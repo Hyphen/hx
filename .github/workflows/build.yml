@@ -51,7 +51,7 @@ jobs:
           echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
 
       - name: Build
-        run: go build -v -o myapp-${{ matrix.arch }}
+        run: go build -v -o hyphen-${{ matrix.arch }}
         shell: bash  
 
       - name: Upload binaries
