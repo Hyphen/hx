@@ -18,12 +18,18 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         go-version: [1.22]
         include:
-          - os: macos-latest
-            arch: amd64
+          - os: ubuntu-latest
+            goos: linux
             goarch: amd64
           - os: macos-latest
-            arch: arm64
+            goos: darwin
+            goarch: amd64
+          - os: macos-latest
+            goos: darwin
             goarch: arm64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
 
     steps:
       - name: Set up Go
@@ -37,16 +43,17 @@ jobs:
       - name: Get dependencies
         run: go mod tidy
 
-      - name: Build
+      - name: Set environment variables
         run: |
-          export GOOS=${{ matrix.goos }}
-          export GOARCH=${{ matrix.goarch }}
-          go build -v -o myapp-${{ matrix.arch }}
-        working-directory: ${{ github.workspace }}
-        
+          echo "GOOS=${{ matrix.goos }}" >> $GITHUB_ENV
+          echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
+
+      - name: Build
+        run: go build -v -o myapp-${{ runner.os }}-${{ matrix.goarch }}
+        shell: bash  # Use Bash shell for building, to work across all platforms
+
       - name: Upload binaries
         uses: actions/upload-artifact@v3
         with:
           name: myapp-${{ matrix.os }}-${{ matrix.arch }}
-          path: myapp-${{ matrix.arch }}
-
+          path: myapp-${{ runner.os }}-${{ matrix.goarch }}
