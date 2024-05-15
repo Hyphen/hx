@@ -15,27 +15,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        go-version: [1.22]
         include:
           - os: ubuntu-latest
             goos: linux
             goarch: amd64
+            arch: AMD64
           - os: macos-latest
             goos: darwin
             goarch: amd64
+            arch: Intel
           - os: macos-latest
             goos: darwin
             goarch: arm64
+            arch: ARM
           - os: windows-latest
             goos: windows
             goarch: amd64
+            arch: AMD64
 
     steps:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version: 1.22
 
       - name: Check out code
         uses: actions/checkout@v3
@@ -49,11 +51,11 @@ jobs:
           echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
 
       - name: Build
-        run: go build -v -o myapp-${{ runner.os }}-${{ matrix.goarch }}
-        shell: bash  # Use Bash shell for building, to work across all platforms
+        run: go build -v -o myapp-${{ matrix.arch }}
+        shell: bash  
 
       - name: Upload binaries
         uses: actions/upload-artifact@v3
         with:
           name: myapp-${{ matrix.os }}-${{ matrix.arch }}
-          path: myapp-${{ runner.os }}-${{ matrix.goarch }}
+          path: myapp-${{ matrix.arch }}
