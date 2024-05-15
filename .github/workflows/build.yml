@@ -1,0 +1,52 @@
+name: Go Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }} ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go-version: [1.22]
+        include:
+          - os: macos-latest
+            arch: amd64
+            goarch: amd64
+          - os: macos-latest
+            arch: arm64
+            goarch: arm64
+
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Get dependencies
+        run: go mod tidy
+
+      - name: Build
+        run: |
+          export GOOS=${{ matrix.goos }}
+          export GOARCH=${{ matrix.goarch }}
+          go build -v -o myapp-${{ matrix.arch }}
+        working-directory: ${{ github.workspace }}
+        
+      - name: Upload binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: myapp-${{ matrix.os }}-${{ matrix.arch }}
+          path: myapp-${{ matrix.arch }}
+
