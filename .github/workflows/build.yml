@@ -57,5 +57,5 @@ jobs:
       - name: Upload binaries
         uses: actions/upload-artifact@v3
         with:
-          name: myapp-${{ matrix.os }}-${{ matrix.arch }}
-          path: myapp-${{ matrix.arch }}
+          name: hyphen-${{ matrix.os }}-${{ matrix.arch }}
+          path: hyphen-${{ matrix.arch }}
