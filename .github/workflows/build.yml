@@ -46,11 +46,12 @@ jobs:
 
       - name: Setup Environment Variables and Git Tag Versioning
         run: |
-          git fetch --depth=1 origin +refs/tags/*:refs/tags/*  # Fetch only the needed tags
-          GIT_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
-          echo "GIT_TAG=$GIT_TAG" >> $GITHUB_ENV
-          echo "GOOS=${{ matrix.goos }}" >> $GITHUB_ENV
-          echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
+          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+          $GIT_TAG = git describe --tags (git rev-list --tags --max-count=1)
+          echo "GIT_TAG=$GIT_TAG" | Out-File -Append -FilePath $env:GITHUB_ENV
+          echo "GOOS=${{ matrix.goos }}" | Out-File -Append -FilePath $env:GITHUB_ENV
+          echo "GOARCH=${{ matrix.goarch }}" | Out-File -Append -FilePath $env:GITHUB_ENV
+        shell: pwsh
 
 
       - name: Get dependencies
