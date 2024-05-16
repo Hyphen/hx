@@ -41,21 +41,27 @@ jobs:
 
       - name: Check out code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # important for git tags fetching
+
+      - name: Setup Environment Variables and Git Tag Versioning
+        run: |
+          git fetch --depth=1 origin +refs/tags/*:refs/tags/*  # Fetch only the needed tags
+          GIT_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
+          echo "GIT_TAG=$GIT_TAG" >> $GITHUB_ENV
+          echo "GOOS=${{ matrix.goos }}" >> $GITHUB_ENV
+          echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
+
 
       - name: Get dependencies
         run: go mod tidy
 
-      - name: Set environment variables
-        run: |
-          echo "GOOS=${{ matrix.goos }}" >> $GITHUB_ENV
-          echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
-
       - name: Build
-        run: go build -v -o hyphen-${{ matrix.arch }}
-        shell: bash  
+        run: go build -v -ldflags="-X main.version=${{ env.GIT_TAG }}" -o hyphen-${{ matrix.arch }}
+        shell: bash
 
       - name: Upload binaries
         uses: actions/upload-artifact@v3
         with:
-          name: hyphen-${{ matrix.os }}-${{ matrix.arch }}
+          name: hyphen-${{ matrix.os }}-${{ matrix.arch }}-${{ env.GIT_TAG }}
           path: hyphen-${{ matrix.arch }}

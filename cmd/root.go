@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/Hyphen/cli/cmd/auth"
+	"github.com/Hyphen/cli/cmd/version"
 	"github.com/spf13/cobra"
 )
 
@@ -16,6 +17,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(auth.AuthCmd)
+	rootCmd.AddCommand(version.VersionCmd)
 }
 
 func Execute() {
