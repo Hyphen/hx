@@ -28,12 +28,17 @@ type Environment interface {
 	EnsureDir(dirName string) error
 	WriteFile(filename string, data []byte, perm os.FileMode) error
 	ReadFile(path string) ([]byte, error)
+	GetGOOS() string
 }
 
 type systemEnvironment struct{}
 
+func (se *systemEnvironment) GetGOOS() string {
+	return runtime.GOOS
+}
+
 func (se *systemEnvironment) GetConfigDirectory() string {
-	switch runtime.GOOS {
+	switch se.GetGOOS() {
 	case "windows":
 		return filepath.Join(os.Getenv("APPDATA"), WindowsConfigPath)
 	default:

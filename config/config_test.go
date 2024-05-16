@@ -1,199 +1,223 @@
 package config
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/BurntSushi/toml"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
-type mockEnvironment struct {
-	ConfigDir    string
-	Files        map[string][]byte
-	EnsureDirErr error
-	WriteFileErr error
-	ReadFileErr  error
+// Test for GetConfigDirectory
+func TestGetConfigDirectory(t *testing.T) {
+	se := systemEnvironment{}
+	expectedPath := ""
+	if runtime.GOOS == "windows" {
+		expectedPath = filepath.Join(os.Getenv("APPDATA"), WindowsConfigPath)
+	} else {
+		home, _ := os.UserHomeDir() // We ignore error for simplicity in the test case
+		expectedPath = filepath.Join(home, UnixConfigPath)
+	}
+	assert.Equal(t, expectedPath, se.GetConfigDirectory(), "Config directory should match expected path")
 }
 
-func (m *mockEnvironment) ReadFile(path string) ([]byte, error) {
-	if m.ReadFileErr != nil {
-		return nil, m.ReadFileErr
-	}
-	data, exists := m.Files[path]
-	if !exists {
-		return nil, fmt.Errorf("file %s does not exist", path)
-	}
-	return data, nil
+// Test for EnsureDir
+func TestEnsureDir(t *testing.T) {
+	dirName := "testdir"
+	se := &systemEnvironment{}
+	err := se.EnsureDir(dirName)
+	assert.Nil(t, err, "EnsureDir should not return an error")
 }
 
-func (m *mockEnvironment) GetConfigDirectory() string {
-	return m.ConfigDir
+// Test for WriteFile
+func TestWriteFile(t *testing.T) {
+	se := &systemEnvironment{}
+	filename := "testfile.txt"
+
+	// Write to the file
+	err := se.WriteFile(filename, []byte("test data"), 0644)
+	// Check that the write operation did not return an error
+	assert.Nil(t, err, "WriteFile should not return an error")
+
+	// Clean up by removing the file
+	cleanupErr := os.Remove(filename)
+	// Make sure that no error occurred during file removal, ensure cleanup was successful
+	assert.Nil(t, cleanupErr, "Removing test file failed which can affect other tests")
 }
 
-func (m *mockEnvironment) EnsureDir(dirName string) error {
-	return m.EnsureDirErr
+// Test for ReadFile
+func TestReadFile(t *testing.T) {
+	filename := "testfile.txt"
+	se := &systemEnvironment{}
+
+	err := se.WriteFile(filename, []byte("test data"), 0644)
+	assert.Nil(t, err, "WriteFile should not return an error")
+	data, err := se.ReadFile("testfile.txt")
+	assert.Nil(t, err, "ReadFile should not return an error when reading existing file")
+	assert.NotEmpty(t, data, "ReadFile should return data")
+
+	// Clean up by removing the file
+	cleanupErr := os.Remove(filename)
+	// Make sure that no error occurred during file removal, ensure cleanup was successful
+	assert.Nil(t, cleanupErr, "Removing test file failed which can affect other tests")
 }
 
-func (m *mockEnvironment) WriteFile(filename string, data []byte, perm os.FileMode) error {
-	if m.WriteFileErr != nil {
-		return m.WriteFileErr
-	}
-	m.Files[filename] = data
-	return nil
+// Mock to simulate methods in the Environment interface
+type MockEnvironment struct {
+	mock.Mock
 }
 
-func (m *mockEnvironment) DecodeFile(filePath string, v interface{}) error {
-	data, ok := m.Files[filePath]
-	if !ok {
-		return fmt.Errorf("open %s: no such file or directory", filePath)
-	}
-	if _, err := toml.Decode(string(data), v); err != nil {
-		return err
-	}
-	return nil
+func (m *MockEnvironment) GetConfigDirectory() string {
+	args := m.Called()
+	return args.String(0)
 }
 
-// TestSaveCredentials checks the behavior of SaveCredentials.
-func TestSaveCredentials(t *testing.T) {
-	// Arrange
-	mockEnv := &mockEnvironment{
-		ConfigDir:    "/fake/dir",
-		Files:        make(map[string][]byte),
-		EnsureDirErr: nil,
-		WriteFileErr: nil,
-	}
-	Env = mockEnv
-	username := "user"
-	password := "pass"
-
-	// Act
-	SaveCredentials(username, password)
-
-	// Assert
-	expectedFileName := "/fake/dir/credentials.toml"
-	data, exists := mockEnv.Files[expectedFileName]
-	if !exists {
-		t.Fatalf("Expected file %s to be written", expectedFileName)
-	}
-
-	expectedContent := "[default]\nhyphen_access_token=\"user:pass\""
-	if !bytes.Equal(data, []byte(expectedContent)) {
-		t.Errorf("Expected file content to be %s, got %s", expectedContent, string(data))
-	}
+func (m *MockEnvironment) EnsureDir(dirName string) error {
+	args := m.Called(dirName)
+	return args.Error(0)
 }
 
-func TestSaveCredentials_DirectoryCreationFail(t *testing.T) {
-	// Arrange
-	mockEnv := &mockEnvironment{
-		ConfigDir:    "/fake/dir",
-		Files:        make(map[string][]byte),
-		EnsureDirErr: fmt.Errorf("mock directory creation error"), // Simulate error
-	}
-	Env = mockEnv
-	username := "user"
-	password := "pass"
-
-	// Act
-	SaveCredentials(username, password)
-
-	// Assert
-	expectedFileName := "/fake/dir/credentials.toml"
-	_, exists := mockEnv.Files[expectedFileName]
-	if exists {
-		t.Fatalf("File %s should not be written due to directory creation failure", expectedFileName)
-	}
+func (m *MockEnvironment) WriteFile(filename string, data []byte, perm os.FileMode) error {
+	args := m.Called(filename, data, perm)
+	return args.Error(0)
 }
 
-func TestSaveCredentials_WriteFileFail(t *testing.T) {
-	// Arrange
-	mockEnv := &mockEnvironment{
-		ConfigDir:    "/fake/dir",
-		Files:        make(map[string][]byte),
-		WriteFileErr: fmt.Errorf("mock write file error"), // Simulate error
-	}
-	Env = mockEnv
-	username := "user"
-	password := "pass"
-
-	// Act
-	SaveCredentials(username, password)
-
-	// Assert
-	expectedFileName := "/fake/dir/credentials.toml"
-	if _, exists := mockEnv.Files[expectedFileName]; exists {
-		t.Fatalf("File %s should not be written due to write failure", expectedFileName)
-	}
+func (m *MockEnvironment) ReadFile(path string) ([]byte, error) {
+	args := m.Called(path)
+	return args.Get(0).([]byte), args.Error(1)
 }
 
-// TestGetCredentials attempts to retrieve the credentials using a mocked file reader.
-func TestGetCredentials(t *testing.T) {
-	mockFiles := map[string][]byte{
-		"/fake/dir/credentials.toml": []byte("[default]\nhyphen_access_token=\"user:pass\""),
-	}
-
-	mockEnv := &mockEnvironment{
-		ConfigDir: "/fake/dir",
-		Files:     mockFiles,
-	}
-	Env = mockEnv // Set the global environment to our mock
-
-	creds, err := GetCredentials()
-	if err != nil {
-		t.Fatalf("Expected no error, but got: %s", err)
-	}
-
-	expectedAccessToken := "user:pass"
-	if creds.Default.HyphenAccessToken != expectedAccessToken {
-		t.Errorf("Expected hyphen_access_token to be %s, got %s", expectedAccessToken, creds.Default.HyphenAccessToken)
-	}
+func (m *MockEnvironment) GetGOOS() string {
+	args := m.Called()
+	return args.String(0)
 }
 
-func TestGetCredentials_ReadFileFail(t *testing.T) {
-	// Arrange
-	mockEnv := &mockEnvironment{
-		ConfigDir:   "/fake/dir",
-		Files:       make(map[string][]byte),
-		ReadFileErr: fmt.Errorf("mock read file error"), // Simulate error
-	}
+// TestSaveCredentialsSuccess to test successful credentials saving
+func TestSaveCredentialsSuccess(t *testing.T) {
+	mockEnv := new(MockEnvironment)
 	Env = mockEnv
 
-	// Act
-	_, err := GetCredentials()
+	configDir := "/mocked/path"
+	credentialFile := filepath.Join(configDir, CredentialFile)
+	credentialsContent := fmt.Sprintf("[default]\nhyphen_access_token=\"%s:%s\"", "user", "pass")
 
-	// Assert
-	if err == nil {
-		t.Fatal("Expected an read file error, got nil")
-	}
+	mockEnv.On("GetConfigDirectory").Return(configDir)
+	mockEnv.On("EnsureDir", configDir).Return(nil)
+	mockEnv.On("WriteFile", credentialFile, []byte(credentialsContent), os.FileMode(0644)).Return(nil)
+
+	SaveCredentials("user", "pass")
+
+	mockEnv.AssertExpectations(t) // verify that all mocked methods were called as expected
 }
 
-func TestGetCredentials_DecodeFail(t *testing.T) {
-	// Arrange
-	corruptData := []byte("[default]\nhyphen_access_token= broken\"data\"")
-	mockEnv := &mockEnvironment{
-		ConfigDir: "/fake/dir",
-		Files: map[string][]byte{
-			"/fake/dir/credentials.toml": corruptData,
+// TestSaveCredentialsFailures to handle different types of failures
+func TestSaveCredentialsFailures(t *testing.T) {
+	mockEnv := new(MockEnvironment)
+	Env = mockEnv
+
+	configDir := "/mocked/path"
+	credentialFile := filepath.Join(configDir, CredentialFile)
+	credentialsContent := fmt.Sprintf("[default]\nhyphen_access_token=\"%s:%s\"", "user", "pass")
+
+	tests := []struct {
+		name       string
+		setupMocks func()
+	}{
+		{
+			name: "failure in directory creation",
+			setupMocks: func() {
+				mockEnv.On("GetConfigDirectory").Return(configDir)
+				mockEnv.On("EnsureDir", configDir).Return(fmt.Errorf("failed to create directory"))
+			},
+		},
+		{
+			name: "failure in file write",
+			setupMocks: func() {
+				mockEnv.On("GetConfigDirectory").Return(configDir)
+				mockEnv.On("EnsureDir", configDir).Return(nil)
+				mockEnv.On("WriteFile", credentialFile, []byte(credentialsContent), os.FileMode(0644)).Return(fmt.Errorf("failed to write file"))
+			},
 		},
 	}
-	Env = mockEnv
 
-	// Act
-	_, err := GetCredentials()
-
-	// Assert
-	if err == nil {
-		t.Fatal("Expected a TOML decoding error, got nil")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mockEnv.ExpectedCalls = nil // reset expectations
+			mockEnv.Calls = nil         // clean the call stack
+			tc.setupMocks()             // setup test-specific mocks
+			SaveCredentials("user", "pass")
+			mockEnv.AssertExpectations(t)
+		})
 	}
 }
 
-func TestEnsureDir_Exists(t *testing.T) {
-	// Create a temporary directory and ensure it exists
-	tmpDir := t.TempDir()
+// TestGetCredentialsSuccess tests successful credentials retrieval
+func TestGetCredentialsSuccess(t *testing.T) {
+	mockEnv := new(MockEnvironment)
+	Env = mockEnv
 
-	env := systemEnvironment{}
-	if err := env.EnsureDir(tmpDir); err != nil {
-		t.Errorf("Expected no error for existing directory, got: %v", err)
+	configDir := "/mocked/path"
+	credentialFile := filepath.Join(configDir, CredentialFile)
+	credentialsToml := `[default]
+hyphen_access_token="username:password"`
+
+	mockEnv.On("GetConfigDirectory").Return(configDir)
+	mockEnv.On("ReadFile", credentialFile).Return([]byte(credentialsToml), nil)
+
+	var credentials CredentialsConfig
+	err := toml.Unmarshal([]byte(credentialsToml), &credentials)
+	assert.Nil(t, err, "Unmarshalling should succeed in test setup")
+
+	retrievedCredentials, err := GetCredentials()
+	assert.Nil(t, err, "GetCredentials should not return an error")
+	assert.Equal(t, credentials, retrievedCredentials, "Retrieved credentials should match expected")
+
+	mockEnv.AssertExpectations(t) // Verify that all mocked methods were called as expected
+}
+
+// TestGetCredentialsFailures tests different failure scenarios for credentials retrieval
+func TestGetCredentialsFailures(t *testing.T) {
+	mockEnv := new(MockEnvironment)
+	Env = mockEnv
+
+	configDir := "/mocked/path"
+	credentialFile := filepath.Join(configDir, CredentialFile)
+	mockEnv.On("GetConfigDirectory").Return(configDir)
+
+	tests := []struct {
+		name        string
+		setupMocks  func()
+		expectedErr string
+	}{
+		{
+			name: "failure reading file",
+			setupMocks: func() {
+				mockEnv.On("ReadFile", credentialFile).Return([]byte(nil), errors.New("failed to read file")).Once()
+			},
+			expectedErr: "failed to read file: failed to read file",
+		},
+
+		{
+			name: "failure decoding credentials",
+			setupMocks: func() {
+				// Return some bytes to simulate bad TOML data
+				mockEnv.On("ReadFile", credentialFile).Return([]byte("invalid toml data"), nil).Once()
+			},
+			expectedErr: "failed to decode credentials: toml: line 1: expected '.' or '=', but got 't' instead",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setupMocks()
+			_, err := GetCredentials()
+			assert.EqualError(t, err, tc.expectedErr, "Error message should match for "+tc.name)
+			mockEnv.AssertExpectations(t)
+		})
 	}
 }
