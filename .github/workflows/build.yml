@@ -58,7 +58,7 @@ jobs:
         run: go mod tidy
 
       - name: Build
-        run: go build -v -ldflags="-X main.version=${{ env.GIT_TAG }}" -o hyphen-${{ matrix.arch }}
+        run: go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.version=${{ env.GIT_TAG }}" -o hyphen-${{ matrix.arch }}
         shell: bash
 
       - name: Upload binaries
