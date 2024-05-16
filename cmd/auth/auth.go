@@ -2,10 +2,12 @@ package auth
 
 import (
 	"fmt"
+
+	"github.com/Hyphen/cli/config"
 	"github.com/spf13/cobra"
 )
 
-// authCmd represents the auth command
+// AuthCmd represents the auth command
 var AuthCmd = &cobra.Command{
 	Use:   "auth",
 	Short: "Authenticate with the server",
@@ -24,5 +26,6 @@ func login() {
 	fmt.Scanln(&password)
 
 	fmt.Println("Logging in with Username:", username, "and Password:", password)
-
+	config.SaveCredentials(username, password)
+	fmt.Println("Login successful")
 }
