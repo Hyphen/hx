@@ -25,7 +25,5 @@ func login() {
 	fmt.Print("Enter Password: ")
 	fmt.Scanln(&password)
 
-	fmt.Println("Logging in with Username:", username, "and Password:", password)
 	config.SaveCredentials(username, password)
-	fmt.Println("Login successful")
 }
