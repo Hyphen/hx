@@ -1,12 +1,8 @@
-name: Go Build
+name: Production release
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  release:
+    types: [created]
 
 jobs:
   build:
@@ -53,16 +49,9 @@ jobs:
           echo "GOARCH=${{ matrix.goarch }}" | Out-File -Append -FilePath $env:GITHUB_ENV
         shell: pwsh
 
-
       - name: Get dependencies
         run: go mod tidy
 
       - name: Build
         run: go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.version=${{ env.GIT_TAG }}" -o hyphen-${{ matrix.arch }}
         shell: bash
-
-      - name: Upload binaries
-        uses: actions/upload-artifact@v3
-        with:
-          name: hyphen-${{ matrix.os }}-${{ matrix.arch }}-${{ env.GIT_TAG }}
-          path: hyphen-${{ matrix.arch }}
