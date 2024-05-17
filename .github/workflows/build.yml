@@ -1,8 +1,7 @@
-name: Production release
+name: Build
 
 on:
-  release:
-    types: [created]
+  workflow_call:
 
 jobs:
   build:

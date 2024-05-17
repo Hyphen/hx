@@ -11,7 +11,7 @@ on:
 jobs:
   build:
     name: Build
-    uses: ./build.yml
+    uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
       go-version: '1.22'
