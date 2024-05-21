@@ -1,12 +1,7 @@
-name: Go Build
+name: Build
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  workflow_call:
 
 jobs:
   build:

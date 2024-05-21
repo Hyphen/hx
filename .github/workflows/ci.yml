@@ -10,7 +10,7 @@ on:
 
 jobs:
   test:
-    name: Build and Test
+    name: Test
     runs-on: ubuntu-latest
 
     steps:
@@ -34,7 +34,13 @@ jobs:
         run: go test -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./coverage.txt
+
+  build:
+    name: Build
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    needs: test
