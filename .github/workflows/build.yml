@@ -53,13 +53,16 @@ jobs:
           echo "GOARCH=${{ matrix.goarch }}" | Out-File -Append -FilePath $env:GITHUB_ENV
         shell: pwsh
 
-
       - name: Get dependencies
         run: go mod tidy
 
       - name: Build
         run: go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.version=${{ env.GIT_TAG }}" -o hyphen-${{ matrix.arch }}
         shell: bash
+
+      - name: Set execution permissions
+        if: runner.os != 'Windows'
+        run: chmod +x hyphen-${{ matrix.arch }}
 
       - name: Upload binaries
         uses: actions/upload-artifact@v3
