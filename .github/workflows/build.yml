@@ -58,7 +58,8 @@ jobs:
 
       - name: Build for Windows
         if: runner.os == 'Windows'
-        run: pwsh -Command "go build -v -ldflags=\"-X github.com/Hyphen/cli/cmd/version.version=${{ env.GIT_TAG }}\" -o hyphen-${{ matrix.arch }}.exe"
+        run: pwsh -Command 'go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.version=${{ env.GIT_TAG }}" -o hyphen-${{ matrix.arch }}.exe'
+
 
       - name: Set execution permissions
         if: runner.os != 'Windows'
