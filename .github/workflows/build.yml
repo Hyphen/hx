@@ -51,16 +51,29 @@ jobs:
       - name: Get dependencies
         run: go mod tidy
 
-      - name: Build
+      - name: Build for Unix-like systems
+        if: runner.os != 'Windows'
         run: go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.version=${{ env.GIT_TAG }}" -o hyphen-${{ matrix.arch }}
         shell: bash
+
+      - name: Build for Windows
+        if: runner.os == 'Windows'
+        run: pwsh -Command "go build -v -ldflags=\"-X github.com/Hyphen/cli/cmd/version.version=${{ env.GIT_TAG }}\" -o hyphen-${{ matrix.arch }}.exe"
 
       - name: Set execution permissions
         if: runner.os != 'Windows'
         run: chmod +x hyphen-${{ matrix.arch }}
 
-      - name: Upload binaries
+      - name: Upload binaries for Unix-like systems
+        if: runner.os != 'Windows'
         uses: actions/upload-artifact@v3
         with:
           name: hyphen-${{ matrix.os }}-${{ matrix.arch }}-${{ env.GIT_TAG }}
           path: hyphen-${{ matrix.arch }}
+
+      - name: Upload binaries for Windows
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v3
+        with:
+          name: hyphen-${{ matrix.os }}-${{ matrix.arch }}-${{ env.GIT_TAG }}
+          path: hyphen-${{ matrix.arch }}.exe
