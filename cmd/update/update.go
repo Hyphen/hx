@@ -122,12 +122,24 @@ func downloadAndUpdate(url string) error {
 	}
 
 	// For Windows, use a batch script to replace the file after the process exits
+	return scheduleWindowsUpdate(tempFile.Name())
+}
+
+func scheduleWindowsUpdate(tempFileName string) error {
+	executablePath := getExecutablePath()
 	batchScript := `
+@echo off
 ping 127.0.0.1 -n 5 > nul
 move /Y "%s" "%s"
+if %%errorlevel%% neq 0 (
+    echo Failed to move updated file.
+    exit /b %%errorlevel%%
+) else (
+    echo Successfully moved updated file.
+)
 `
+	scriptContent := fmt.Sprintf(batchScript, tempFileName, executablePath)
 	scriptPath := filepath.Join(os.TempDir(), "update_hyphen.bat")
-	scriptContent := fmt.Sprintf(batchScript, tempFile.Name(), getExecutablePath())
 
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0644); err != nil {
 		return fmt.Errorf("error writing batch script: %w", err)
@@ -138,6 +150,7 @@ move /Y "%s" "%s"
 		return fmt.Errorf("error starting batch script: %w", err)
 	}
 
+	fmt.Println("Update scheduled. The CLI will be updated after it exits.")
 	return nil
 }
 
