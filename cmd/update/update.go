@@ -106,13 +106,12 @@ func downloadAndUpdate(url string) error {
 	if err != nil {
 		return fmt.Errorf("error creating temp file: %w", err)
 	}
-	defer os.Remove(tempFile.Name())
+	defer tempFile.Close()
 
 	_, err = io.Copy(tempFile, resp.Body)
 	if err != nil {
 		return fmt.Errorf("error writing to temp file: %w", err)
 	}
-	tempFile.Close()
 
 	if runtime.GOOS != "windows" {
 		if err := os.Chmod(tempFile.Name(), 0755); err != nil {
@@ -129,6 +128,7 @@ func scheduleWindowsUpdate(tempFileName string) error {
 	executablePath := getExecutablePath()
 	batchScript := `
 @echo off
+echo Updating Hyphen CLI...
 ping 127.0.0.1 -n 5 > nul
 move /Y "%s" "%s"
 if %%errorlevel%% neq 0 (
