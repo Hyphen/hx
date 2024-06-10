@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -100,24 +102,56 @@ func downloadAndUpdate(url string) error {
 		filename += ".exe"
 	}
 
-	out, err := os.Create(filename)
+	tempFile, err := os.CreateTemp("", filename)
 	if err != nil {
-		return fmt.Errorf("error creating file: %w", err)
+		return fmt.Errorf("error creating temp file: %w", err)
 	}
-	defer out.Close()
+	defer os.Remove(tempFile.Name())
 
-	_, err = io.Copy(out, resp.Body)
+	_, err = io.Copy(tempFile, resp.Body)
 	if err != nil {
-		return fmt.Errorf("error writing to file: %w", err)
+		return fmt.Errorf("error writing to temp file: %w", err)
 	}
+	tempFile.Close()
 
 	if runtime.GOOS != "windows" {
-		if err := os.Chmod(filename, 0755); err != nil {
+		if err := os.Chmod(tempFile.Name(), 0755); err != nil {
 			return fmt.Errorf("error setting executable permission: %w", err)
 		}
+		return replaceFile(tempFile.Name(), filename)
+	}
+
+	// For Windows, use a batch script to replace the file after the process exits
+	batchScript := `
+ping 127.0.0.1 -n 5 > nul
+move /Y "%s" "%s"
+`
+	scriptPath := filepath.Join(os.TempDir(), "update_hyphen.bat")
+	scriptContent := fmt.Sprintf(batchScript, tempFile.Name(), getExecutablePath())
+
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0644); err != nil {
+		return fmt.Errorf("error writing batch script: %w", err)
+	}
+
+	cmd := exec.Command("cmd", "/C", "start", "/MIN", scriptPath)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("error starting batch script: %w", err)
 	}
 
 	return nil
+}
+
+func getExecutablePath() string {
+	path, err := os.Executable()
+	if err != nil {
+		fmt.Printf("Could not determine executable path: %v\n", err)
+		os.Exit(1)
+	}
+	return path
+}
+
+func replaceFile(src, dst string) error {
+	return os.Rename(src, dst)
 }
 
 func init() {
