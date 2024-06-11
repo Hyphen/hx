@@ -2,6 +2,7 @@ package update
 
 import (
 	"fmt"
+	cliVersion "github.com/Hyphen/cli/cmd/version"
 	"io"
 	"net/http"
 	"os"
@@ -87,9 +88,9 @@ func NewDefaultUpdater(version string) *Updater {
 	// Check if the environment variable is set, else use the default URL
 	defaultUrlTemplate := os.Getenv("HYPHEN_ENGINE_URL")
 	if defaultUrlTemplate == "" {
-		defaultUrlTemplate = "https://api.hyphen.ai/api/downloads/hyphen-cli/%s?os=%s"
+		defaultUrlTemplate = "https://api.hyphen.ai/api/version/latest"
 	} else {
-		defaultUrlTemplate += "/api/downloads/hyphen-cli/%s?os=%s"
+		defaultUrlTemplate += "/api/version/latest"
 	}
 
 	updater := &Updater{
@@ -113,14 +114,46 @@ func (u *Updater) Run(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	// Fetch the latest version
+	latestVersion, err := u.fetchLatestVersion()
+	if err != nil {
+		fmt.Printf("Failed to fetch the latest version: %v\n", err)
+		return
+	}
+
+	// Compare the versions
+	if latestVersion == cliVersion.GetVersion() {
+		fmt.Println("You are already using the latest version of Hyphen CLI.")
+		return
+	}
+
 	targetVersion := getTargetVersion(u.Version)
 	updateUrl := fmt.Sprintf(u.URLTemplate, targetVersion, osType)
-	err := u.DownloadAndUpdate(updateUrl)
+	err = u.DownloadAndUpdate(updateUrl)
 	if err != nil {
 		fmt.Printf("Failed to update Hyphen CLI: %v\n", err)
 		return
 	}
 	fmt.Println("Hyphen CLI updated successfully")
+}
+
+func (u *Updater) fetchLatestVersion() (string, error) {
+	resp, err := u.HTTPClient.Get(u.URLTemplate)
+	if err != nil {
+		return "", fmt.Errorf("error fetching latest version: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to get latest version, status code: %d", resp.StatusCode)
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading response body: %w", err)
+	}
+
+	return strings.TrimSpace(string(bodyBytes)), nil
 }
 
 func detectPlatform(goos, goarch string) string {

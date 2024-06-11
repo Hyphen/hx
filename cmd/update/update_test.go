@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	cliVersion "github.com/Hyphen/cli/cmd/version"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
@@ -49,10 +50,10 @@ func TestNewDefaultUpdater(t *testing.T) {
 	version := "1.0.0"
 	updater := NewDefaultUpdater(version)
 
-	expectedURLTemplate := "https://api.hyphen.ai/api/downloads/hyphen-cli/%s?os=%s"
+	expectedURLTemplate := "https://api.hyphen.ai/api/version/latest"
 	envURLTemplate := os.Getenv("HYPHEN_ENGINE_URL")
 	if envURLTemplate != "" {
-		expectedURLTemplate = envURLTemplate + "/api/downloads/hyphen-cli/%s?os=%s"
+		expectedURLTemplate = envURLTemplate + "/api/version/latest"
 	}
 
 	assert.Equal(t, version, updater.Version, "The version should be set correctly")
@@ -71,17 +72,67 @@ func TestNewDefaultUpdater_EnvVar(t *testing.T) {
 
 	updater := NewDefaultUpdater(version)
 
-	expectedURLTemplate := envURL + "/api/downloads/hyphen-cli/%s?os=%s"
+	expectedURLTemplate := envURL + "/api/version/latest"
 	assert.Equal(t, expectedURLTemplate, updater.URLTemplate, "The URLTemplate should be based on the environment variable")
 }
 
+func TestUpdater_Run_AlreadyUpToDate(t *testing.T) {
+	latestVersion := "1.0.0"
+	cliVersion.Version = latestVersion
+
+	mockHTTPClient := MockHTTPClient{
+		Response: &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(latestVersion)),
+		},
+		Err: nil,
+	}
+
+	updater := &Updater{
+		Version:           "latest",
+		URLTemplate:       "https://api.hyphen.ai/api/version/latest",
+		HTTPClient:        mockHTTPClient,
+		FileHandler:       DefaultFileHandler{},
+		GetExecPath:       func() string { return "" },
+		DetectPlatform:    func() string { return linux },
+		DownloadAndUpdate: func(url string) error { return nil },
+	}
+
+	cmd := &cobra.Command{}
+	args := []string{}
+
+	// Capture the standard output
+	old := os.Stdout // keep backup of the real stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Run the command
+	updater.Run(cmd, args)
+
+	// Restore the real stdout
+	w.Close()
+	os.Stdout = old
+	var buf strings.Builder
+	io.Copy(&buf, r)
+
+	expectedOutput := "You are already using the latest version of Hyphen CLI.\n"
+
+	assert.Contains(t, buf.String(), expectedOutput, "The output should indicate that the version is already up-to-date")
+}
+
 func TestUpdater_Run_DownloadAndUpdateError(t *testing.T) {
-	mockHTTPClient := MockHTTPClient{Response: nil, Err: nil}
+	mockHTTPClient := MockHTTPClient{
+		Response: &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader("2.0.0")),
+		},
+		Err: nil,
+	}
 	mockFileHandler := MockFileHandler{CreateTempFile: nil, CreateTempErr: nil}
 
 	updater := &Updater{
 		Version:           "latest",
-		URLTemplate:       "http://localhost:4000/api/downloads/hyphen-cli/%s?os=%s",
+		URLTemplate:       "https://api.hyphen.ai/api/version/latest",
 		HTTPClient:        mockHTTPClient,
 		FileHandler:       mockFileHandler,
 		GetExecPath:       func() string { return "" },
@@ -112,7 +163,10 @@ func TestUpdater_Run_DownloadAndUpdateError(t *testing.T) {
 }
 
 func TestUpdater_Run_Success(t *testing.T) {
-	mockResp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("binary content"))}
+	latestVersion := "2.0.0"
+	cliVersion.Version = "1.0.0" // Current version is different from the latest
+
+	mockResp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(latestVersion))}
 	mockHTTPClient := MockHTTPClient{Response: mockResp, Err: nil}
 	mockFile, _ := os.CreateTemp("", "hyphen")
 	mockFileHandler := MockFileHandler{CreateTempFile: mockFile, CreateTempErr: nil}
@@ -121,7 +175,7 @@ func TestUpdater_Run_Success(t *testing.T) {
 
 	updater := Updater{
 		Version:           "latest",
-		URLTemplate:       "http://localhost:4000/api/downloads/hyphen-cli/%s?os=%s",
+		URLTemplate:       "https://api.hyphen.ai/api/version/latest",
 		HTTPClient:        mockHTTPClient,
 		FileHandler:       mockFileHandler,
 		GetExecPath:       func() string { return mockFile.Name() },
@@ -134,15 +188,38 @@ func TestUpdater_Run_Success(t *testing.T) {
 	cmd := &cobra.Command{}
 	args := []string{}
 
+	// Capture the standard output
+	old := os.Stdout // keep backup of the real stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Run the command
 	updater.Run(cmd, args)
+
+	// Restore the real stdout
+	w.Close()
+	os.Stdout = old
+	var buf strings.Builder
+	io.Copy(&buf, r)
+
+	expectedOutput := "Hyphen CLI updated successfully\n"
+	assert.Contains(t, buf.String(), expectedOutput, "The output should indicate that the update was successful")
 	assert.FileExists(t, mockFile.Name(), "The expected file should exist after update")
 }
 
 func TestUpdater_Run_InvalidOS(t *testing.T) {
-	mockHTTPClient := MockHTTPClient{Response: nil, Err: errors.New("unsupported OS")}
+	cliVersion.Version = "1.0.0" // Set current version for comparison
+
+	mockHTTPClient := MockHTTPClient{
+		Response: &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader("2.0.0")),
+		},
+		Err: nil,
+	}
 	updater := Updater{
 		Version:           "latest",
-		URLTemplate:       "http://localhost:4000/api/downloads/hyphen-cli/%s?os=%s",
+		URLTemplate:       "https://api.hyphen.ai/api/version/latest",
 		HTTPClient:        mockHTTPClient,
 		FileHandler:       DefaultFileHandler{},
 		GetExecPath:       defaultGetExecutablePath,
@@ -165,7 +242,7 @@ func TestUpdater_DownloadAndUpdate_NetworkError(t *testing.T) {
 	mockHTTPClient := MockHTTPClient{Response: nil, Err: errors.New("network error")}
 	updater := Updater{
 		Version:           "latest",
-		URLTemplate:       "http://localhost:4000/api/downloads/hyphen-cli/%s?os=%s",
+		URLTemplate:       "https://api.hyphen.ai/api/version/latest",
 		HTTPClient:        mockHTTPClient,
 		FileHandler:       DefaultFileHandler{},
 		GetExecPath:       defaultGetExecutablePath,
@@ -174,7 +251,7 @@ func TestUpdater_DownloadAndUpdate_NetworkError(t *testing.T) {
 
 	updater.DownloadAndUpdate = updater.downloadAndUpdate // Initialize the function reference.
 
-	err := updater.downloadAndUpdate("http://localhost:4000/api/downloads/hyphen-cli/latest?os=linux")
+	err := updater.downloadAndUpdate("https://api.hyphen.ai/api/downloads/hyphen-cli/latest?os=linux")
 	assert.Error(t, err, "An error was expected due to network issue")
 }
 
@@ -185,7 +262,7 @@ func TestUpdater_ScheduleWindowsUpdate_WriteError(t *testing.T) {
 
 	updater := Updater{
 		Version:           "latest",
-		URLTemplate:       "http://localhost:4000/api/downloads/hyphen-cli/%s?os=%s",
+		URLTemplate:       "https://api.hyphen.ai/api/version/latest",
 		HTTPClient:        DefaultHTTPClient{},
 		FileHandler:       mockFileHandler,
 		GetExecPath:       defaultGetExecutablePath,
