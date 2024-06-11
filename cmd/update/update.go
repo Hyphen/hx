@@ -13,8 +13,56 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version string
-var defaultUrlTemplate = "http://localhost:4000/api/downloads/hyphen-cli/%s?os=%s"
+// Service interfaces for dependency injection
+type HTTPClient interface {
+	Get(url string) (*http.Response, error)
+}
+
+type FileHandler interface {
+	CreateTemp(dir, pattern string) (*os.File, error)
+	WriteFile(filename string, data []byte, perm os.FileMode) error
+	Chmod(name string, mode os.FileMode) error
+	Rename(oldpath, newpath string) error
+}
+
+// Default implementations
+type DefaultHTTPClient struct{}
+type DefaultFileHandler struct{}
+
+func (d DefaultHTTPClient) Get(url string) (*http.Response, error) {
+	return http.Get(url)
+}
+
+func (d DefaultFileHandler) CreateTemp(dir, pattern string) (*os.File, error) {
+	return os.CreateTemp(dir, pattern)
+}
+
+func (d DefaultFileHandler) WriteFile(filename string, data []byte, perm os.FileMode) error {
+	return os.WriteFile(filename, data, perm)
+}
+
+func (d DefaultFileHandler) Chmod(name string, mode os.FileMode) error {
+	return os.Chmod(name, mode)
+}
+
+func (d DefaultFileHandler) Rename(oldpath, newpath string) error {
+	return os.Rename(oldpath, newpath)
+}
+
+// CommandRunner is a function type for running commands, to facilitate mocking in tests
+type CommandRunner func(name string, arg ...string) *exec.Cmd
+
+// Config struct for dependencies and settings
+type Updater struct {
+	Version           string
+	URLTemplate       string
+	HTTPClient        HTTPClient
+	FileHandler       FileHandler
+	GetExecPath       func() string
+	DetectPlatform    func() string
+	DownloadAndUpdate func(url string) error
+	CommandRunner     CommandRunner
+}
 
 const (
 	linux    = "linux"
@@ -30,41 +78,62 @@ var UpdateCmd = &cobra.Command{
 	Short: "Update the Hyphen CLI",
 	Long:  `This command updates the Hyphen CLI to the specified version or the latest version available for your operating system`,
 	Run: func(cmd *cobra.Command, args []string) {
-		osType := detectPlatform()
-		if !isValidOs(osType) {
-			fmt.Printf("Unsupported operating system: %s\n", osType)
-			return
-		}
-
-		// Get the target version (use "latest" if not specified)
-		targetVersion := getTargetVersion()
-
-		// Generate the update URL
-		updateUrl := fmt.Sprintf(defaultUrlTemplate, targetVersion, osType)
-		err := downloadAndUpdate(updateUrl)
-		if err != nil {
-			fmt.Printf("Failed to update Hyphen CLI: %v\n", err)
-			return
-		}
-
-		fmt.Println("Hyphen CLI updated successfully")
+		updater := NewDefaultUpdater(version)
+		updater.Run(cmd, args)
 	},
 }
 
-func detectPlatform() string {
-	switch runtime.GOOS {
+func NewDefaultUpdater(version string) *Updater {
+	defaultUrlTemplate := "http://localhost:4000/api/downloads/hyphen-cli/%s?os=%s"
+	updater := &Updater{
+		Version:           version,
+		URLTemplate:       defaultUrlTemplate,
+		HTTPClient:        DefaultHTTPClient{},
+		FileHandler:       DefaultFileHandler{},
+		GetExecPath:       defaultGetExecutablePath,
+		DetectPlatform:    defaultDetectPlatformWrapper,
+		DownloadAndUpdate: nil,
+		CommandRunner:     exec.Command, // Use exec.Command by default
+	}
+	updater.DownloadAndUpdate = updater.downloadAndUpdate // Initialize the function reference.
+	return updater
+}
+
+func (u *Updater) Run(cmd *cobra.Command, args []string) {
+	osType := u.DetectPlatform()
+	if !isValidOs(osType) {
+		fmt.Printf("Unsupported operating system: %s\n", osType)
+		return
+	}
+
+	targetVersion := getTargetVersion(u.Version)
+	updateUrl := fmt.Sprintf(u.URLTemplate, targetVersion, osType)
+	err := u.DownloadAndUpdate(updateUrl)
+	if err != nil {
+		fmt.Printf("Failed to update Hyphen CLI: %v\n", err)
+		return
+	}
+	fmt.Println("Hyphen CLI updated successfully")
+}
+
+func detectPlatform(goos, goarch string) string {
+	switch goos {
 	case "linux":
 		return linux
 	case "darwin":
-		if runtime.GOARCH == "arm64" {
+		if goarch == "arm64" {
 			return macosArm
 		}
 		return macos
 	case "windows":
 		return windows
 	default:
-		return runtime.GOOS
+		return goos
 	}
+}
+
+func defaultDetectPlatformWrapper() string {
+	return detectPlatform(runtime.GOOS, runtime.GOARCH)
 }
 
 func isValidOs(osType string) bool {
@@ -76,16 +145,15 @@ func isValidOs(osType string) bool {
 	return false
 }
 
-func getTargetVersion() string {
-	// Use "latest" if no version is specified
+func getTargetVersion(version string) string {
 	if strings.TrimSpace(version) == "" {
 		return "latest"
 	}
 	return version
 }
 
-func downloadAndUpdate(url string) error {
-	resp, err := http.Get(url)
+func (u *Updater) downloadAndUpdate(url string) error {
+	resp, err := u.HTTPClient.Get(url)
 	if err != nil {
 		return fmt.Errorf("error fetching the update: %w", err)
 	}
@@ -100,7 +168,7 @@ func downloadAndUpdate(url string) error {
 		filename += ".exe"
 	}
 
-	tempFile, err := os.CreateTemp("", filename)
+	tempFile, err := u.FileHandler.CreateTemp("", filename)
 	if err != nil {
 		return fmt.Errorf("error creating temp file: %w", err)
 	}
@@ -112,18 +180,17 @@ func downloadAndUpdate(url string) error {
 	}
 
 	if runtime.GOOS != "windows" {
-		if err := os.Chmod(tempFile.Name(), 0755); err != nil {
+		if err := u.FileHandler.Chmod(tempFile.Name(), 0755); err != nil {
 			return fmt.Errorf("error setting executable permission: %w", err)
 		}
-		return moveToExecutablePath(tempFile.Name())
+		return u.moveToExecutablePath(tempFile.Name())
 	}
 
-	// For Windows, use a batch script to replace the file after the process exits
-	return scheduleWindowsUpdate(tempFile.Name())
+	return u.scheduleWindowsUpdate(tempFile.Name())
 }
 
-func scheduleWindowsUpdate(tempFileName string) error {
-	executablePath := getExecutablePath()
+func (u *Updater) scheduleWindowsUpdate(tempFileName string) error {
+	executablePath := u.GetExecPath()
 	batchScript := `
 @echo off
 echo Updating Hyphen CLI...
@@ -139,11 +206,11 @@ if %%errorlevel%% neq 0 (
 	scriptContent := fmt.Sprintf(batchScript, tempFileName, executablePath)
 	scriptPath := filepath.Join(os.TempDir(), "update_hyphen.bat")
 
-	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0644); err != nil {
+	if err := u.FileHandler.WriteFile(scriptPath, []byte(scriptContent), 0644); err != nil {
 		return fmt.Errorf("error writing batch script: %w", err)
 	}
 
-	cmd := exec.Command("cmd", "/C", "start", "/MIN", scriptPath)
+	cmd := u.CommandRunner("cmd", "/C", "start", "/MIN", scriptPath)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("error starting batch script: %w", err)
 	}
@@ -152,7 +219,12 @@ if %%errorlevel%% neq 0 (
 	return nil
 }
 
-func getExecutablePath() string {
+func (u *Updater) moveToExecutablePath(src string) error {
+	executablePath := u.GetExecPath()
+	return u.FileHandler.Rename(src, executablePath)
+}
+
+func defaultGetExecutablePath() string {
 	path, err := os.Executable()
 	if err != nil {
 		fmt.Printf("Could not determine executable path: %v\n", err)
@@ -161,12 +233,8 @@ func getExecutablePath() string {
 	return path
 }
 
-func moveToExecutablePath(src string) error {
-	executablePath := getExecutablePath()
-	dest := executablePath
-	return os.Rename(src, dest)
-}
-
 func init() {
 	UpdateCmd.Flags().StringVar(&version, "version", "", "Specific version to update to (default is latest)")
 }
+
+var version string
