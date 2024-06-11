@@ -49,12 +49,30 @@ func TestNewDefaultUpdater(t *testing.T) {
 	version := "1.0.0"
 	updater := NewDefaultUpdater(version)
 
+	expectedURLTemplate := "https://api.hyphen.ai/api/downloads/hyphen-cli/%s?os=%s"
+	envURLTemplate := os.Getenv("HYPHEN_ENGINE_URL")
+	if envURLTemplate != "" {
+		expectedURLTemplate = envURLTemplate + "/api/downloads/hyphen-cli/%s?os=%s"
+	}
+
 	assert.Equal(t, version, updater.Version, "The version should be set correctly")
-	assert.Equal(t, "http://localhost:4000/api/downloads/hyphen-cli/%s?os=%s", updater.URLTemplate, "The URLTemplate should be set correctly")
+	assert.Equal(t, expectedURLTemplate, updater.URLTemplate, "The URLTemplate should be set correctly")
 	assert.IsType(t, DefaultHTTPClient{}, updater.HTTPClient, "The HTTPClient should be of type DefaultHTTPClient")
 	assert.IsType(t, DefaultFileHandler{}, updater.FileHandler, "The FileHandler should be of type DefaultFileHandler")
 	assert.NotNil(t, updater.GetExecPath, "The GetExecPath function should be set")
 	assert.NotNil(t, updater.DetectPlatform, "The DetectPlatform function should be set")
+}
+
+func TestNewDefaultUpdater_EnvVar(t *testing.T) {
+	version := "1.0.0"
+	envURL := "https://custom.hyphen.ai"
+	os.Setenv("HYPHEN_ENGINE_URL", envURL)
+	defer os.Unsetenv("HYPHEN_ENGINE_URL")
+
+	updater := NewDefaultUpdater(version)
+
+	expectedURLTemplate := envURL + "/api/downloads/hyphen-cli/%s?os=%s"
+	assert.Equal(t, expectedURLTemplate, updater.URLTemplate, "The URLTemplate should be based on the environment variable")
 }
 
 func TestUpdater_Run_DownloadAndUpdateError(t *testing.T) {

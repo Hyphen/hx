@@ -84,7 +84,14 @@ var UpdateCmd = &cobra.Command{
 }
 
 func NewDefaultUpdater(version string) *Updater {
-	defaultUrlTemplate := "http://localhost:4000/api/downloads/hyphen-cli/%s?os=%s"
+	// Check if the environment variable is set, else use the default URL
+	defaultUrlTemplate := os.Getenv("HYPHEN_ENGINE_URL")
+	if defaultUrlTemplate == "" {
+		defaultUrlTemplate = "https://api.hyphen.ai/api/downloads/hyphen-cli/%s?os=%s"
+	} else {
+		defaultUrlTemplate += "/api/downloads/hyphen-cli/%s?os=%s"
+	}
+
 	updater := &Updater{
 		Version:           version,
 		URLTemplate:       defaultUrlTemplate,
