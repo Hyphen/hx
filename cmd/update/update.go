@@ -31,8 +31,6 @@ var UpdateCmd = &cobra.Command{
 	Long:  `This command updates the Hyphen CLI to the specified version or the latest version available for your operating system`,
 	Run: func(cmd *cobra.Command, args []string) {
 		osType := detectPlatform()
-		fmt.Println("Detected OS Type:")
-		fmt.Println(osType)
 		if !isValidOs(osType) {
 			fmt.Printf("Unsupported operating system: %s\n", osType)
 			return
@@ -97,7 +95,7 @@ func downloadAndUpdate(url string) error {
 		return fmt.Errorf("failed to download update, status code: %d", resp.StatusCode)
 	}
 
-	filename := "hyphen-cli"
+	filename := "hyphen"
 	if runtime.GOOS == "windows" {
 		filename += ".exe"
 	}
@@ -117,7 +115,7 @@ func downloadAndUpdate(url string) error {
 		if err := os.Chmod(tempFile.Name(), 0755); err != nil {
 			return fmt.Errorf("error setting executable permission: %w", err)
 		}
-		return replaceFile(tempFile.Name(), filename)
+		return moveToExecutablePath(tempFile.Name())
 	}
 
 	// For Windows, use a batch script to replace the file after the process exits
@@ -163,8 +161,10 @@ func getExecutablePath() string {
 	return path
 }
 
-func replaceFile(src, dst string) error {
-	return os.Rename(src, dst)
+func moveToExecutablePath(src string) error {
+	executablePath := getExecutablePath()
+	dest := executablePath
+	return os.Rename(src, dest)
 }
 
 func init() {
