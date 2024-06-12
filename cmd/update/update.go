@@ -140,8 +140,8 @@ func (u *Updater) Run(cmd *cobra.Command, args []string) {
 }
 
 func (u *Updater) fetchLatestVersion() (string, error) {
-	// Use the BaseURL and append /latest-version
-	url := fmt.Sprintf("%s/api/downloads/hyphen-cli/version/latest", u.BaseURL)
+	// Use the BaseURL and append /versions?latest=true
+	url := fmt.Sprintf("%s/api/downloads/hyphen-cli/versions?latest=true", u.BaseURL)
 	resp, err := u.HTTPClient.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("error fetching latest version: %w", err)
@@ -153,14 +153,20 @@ func (u *Updater) fetchLatestVersion() (string, error) {
 	}
 
 	var responseBody struct {
-		Version string `json:"latestVersion"`
+		Data []struct {
+			Version string `json:"version"`
+		} `json:"data"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&responseBody); err != nil {
 		return "", fmt.Errorf("error decoding response body: %w", err)
 	}
 
-	return strings.TrimSpace(responseBody.Version), nil
+	if len(responseBody.Data) > 0 {
+		return strings.TrimSpace(responseBody.Data[0].Version), nil
+	}
+
+	return "", fmt.Errorf("latest version not found")
 }
 
 func detectPlatform(goos, goarch string) string {

@@ -84,7 +84,7 @@ func TestUpdater_Run_AlreadyUpToDate(t *testing.T) {
 	mockHTTPClient := MockHTTPClient{
 		Response: &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(`{"latestVersion":"1.0.0"}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"data":[{"version":"1.0.0"}]}`)),
 		},
 		Err: nil,
 	}
@@ -126,7 +126,7 @@ func TestUpdater_Run_DownloadAndUpdateError(t *testing.T) {
 	mockHTTPClient := MockHTTPClient{
 		Response: &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(`{"latestVersion":"2.0.0"}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"data":[{"version":"2.0.0"}]}`)),
 		},
 		Err: nil,
 	}
@@ -168,7 +168,7 @@ func TestUpdater_Run_DownloadAndUpdateError(t *testing.T) {
 func TestUpdater_Run_Success(t *testing.T) {
 	cliVersion.Version = "1.0.0" // Current version is different from the latest
 
-	mockResp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"latestVersion":"2.0.0"}`))}
+	mockResp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"data":[{"version":"2.0.0"}]}`))}
 	mockHTTPClient := MockHTTPClient{Response: mockResp, Err: nil}
 	mockFile, _ := os.CreateTemp("", "hyphen")
 	mockFileHandler := MockFileHandler{CreateTempFile: mockFile, CreateTempErr: nil}
@@ -216,7 +216,7 @@ func TestUpdater_Run_InvalidOS(t *testing.T) {
 	mockHTTPClient := MockHTTPClient{
 		Response: &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(`{"latestVersion":"2.0.0"}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"data":[{"version":"2.0.0"}]}`)),
 		},
 		Err: nil,
 	}
@@ -288,7 +288,9 @@ func TestDefaultHTTPClient_Get(t *testing.T) {
 
 	assert.NoError(t, err, "Expected no error for a valid URL")
 	assert.NotNil(t, resp, "Expected a response for a valid URL")
-	assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected status code to be 200")
+	if resp != nil {
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected status code to be 200")
+	}
 }
 
 func TestDefaultFileHandler_CreateTemp(t *testing.T) {
