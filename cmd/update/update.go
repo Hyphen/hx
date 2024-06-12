@@ -1,6 +1,7 @@
 package update
 
 import (
+	"encoding/json"
 	"fmt"
 	cliVersion "github.com/Hyphen/cli/cmd/version"
 	"io"
@@ -56,6 +57,7 @@ type CommandRunner func(name string, arg ...string) *exec.Cmd
 // Config struct for dependencies and settings
 type Updater struct {
 	Version           string
+	BaseURL           string
 	URLTemplate       string
 	HTTPClient        HTTPClient
 	FileHandler       FileHandler
@@ -85,17 +87,17 @@ var UpdateCmd = &cobra.Command{
 }
 
 func NewDefaultUpdater(version string) *Updater {
-	// Check if the environment variable is set, else use the default URL
-	defaultUrlTemplate := os.Getenv("HYPHEN_ENGINE_URL")
-	if defaultUrlTemplate == "" {
-		defaultUrlTemplate = "https://api.hyphen.ai/api/version/latest"
-	} else {
-		defaultUrlTemplate += "/api/version/latest"
+	baseURL := os.Getenv("HYPHEN_ENGINE_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://api.hyphen.ai"
 	}
+
+	urlTemplate := fmt.Sprintf("%s/api/downloads/hyphen-cli/%%s?os=%%s", baseURL)
 
 	updater := &Updater{
 		Version:           version,
-		URLTemplate:       defaultUrlTemplate,
+		BaseURL:           baseURL,
+		URLTemplate:       urlTemplate,
 		HTTPClient:        DefaultHTTPClient{},
 		FileHandler:       DefaultFileHandler{},
 		GetExecPath:       defaultGetExecutablePath,
@@ -138,7 +140,9 @@ func (u *Updater) Run(cmd *cobra.Command, args []string) {
 }
 
 func (u *Updater) fetchLatestVersion() (string, error) {
-	resp, err := u.HTTPClient.Get(u.URLTemplate)
+	// Use the BaseURL and append /latest-version
+	url := fmt.Sprintf("%s/api/downloads/hyphen-cli/version/latest", u.BaseURL)
+	resp, err := u.HTTPClient.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("error fetching latest version: %w", err)
 	}
@@ -148,12 +152,15 @@ func (u *Updater) fetchLatestVersion() (string, error) {
 		return "", fmt.Errorf("failed to get latest version, status code: %d", resp.StatusCode)
 	}
 
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("error reading response body: %w", err)
+	var responseBody struct {
+		Version string `json:"latestVersion"`
 	}
 
-	return strings.TrimSpace(string(bodyBytes)), nil
+	if err := json.NewDecoder(resp.Body).Decode(&responseBody); err != nil {
+		return "", fmt.Errorf("error decoding response body: %w", err)
+	}
+
+	return strings.TrimSpace(responseBody.Version), nil
 }
 
 func detectPlatform(goos, goarch string) string {
