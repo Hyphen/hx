@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"os"
 )
 
 type SecretKey struct {
@@ -28,7 +27,7 @@ func New() *SecretKey {
 	secret := make([]byte, 256)
 	if _, err := rand.Read(secret); err != nil {
 		fmt.Println("Error generating secret key:", err)
-		os.Exit(1)
+		panic(err)
 	}
 
 	secretBase64 := base64.StdEncoding.EncodeToString(secret)
@@ -49,7 +48,7 @@ func (s SecretKey) HashSHA() string {
 	hasher := sha256.New()
 	if _, err := hasher.Write([]byte(s.secretBase64)); err != nil {
 		fmt.Println("Error hashing secret key:", err)
-		os.Exit(1)
+		panic(err)
 	}
 
 	return fmt.Sprintf("%x", hasher.Sum(nil))
