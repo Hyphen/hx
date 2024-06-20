@@ -12,6 +12,11 @@ type SecretKey struct {
 	secretBase64 string
 }
 
+type SecretKeyer interface {
+	Base64() string
+	HashSHA() string
+}
+
 func FromBase64(secretBase64 string) *SecretKey {
 	return &SecretKey{
 		secretBase64: secretBase64,
