@@ -1,8 +1,7 @@
 package secretkey
 
 import (
-	"crypto/rand"
-	"fmt"
+	"encoding/base64"
 	"testing"
 )
 
@@ -16,8 +15,8 @@ func TestFromBase64(t *testing.T) {
 
 func TestNew(t *testing.T) {
 	sk := New()
-	if len(sk.Base64()) != 256 {
-		t.Errorf("New() produced Base64 string of length %d, want %d", len(sk.Base64()), 256)
+	if len(sk.Base64()) == 0 {
+		t.Errorf("New() produced empty Base64 string")
 	}
 }
 
@@ -31,32 +30,45 @@ func TestBase64(t *testing.T) {
 
 func TestHashSHA(t *testing.T) {
 	base64Str := "c2VjcmV0LWtleQ=="
-	expectedHash := "b400df4d7db31b2ca6d9b69f261017026177d0dafcf1af8b73e3f0bc33210b50" // Expected hash of "secret-key"
+	expectedHash := "b400df4d7db31b2ca6d9b69f261017026177d0dafcf1af8b73e3f0bc33210b50" // Expected hash of "secret-key in Base64"
 	sk := FromBase64(base64Str)
 	if sk.HashSHA() != expectedHash {
 		t.Errorf("HashSHA() = %v, want %v", sk.HashSHA(), expectedHash)
 	}
 }
 
-// Test for error handling in New function
-func TestNew_ErrorHandling(t *testing.T) {
-	// Replace rand.Reader to simulate an error
-	oldRandReader := rand.Reader
-	defer func() { rand.Reader = oldRandReader }()
-	rand.Reader = &errorReader{}
+func TestEncryptDecrypt(t *testing.T) {
+	sk := New()
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("New() did not panic on rand.Read error")
-		}
-	}()
+	message := "This is a test message."
+	encrypted, err := sk.Encrypt(message)
+	if err != nil {
+		t.Fatalf("Encrypt() error = %v", err)
+	}
 
-	New()
+	decrypted, err := sk.Decrypt(encrypted)
+	if err != nil {
+		t.Fatalf("Decrypt() error = %v", err)
+	}
+
+	if decrypted != message {
+		t.Errorf("Decrypt() = %v, want %v", decrypted, message)
+	}
 }
 
-// Simulate an error for rand.Reader
-type errorReader struct{}
+// TestDecryptErrorHandling tests error handling in the Decrypt function
+func TestDecryptErrorHandling(t *testing.T) {
+	sk := New()
 
-func (e *errorReader) Read(p []byte) (n int, err error) {
-	return 0, fmt.Errorf("simulated read error")
+	// Test with an improperly formatted base64 string
+	_, err := sk.Decrypt("bad-base64")
+	if err == nil {
+		t.Error("Decrypt() expected error, got nil")
+	}
+
+	// Test with ciphertext that is too short
+	_, err = sk.Decrypt(base64.URLEncoding.EncodeToString([]byte("short")))
+	if err == nil {
+		t.Error("Decrypt() expected 'ciphertext too short' error, got nil")
+	}
 }

@@ -7,16 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Hyphen/cli/internal/secretkey"
+	"github.com/Hyphen/cli/internal/environment"
 	"github.com/spf13/cobra"
-
-	"github.com/BurntSushi/toml"
 )
-
-type Config struct {
-	AppName   string `toml:"app_name"`
-	SecretKey string `toml:"secret_key"`
-}
 
 var InitCmd = &cobra.Command{
 	Use:     "init",
@@ -33,25 +26,7 @@ var InitCmd = &cobra.Command{
 		//check if name exist
 		//xxx
 
-		// Create and write to the .hyphen-env-key file
-		config := Config{
-			AppName:   appName,
-			SecretKey: secretkey.New().Base64(),
-		}
-
-		file, err := os.Create(".hyphen-env-key")
-		if err != nil {
-			fmt.Println("Error creating file:", err)
-			return
-		}
-		defer file.Close()
-
-		enc := toml.NewEncoder(file)
-		if err := enc.Encode(config); err != nil {
-			fmt.Println("Error encoding TOML:", err)
-			return
-		}
-
+		environment.Initialize(appName)
 		fmt.Println("Environment initialized")
 	},
 }
