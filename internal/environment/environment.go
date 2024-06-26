@@ -202,3 +202,43 @@ func GetEnvFileByEnvironment(environment string) string {
 	}
 	return fmt.Sprintf(".env.%s", strings.ToLower(environment))
 }
+
+// ensureGitignore checks for a .gitignore file in the current directory
+// and adds the entry (".hyphen-env-key") if it's not already present.
+func EnsureGitignore() error {
+	const gitignorePath = ".gitignore"
+
+	// Check if .gitignore exists
+	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
+		// If .gitignore does not exist, do nothing and return early
+		return nil
+	}
+
+	// Open the existing .gitignore file for reading and appending
+	file, err := os.OpenFile(gitignorePath, os.O_RDWR|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("error opening .gitignore: %w", err)
+	}
+	defer file.Close()
+
+	// Check if the entry already exists in .gitignore
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		if strings.TrimSpace(scanner.Text()) == EnvConfigFile {
+			// Entry already exists in .gitignore
+			return nil
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading .gitignore: %w", err)
+	}
+
+	// If the entry doesn't exist, add it to the file
+	_, err = file.WriteString(EnvConfigFile + "\n")
+	if err != nil {
+		return fmt.Errorf("error writing to .gitignore: %w", err)
+	}
+
+	return nil
+}

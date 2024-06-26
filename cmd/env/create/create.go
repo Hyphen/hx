@@ -47,8 +47,12 @@ The command will create a file named based on the environment, such as 'default.
 		}
 
 		fmt.Printf("Successfully created environment file for %s: %s\n", env, fileName)
+
+		if err := environment.EnsureGitignore(); err != nil {
+			fmt.Printf("Error checking/updating .gitignore: %v\n", err)
+			os.Exit(1)
+		}
 	},
 }
 
-func init() {
-}
+func init() {}
