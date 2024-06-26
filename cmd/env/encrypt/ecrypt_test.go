@@ -28,7 +28,7 @@ func (m *mockEnvHandler) GetEncryptedEnviromentVars(env string) (string, error) 
 	return "", nil
 }
 
-func (m *mockEnvHandler) UploadEncryptedEnviromentVars(env string) error {
+func (m *mockEnvHandler) UploadEncryptedEnviromentVars(env, envVars string) error {
 	return nil
 }
 
