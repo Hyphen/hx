@@ -12,53 +12,82 @@ import (
 )
 
 var (
-	envFile      string
-	envWorkspace string
-	StreamVars   bool
+	envFile    string
+	StreamVars bool
 )
 
 var RunCmd = &cobra.Command{
-	Use:   "run [COMMAND]",
+	Use:   "run [ENVIRONMENT] [COMMAND] [ARGS...]",
 	Short: "Run a command using some environment variables",
-	Long:  `Executes the specified command with the environment variables sourced from the specified environment file.`,
-	Run:   runCommand,
+	Long: `Executes the specified command with the environment variables sourced from the specified environment file.
+
+Example usage:
+  hyrule env run default go run main.go
+  hyrule env run production some_script.sh`,
+	Args: cobra.MinimumNArgs(2), // Ensure at least two arguments are provided: ENVIRONMENT and COMMAND
+	Run:  runCommand,
 }
 
 func init() {
 	RunCmd.Flags().StringVarP(&envFile, "file", "f", "", "specific environment file to use")
-	RunCmd.Flags().StringVarP(&envWorkspace, "env", "e", "", "environment workspace (e.g., development, production)")
 	RunCmd.Flags().BoolVarP(&StreamVars, "stream", "s", false, "stream environment variables")
 }
 
 func runCommand(cmd *cobra.Command, args []string) {
-	if len(args) < 1 {
-		fmt.Println("Usage: cloudenv run [COMMAND]")
-		return
-	}
+	runCommander := InitRunCommander()
+	env := args[0]
+	command := args[1]
+	commandArgs := args[2:]
 
-	command := args[0]
-	env := getEnvFile()
-
-	if !fileExists(env) {
-		fmt.Printf("Environment file %s does not exist.\n", env)
-		return
-	}
-
-	envVars, err := getEnvironmentVariables(env)
+	envVars, err := runCommander.getEnvironmentVariables(env)
 	if err != nil {
 		fmt.Printf("Error exporting environment variables: %v\n", err)
 		return
 	}
 
-	fmt.Printf("Running command '%s' with environment variables from %s.\n", command, env)
-	if err := executeCommand(command, args[1:], envVars); err != nil {
+	if err := runCommander.execute(command, commandArgs, envVars); err != nil {
 		fmt.Printf("Error executing command '%s': %v\n", command, err)
 	}
 }
 
-func getEnvFile() string {
+type RunCommander struct {
+	envHanler environment.EnviromentHandler
+}
+
+func InitRunCommander() *RunCommander {
+	return &RunCommander{
+		envHanler: environment.Restore(),
+	}
+}
+
+func (r *RunCommander) getEnvironmentVariables(env string) ([]string, error) {
+	if StreamVars {
+		return r.readEnvFileStremed(env)
+	}
+	return readEnvFile(env)
+}
+
+func (r *RunCommander) readEnvFileStremed(env string) ([]string, error) {
+	return r.envHanler.DecryptEnvironmentVars(env)
+}
+
+func (r *RunCommander) execute(command string, args []string, envVars []string) error {
+	cmd := exec.Command(os.ExpandEnv(command), expandArgs(args)...)
+	cmd.Env = append(os.Environ(), envVars...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("execution failed: %w", err)
+	}
+
+	return nil
+}
+
+func getEnvFile(env string) string {
 	if envFile == "" {
-		return environment.GetEnvFileByEnvironment(envWorkspace)
+		return environment.GetEnvFileByEnvironment(env)
 	}
 	return envFile
 }
@@ -68,20 +97,15 @@ func fileExists(filename string) bool {
 	return !os.IsNotExist(err)
 }
 
-func getEnvironmentVariables(env string) ([]string, error) {
-	if StreamVars {
-		// TODO: Handle streaming environment variables
-		return []string{}, nil // Placeholder for the actual streaming logic
+func readEnvFile(env string) ([]string, error) {
+	envFile := getEnvFile(env)
+
+	if !fileExists(envFile) {
+		fmt.Printf("Environment file %s does not exist.\n", envFile)
+		os.Exit(1)
 	}
-	return readEnvFile(env)
-}
 
-func readEnvFileStremed(env string) ([]string, error) {
-	return nil, nil
-}
-
-func readEnvFile(file string) ([]string, error) {
-	f, err := os.Open(file)
+	f, err := os.Open(envFile)
 	if err != nil {
 		return nil, fmt.Errorf("error opening file: %w", err)
 	}
@@ -121,20 +145,6 @@ func parseEnvLine(line string) (string, string, error) {
 		return "", "", fmt.Errorf("invalid line: %s", line)
 	}
 	return parts[0], parts[1], nil
-}
-
-func executeCommand(command string, args []string, envVars []string) error {
-	cmd := exec.Command(os.ExpandEnv(command), expandArgs(args)...)
-	cmd.Env = append(os.Environ(), envVars...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("execution failed: %w", err)
-	}
-
-	return nil
 }
 
 func expandArgs(args []string) []string {

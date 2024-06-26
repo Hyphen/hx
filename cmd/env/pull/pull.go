@@ -8,16 +8,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Define variables to hold the values of the env and file flags
-var env string
+// Define a variable to hold the value of the file flag
 var fileName string
 
 var PullCmd = &cobra.Command{
-	Use:   "pull",
+	Use:   "pull [environment]",
 	Short: "Decrypt and put environment variables into a file",
 	Long: `This command reads the specified environment, decrypts the variables, and 
 writes them into the given file.`,
+	Args: cobra.ExactArgs(1), // Ensure exactly one argument is provided
 	Run: func(cmd *cobra.Command, args []string) {
+		// Get the environment from the first command-line argument
+		env := args[0]
+
 		// Get the default environment file name
 		envFile := environment.GetEnvFileByEnvironment(env)
 
@@ -40,6 +43,5 @@ writes them into the given file.`,
 }
 
 func init() {
-	PullCmd.Flags().StringVarP(&env, "environment", "e", "", " Specify the environment. If not set, the 'default' environment will be used.")
 	PullCmd.Flags().StringVarP(&fileName, "file", "f", "", "Specify the output file name")
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/Hyphen/cli/internal/environment/infrastructure/inmemory"
 	"github.com/Hyphen/cli/internal/secretkey"
 )
 
@@ -16,7 +17,7 @@ type EnviromentHandler interface {
 	DecryptedEnviromentVarsIntoAFile(env, fileName string) (string, error)
 
 	GetEncryptedEnviromentVars(env string) (string, error)
-	UploadEncryptedEnviromentVars(env string) error
+	UploadEncryptedEnviromentVars(env, envVars string) error
 	SourceEnviromentVars(env string) error
 	SecretKey() secretkey.SecretKeyer
 }
@@ -24,7 +25,8 @@ type EnviromentHandler interface {
 var EnvConfigFile = ".hyphen-env-key"
 
 type Enviroment struct {
-	secretKey secretkey.SecretKeyer
+	secretKey  secretkey.SecretKeyer
+	repository Repository
 }
 
 type Config struct {
@@ -51,7 +53,8 @@ func RestoreFromFile(file string) EnviromentHandler {
 	}
 
 	return &Enviroment{
-		secretKey: secretkey.FromBase64(config.SecretKey),
+		secretKey:  secretkey.FromBase64(config.SecretKey),
+		repository: inmemory.New(),
 	}
 }
 
@@ -75,7 +78,8 @@ func Initialize(appName string) *Enviroment {
 	}
 
 	return &Enviroment{
-		secretKey: secretkey.FromBase64(config.SecretKey),
+		secretKey:  secretkey.FromBase64(config.SecretKey),
+		repository: inmemory.New(),
 	}
 
 }
@@ -85,12 +89,19 @@ func (e *Enviroment) SecretKey() secretkey.SecretKeyer {
 }
 
 func (e *Enviroment) GetEncryptedEnviromentVars(env string) (string, error) {
-	//TODO get the ecripted from the correct env viroments
-	return "BCvegyxXEftYPvYR865d6ONEzlyyXRVEa9bcqSW6BxKdv0SEadIzKe8I", nil
+	return e.repository.GetEncryptedVariables(env)
 }
 
-func (e *Enviroment) UploadEncryptedEnviromentVars(env string) error {
-	//TODO upload the env to the correct env
+func (e *Enviroment) UploadEncryptedEnviromentVars(env, fileContent string) error {
+	encryptedVars, err := e.secretKey.Encrypt(fileContent)
+	if err != nil {
+		return err
+	}
+
+	if err = e.repository.UploadEnvVariable(env, encryptedVars); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -186,7 +197,7 @@ func tmpFile() (*os.File, string) {
 }
 
 func GetEnvFileByEnvironment(environment string) string {
-	if environment == "" {
+	if environment == "" || environment == "default" {
 		return ".env"
 	}
 	return fmt.Sprintf(".env.%s", strings.ToLower(environment))

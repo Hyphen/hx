@@ -1,6 +1,7 @@
 package env
 
 import (
+	"github.com/Hyphen/cli/cmd/env/create"
 	"github.com/Hyphen/cli/cmd/env/decrypt"
 	"github.com/Hyphen/cli/cmd/env/encrypt"
 	"github.com/Hyphen/cli/cmd/env/initialize"
@@ -25,5 +26,6 @@ func init() {
 	EnvCmd.AddCommand(run.RunCmd)
 	EnvCmd.AddCommand(encrypt.EncryptCmd)
 	EnvCmd.AddCommand(pull.PullCmd)
+	EnvCmd.AddCommand(create.CreateCmd)
 
 }
