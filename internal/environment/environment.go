@@ -38,6 +38,12 @@ func Restore() EnviromentHandler {
 
 func RestoreFromFile(file string) EnviromentHandler {
 	config := Config{}
+
+	if _, err := os.Stat(file); os.IsNotExist(err) {
+		fmt.Println("You must init the environment with 'env init'")
+		os.Exit(1)
+	}
+
 	_, err := toml.DecodeFile(file, &config)
 	if err != nil {
 		fmt.Println("Error decoding TOML file:", err)
@@ -80,7 +86,7 @@ func (e *Enviroment) SecretKey() secretkey.SecretKeyer {
 
 func (e *Enviroment) GetEncryptedEnviromentVars(env string) (string, error) {
 	//TODO get the ecripted from the correct env viroments
-	return "A0ypRST4-Bfd6Z9zGwzO6tSQagByUtlHFZ42", nil
+	return "BCvegyxXEftYPvYR865d6ONEzlyyXRVEa9bcqSW6BxKdv0SEadIzKe8I", nil
 }
 
 func (e *Enviroment) UploadEncryptedEnviromentVars(env string) error {
