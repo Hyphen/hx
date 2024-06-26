@@ -40,6 +40,6 @@ writes them into the given file.`,
 }
 
 func init() {
-	PullCmd.Flags().StringVarP(&env, "environment", "e", "", "Specify the environment")
+	PullCmd.Flags().StringVarP(&env, "environment", "e", "", " Specify the environment. If not set, the 'default' environment will be used.")
 	PullCmd.Flags().StringVarP(&fileName, "file", "f", "", "Specify the output file name")
 }
