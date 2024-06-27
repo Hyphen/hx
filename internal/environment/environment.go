@@ -203,14 +203,29 @@ func GetEnvFileByEnvironment(environment string) string {
 	return fmt.Sprintf(".env.%s", strings.ToLower(environment))
 }
 
-// ensureGitignore checks for a .gitignore file in the current directory
-// and adds the entry (".hyphen-env-key") if it's not already present.
 func EnsureGitignore() error {
+	const gitDirPath = ".git"
 	const gitignorePath = ".gitignore"
+
+	// Check if the current directory is a Git project
+	if _, err := os.Stat(gitDirPath); os.IsNotExist(err) {
+		// If the .git directory does not exist, do nothing and return early
+		return nil
+	}
 
 	// Check if .gitignore exists
 	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
-		// If .gitignore does not exist, do nothing and return early
+		// If .gitignore does not exist, create it and add the entry
+		file, err := os.Create(gitignorePath)
+		if err != nil {
+			return fmt.Errorf("error creating .gitignore: %w", err)
+		}
+		defer file.Close()
+
+		_, err = file.WriteString(EnvConfigFile + "\n")
+		if err != nil {
+			return fmt.Errorf("error writing to .gitignore: %w", err)
+		}
 		return nil
 	}
 

@@ -28,6 +28,11 @@ var InitCmd = &cobra.Command{
 
 		environment.Initialize(appName)
 		fmt.Println("Environment initialized")
+
+		if err := environment.EnsureGitignore(); err != nil {
+			fmt.Printf("Error checking/updating .gitignore: %v\n", err)
+			os.Exit(1)
+		}
 	},
 }
 
