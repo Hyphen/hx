@@ -56,12 +56,20 @@ func PromptForAppName(reader io.Reader) (string, error) {
 
 func PromptForOverwrite(reader io.Reader) bool {
 	r := bufio.NewReader(reader)
-	fmt.Print("Are you sure you want to overwrite the EnvConfigFile? (y/N): ")
-	response, err := r.ReadString('\n')
-	if err != nil {
-		fmt.Println("Error reading input:", err)
-		os.Exit(1)
+	for {
+		fmt.Print("Are you sure you want to overwrite the EnvConfigFile? (y/N): ")
+		response, err := r.ReadString('\n')
+		if err != nil {
+			fmt.Println("Error reading input:", err)
+			os.Exit(1)
+		}
+		response = strings.TrimSpace(response)
+		switch strings.ToLower(response) {
+		case "y", "yes":
+			return true
+		case "n", "no", "":
+			return false
+		default:
+		}
 	}
-	response = strings.TrimSpace(response)
-	return strings.ToLower(response) == "y"
 }
