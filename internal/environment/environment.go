@@ -257,3 +257,8 @@ func EnsureGitignore() error {
 
 	return nil
 }
+
+func ConfigExists() bool {
+	_, err := os.Stat(EnvConfigFile)
+	return !os.IsNotExist(err)
+}

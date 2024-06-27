@@ -17,6 +17,14 @@ var InitCmd = &cobra.Command{
 	Short:   "Initialize the environment",
 	Long:    `This command initializes the environment with necessary configurations.`,
 	Run: func(cmd *cobra.Command, args []string) {
+
+		if environment.ConfigExists() {
+			if !PromptForOverwrite(os.Stdin) {
+				fmt.Println("Operation cancelled.")
+				return
+			}
+		}
+
 		appName, err := PromptForAppName(os.Stdin)
 		if err != nil {
 			fmt.Println(err)
@@ -44,4 +52,16 @@ func PromptForAppName(reader io.Reader) (string, error) {
 		return "", fmt.Errorf("error reading input: %w", err)
 	}
 	return strings.TrimSpace(appName), nil
+}
+
+func PromptForOverwrite(reader io.Reader) bool {
+	r := bufio.NewReader(reader)
+	fmt.Print("Are you sure you want to overwrite the EnvConfigFile? (y/N): ")
+	response, err := r.ReadString('\n')
+	if err != nil {
+		fmt.Println("Error reading input:", err)
+		os.Exit(1)
+	}
+	response = strings.TrimSpace(response)
+	return strings.ToLower(response) == "y"
 }
