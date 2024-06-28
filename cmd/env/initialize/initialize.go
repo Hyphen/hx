@@ -30,11 +30,15 @@ var InitCmd = &cobra.Command{
 			fmt.Println(err)
 			return
 		}
-		//TODO:
-		//check if name exist
-		//xxx
 
-		environment.Initialize(appName)
+		defaultAppId := generateDefaultAppId(appName)
+		appId, err := PromptForAppId(os.Stdin, defaultAppId)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		_ = environment.Initialize(appName, appId)
 		fmt.Println("Environment initialized")
 
 		if err := environment.EnsureGitignore(); err != nil {
@@ -52,6 +56,20 @@ func PromptForAppName(reader io.Reader) (string, error) {
 		return "", fmt.Errorf("error reading input: %w", err)
 	}
 	return strings.TrimSpace(appName), nil
+}
+
+func PromptForAppId(reader io.Reader, defaultAppId string) (string, error) {
+	r := bufio.NewReader(reader)
+	fmt.Printf("App ID [%s]: ", defaultAppId)
+	appId, err := r.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("error reading input: %w", err)
+	}
+	appId = strings.TrimSpace(appId)
+	if appId == "" {
+		appId = defaultAppId
+	}
+	return appId, nil
 }
 
 func PromptForOverwrite(reader io.Reader) bool {
@@ -72,4 +90,8 @@ func PromptForOverwrite(reader io.Reader) bool {
 		default:
 		}
 	}
+}
+
+func generateDefaultAppId(appName string) string {
+	return strings.ToLower(strings.ReplaceAll(appName, " ", "-"))
 }

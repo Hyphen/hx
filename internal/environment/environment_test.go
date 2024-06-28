@@ -115,7 +115,7 @@ secret_key = "c2VjcmV0LWtleQ=="
 
 func TestInitialize(t *testing.T) {
 	// Initialize
-	env := Initialize("test-app")
+	env := Initialize("test-app", "test-app")
 	if env.SecretKey().Base64() == "" {
 		t.Errorf("Expected a new secret key")
 	}

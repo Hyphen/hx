@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/Hyphen/cli/internal/environment/infrastructure/inmemory"
+	"github.com/Hyphen/cli/internal/environment/infrastructure/envapi"
 	"github.com/Hyphen/cli/internal/secretkey"
 )
 
@@ -31,6 +31,7 @@ type Enviroment struct {
 
 type Config struct {
 	AppName   string `toml:"app_name"`
+	AppId     string `toml:"app_id"`
 	SecretKey string `toml:"secret_key"`
 }
 
@@ -54,14 +55,29 @@ func RestoreFromFile(file string) EnviromentHandler {
 
 	return &Enviroment{
 		secretKey:  secretkey.FromBase64(config.SecretKey),
-		repository: inmemory.New(),
+		repository: envapi.New(),
 	}
 }
 
-func Initialize(appName string) *Enviroment {
+func Initialize(appName, appId string) *Enviroment {
 	config := Config{
 		AppName:   appName,
+		AppId:     appId,
 		SecretKey: secretkey.New().Base64(),
+	}
+
+	env := &Enviroment{
+		secretKey:  secretkey.FromBase64(config.SecretKey),
+		repository: envapi.New(),
+	}
+
+	if err := env.repository.Initialize(appName, appId); err != nil {
+		if customErr, ok := err.(*envapi.Error); ok {
+			fmt.Println("Error:", customErr.UserMessage)
+		} else {
+			fmt.Println("Error:", err.Error())
+		}
+		os.Exit(1)
 	}
 
 	file, err := os.Create(EnvConfigFile)
@@ -77,10 +93,7 @@ func Initialize(appName string) *Enviroment {
 		os.Exit(1)
 	}
 
-	return &Enviroment{
-		secretKey:  secretkey.FromBase64(config.SecretKey),
-		repository: inmemory.New(),
-	}
+	return env
 
 }
 

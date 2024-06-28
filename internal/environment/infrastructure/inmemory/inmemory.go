@@ -65,3 +65,7 @@ func (m *InMemoryRepo) loadFromFile() error {
 	}
 	return nil
 }
+
+func (m *InMemoryRepo) Initialize(apiName, apiId string) error {
+	return nil
+}
