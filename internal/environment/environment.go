@@ -11,6 +11,12 @@ import (
 	"github.com/Hyphen/cli/internal/secretkey"
 )
 
+var repository Repository = envapi.New()
+
+func SetRepository(repo Repository) {
+	repository = repo
+}
+
 type EnviromentHandler interface {
 	EncryptEnvironmentVars(file string) (string, error)
 	DecryptEnvironmentVars(env string) ([]string, error)
@@ -55,7 +61,7 @@ func RestoreFromFile(file string) EnviromentHandler {
 
 	return &Enviroment{
 		secretKey:  secretkey.FromBase64(config.SecretKey),
-		repository: envapi.New(),
+		repository: repository,
 	}
 }
 
@@ -68,7 +74,7 @@ func Initialize(appName, appId string) *Enviroment {
 
 	env := &Enviroment{
 		secretKey:  secretkey.FromBase64(config.SecretKey),
-		repository: envapi.New(),
+		repository: repository,
 	}
 
 	if err := env.repository.Initialize(appName, appId); err != nil {
