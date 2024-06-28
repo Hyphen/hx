@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Define a variable to hold the value of the file flag
 var fileName string
 
 var CreateCmd = &cobra.Command{
@@ -22,10 +21,15 @@ Example usage:
   hyphen env create production
 
 The command will create a file named based on the environment, such as 'default.env' or 'production.env'.`,
-	Args: cobra.ExactArgs(1), // Ensure exactly one argument is provided, which is the environment
+	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		// Get the environment from the first command-line argument
-		env := args[0]
+		// Initialize env with an empty string
+		env := ""
+
+		// If an environment is provided in args, use it
+		if len(args) == 1 {
+			env = args[0]
+		}
 
 		// Get the default environment file name
 		fileName = environment.GetEnvFileByEnvironment(env)
@@ -47,7 +51,6 @@ The command will create a file named based on the environment, such as 'default.
 		}
 
 		fmt.Printf("Successfully created environment file for %s: %s\n", env, fileName)
-
 	},
 }
 
