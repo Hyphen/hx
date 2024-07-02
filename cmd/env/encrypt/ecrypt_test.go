@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/Hyphen/cli/internal/environment/envvars"
 	"github.com/Hyphen/cli/internal/secretkey"
 )
 
@@ -28,7 +29,7 @@ func (m *mockEnvHandler) GetEncryptedEnviromentVars(env string) (string, error) 
 	return "", nil
 }
 
-func (m *mockEnvHandler) UploadEncryptedEnviromentVars(env, envVars string) error {
+func (m *mockEnvHandler) UploadEncryptedEnviromentVars(env string, envData envvars.EnviromentVarsData) error {
 	return nil
 }
 

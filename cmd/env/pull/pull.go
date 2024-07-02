@@ -16,10 +16,15 @@ var PullCmd = &cobra.Command{
 	Short: "Decrypt and put environment variables into a file",
 	Long: `This command reads the specified environment, decrypts the variables, and 
 writes them into the given file.`,
-	Args: cobra.ExactArgs(1), // Ensure exactly one argument is provided
+	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		// Get the environment from the first command-line argument
-		env := args[0]
+		// Initialize env with an empty string
+		env := "defult"
+
+		// If an environment is provided in args, use it
+		if len(args) == 1 {
+			env = args[0]
+		}
 
 		// Get the default environment file name
 		envFile := environment.GetEnvFileByEnvironment(env)

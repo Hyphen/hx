@@ -5,12 +5,15 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/Hyphen/cli/internal/environment/envvars"
 )
 
+// MockRepository implements the Repository interface for testing
 type MockRepository struct {
 	InitializeFunc            func(apiName, apiId string) error
-	GetEncryptedVariablesFunc func(env string) (string, error)
-	UploadEnvVariableFunc     func(env, encryptedVars string) error
+	GetEncryptedVariablesFunc func(env, appID string) (string, error)
+	UploadEnvVariableFunc     func(env, appID string, envData envvars.EnviromentVarsData) error
 }
 
 func (m *MockRepository) Initialize(apiName, apiId string) error {
@@ -20,37 +23,37 @@ func (m *MockRepository) Initialize(apiName, apiId string) error {
 	return nil
 }
 
-func (m *MockRepository) GetEncryptedVariables(env string) (string, error) {
+func (m *MockRepository) GetEncryptedVariables(env, appID string) (string, error) {
 	if m.GetEncryptedVariablesFunc != nil {
-		return m.GetEncryptedVariablesFunc(env)
+		return m.GetEncryptedVariablesFunc(env, appID)
 	}
 	return "", nil
 }
 
-func (m *MockRepository) UploadEnvVariable(env, encryptedVars string) error {
+func (m *MockRepository) UploadEnvVariable(env, appID string, envData envvars.EnviromentVarsData) error {
 	if m.UploadEnvVariableFunc != nil {
-		return m.UploadEnvVariableFunc(env, encryptedVars)
+		return m.UploadEnvVariableFunc(env, appID, envData)
 	}
 	return nil
 }
 
-// Mock SecretKeyer for testing
-type mockSecretKey struct{}
+// MockSecretKeyer for testing
+type MockSecretKey struct{}
 
-func (m *mockSecretKey) Base64() string {
+func (m *MockSecretKey) Base64() string {
 	return "mockBase64Key"
 }
 
-func (m *mockSecretKey) HashSHA() string {
+func (m *MockSecretKey) HashSHA() string {
 	return "mockHash"
 }
 
-func (m *mockSecretKey) Encrypt(message string) (string, error) {
+func (m *MockSecretKey) Encrypt(message string) (string, error) {
 	encoded := base64.URLEncoding.EncodeToString([]byte(message))
 	return encoded, nil
 }
 
-func (m *mockSecretKey) Decrypt(encryptedMessage string) (string, error) {
+func (m *MockSecretKey) Decrypt(encryptedMessage string) (string, error) {
 	decoded, err := base64.URLEncoding.DecodeString(encryptedMessage)
 	if err != nil {
 		return "", err
@@ -116,7 +119,7 @@ func TestInitialize(t *testing.T) {
 }
 
 func TestEncryptEnvironmentVars(t *testing.T) {
-	mockKey := &mockSecretKey{}
+	mockKey := &MockSecretKey{}
 	env := &Enviroment{secretKey: mockKey}
 
 	// Create a temporary file
@@ -145,7 +148,7 @@ func TestEncryptEnvironmentVars(t *testing.T) {
 }
 
 func TestDecryptEnvironmentVarsIntoAFile(t *testing.T) {
-	mockKey := &mockSecretKey{}
+	mockKey := &MockSecretKey{}
 	mockRepo := &MockRepository{}
 	SetRepository(mockRepo)
 
@@ -156,11 +159,11 @@ func TestDecryptEnvironmentVarsIntoAFile(t *testing.T) {
 	envVars := base64.URLEncoding.EncodeToString([]byte("TEST_VAR=test_value\nANOTHER_VAR=another_value"))
 
 	// Mock GetEncryptedVariables to return envVars
-	mockRepo.GetEncryptedVariablesFunc = func(env string) (string, error) {
+	mockRepo.GetEncryptedVariablesFunc = func(env, appID string) (string, error) {
 		return envVars, nil
 	}
 
-	tmpFileLocation, err := env.DecryptedEnviromentVarsIntoAFile("mockEnv", "mockfile")
+	tmpFileLocation, err := env.DecryptedEnviromentVarsIntoAFile("mockEnv", "mockApp")
 	if err != nil {
 		t.Fatalf("DecryptedEnviromentVarsIntoAFile error = %v", err)
 	}
@@ -178,7 +181,7 @@ func TestDecryptEnvironmentVarsIntoAFile(t *testing.T) {
 }
 
 func TestEncryptAndDecryptEnvironmentVars(t *testing.T) {
-	mockKey := &mockSecretKey{}
+	mockKey := &MockSecretKey{}
 	env := &Enviroment{secretKey: mockKey}
 
 	// Create a temporary file
@@ -206,7 +209,7 @@ func TestEncryptAndDecryptEnvironmentVars(t *testing.T) {
 		t.Fatalf("DecryptEnvironmentVars error = %v", err)
 	}
 
-	expectedDecryptedVars := []string{"TEST_VAR=test_value", "ANOTHER_VAR=another_value"}
+	expectedDecryptedVars := strings.Split(fileContent, "\n")
 	actualDecryptedVars := strings.Split(decryptedVars, "\n")
 	for i, v := range actualDecryptedVars {
 		if v != expectedDecryptedVars[i] {

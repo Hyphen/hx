@@ -3,8 +3,10 @@ package envapi
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
+	"github.com/Hyphen/cli/internal/environment/envvars"
 	"github.com/pkg/errors"
 )
 
@@ -20,10 +22,11 @@ func New() *EnvApi {
 
 // TODO: this sould come from the engine package
 func (e *EnvApi) login() (string, error) {
-	return "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJRX1pObEt0YTF2bWk0cWN1TU5mVWlfX1lKYVZ6MEZiUGt3WVQ5anB4di1ZIn0.eyJleHAiOjE3MTk1OTU0MjQsImlhdCI6MTcxOTU5MzYyNCwiYXV0aF90aW1lIjoxNzE5NTkzNjI0LCJqdGkiOiJkMTdhOGRkZi00MWNjLTRkYmEtOTA5Zi1mNzRlODVlNDZkNDYiLCJpc3MiOiJodHRwczovL2F1dGguaHlwaGVuLmFpL3JlYWxtcy9kZXYiLCJhdWQiOiJhY2NvdW50Iiwic3ViIjoiM2QyMjBlOTYtZTI0MC00ZTI3LTlmZWYtYjdhZTM2YWYzYzY2IiwidHlwIjoiQmVhcmVyIiwiYXpwIjoiZW5naW5lIiwic2Vzc2lvbl9zdGF0ZSI6IjY2Y2RhNTNmLWNjMDAtNDc3NC1iNzFlLWEzNmNkNWUxYmI4YiIsImFjciI6IjEiLCJhbGxvd2VkLW9yaWdpbnMiOlsiaHR0cHM6Ly9hcHAuaHlwaGVuLmFpIiwiaHR0cHM6Ly9kZXYtYXBpLmh5cGhlbi5haS8qIiwiaHR0cDovL2VuZ2luZS5sb2NhbGhvc3QvKiIsImh0dHBzOi8vZW5naW5lLmRldi5oeXBoZW4uYWkiLCJodHRwOi8vZW5naW5lLmxvY2FsaG9zdCIsImh0dHBzOi8vKi5oeXBoZW4tYXBwLnBhZ2VzLmRldiIsImh0dHBzOi8vZGV2LWFwaS5oeXBoZW4uYWkiLCJodHRwOi8vbG9jYWxob3N0OjMwMDAiLCJodHRwOi8vbG9jYWxob3N0OjQwMDAiXSwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbImRlZmF1bHQtcm9sZXMtZGV2Iiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoib3BlbmlkIGVtYWlsIG9mZmxpbmVfYWNjZXNzIHByb2ZpbGUiLCJzaWQiOiI2NmNkYTUzZi1jYzAwLTQ3NzQtYjcxZS1hMzZjZDVlMWJiOGIiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwibmFtZSI6IlJoaW5vIFRlc3QiLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJsdWlzLm1pcmFuZGFAcmhpbm9sYWJzLmNvIiwiZ2l2ZW5fbmFtZSI6IlJoaW5vIiwiZmFtaWx5X25hbWUiOiJUZXN0IiwiZW1haWwiOiJsdWlzLm1pcmFuZGFAcmhpbm9sYWJzLmNvIn0.RqvsfLQlzqvxzdAvSZHC87-K39K1rjUvljr_XSceJtfh_hw5GwsMPNbpEtkBuSeqaB9FopNrCvJO0n3qh_g3hMOQMoJnu4APQMwkHEfvMMDbueSDzTy9GOUb7pwMwL3gd6NS83RhT68tASULFICrlx8F7bXHUHXJjpBoPhlOlPiAotJNCaNr5XPcpgJOHhm1_SQrEK8iJDxluQObtFTZliyOG6TqkAJMc64mB8Qfz9zIXwMJP1nCowcrm9EpY8sCYOLo-kdoUnE0NTr7HTAjOf72r6UC8ZhBDF7siRjmK-z10oAB7f0Zj7qiz7F9sRtBhCJA_HsmJg26Vpnr9RwPrw", nil
+	return "eyJhbGciOiJSUzI1NiIsImtpZCI6IjI3OWNmYWY4LTY5YjctNDJjYS1iYjE4LTNlNDNmYTJjYmVlYyIsInR5cCI6IkpXVCJ9.eyJhdWQiOltdLCJjbGllbnRfaWQiOiI1MDhhZTViZS04YTdmLTRkY2YtOTY4NS1lMDlmMGE2YjY4ZmUiLCJlbWFpbCI6Imx1aXMubWlyYW5kYUByaGlub2xhYnMuY28iLCJleHAiOjE3MTk5NjAwMjAsImZhbWlseV9uYW1lIjoiTWlyYW5kYSIsImdpdmVuX25hbWUiOiJMdWlzIiwiaWF0IjoxNzE5OTU2NDIwLCJpc19oeXBoZW5faW50ZXJuYWwiOmZhbHNlLCJpc3MiOiJodHRwczovL2Rldi1hdXRoLmh5cGhlbi5haSIsImp0aSI6IjJlNzE5NTk2LTZhNTMtNDljMy1hZjBkLWVjYmE2MDdkN2Q4NyIsIm5iZiI6MTcxOTk1NjQyMCwic2NwIjpbIm9wZW5pZCIsIm9mZmxpbmVfYWNjZXNzIiwicHJvZmlsZSIsImVtYWlsIl0sInN1YiI6IjI4MjI0NWYwLWRlZDYtNGMyOC05MGJhLTRlMmRlZmFiYmJkNiJ9.aYcSs7t8SMw6fv405xBjupddtkeXCGYSkK1ia04lPEufpss-pOWt82fgAQ8VaqEdagkuGOI8mZynQuKukKLYXBf4R0QAZWa4VTDdSukPl0cocdVpnfzOP6htDphPy5YaO_vCZ__DMgUz-SbHLzyLRXGYuYHx9GKBgJAIe75qE6eIdkUCtjWEY1ELHIKXgUQP8T6u_gYM1IBH0m4Hlt1t__9MLcsD1G_bL3srsq-vgddGpCcvpHXB0UEa0nHWH4r1opyJth3s33bOndQRQ09S961TDIxS-fILIu7RliG9MP2rZanyANf71zyU2tuYk0Pxsij0yvHrAPhvoe0TXRkaqq4LaFqZFwCECwIeayKwvDXnhCIfNC0Yk8dQpcXjCOuu7tqe_W45LYlczEceDvZ_3pBpx0DI_u7FexoFdRXX1xuHXzS3iCL5-QraAYPa5fDql3LHn7Wu2quKrf12qNYl6jRuOM6FsGPDYlozFkBXRKHnJwE83smqGZFkWgWYiJsXttgjeHL_YrmP7zCuZBZROOeE39_4c3mDgjfqMMh9eS4YiIRmMVv1emFsV11BQFqVjMLakhd8XjeqE1xkHd9A7LGA4YEcM6dMg0DRMiuXM4qR_IbPTqdw7WRJfP70SxmrI0Oe7Dchly5NpG_hX4Y5td1eos-d6xyo6zFlSvQxa0Y", nil
 }
 
 func (e *EnvApi) Initialize(apiName, apiId string) error {
+	fmt.Println("Initializing API")
 	token, err := e.login()
 	if err != nil {
 		// Providing user-friendly message
@@ -57,6 +60,7 @@ func (e *EnvApi) Initialize(apiName, apiId string) error {
 	if resp.StatusCode == 201 {
 		return nil
 	}
+	fmt.Println(resp)
 
 	switch resp.StatusCode {
 	case 401:
@@ -64,15 +68,74 @@ func (e *EnvApi) Initialize(apiName, apiId string) error {
 	case 409:
 		return WrapError(errors.New("Conflict"), "Conflict detected. The resource may already exist.")
 	default:
+		fmt.Println(resp)
 		return WrapError(errors.Errorf("Unexpected status code: %d", resp.StatusCode), "An unexpected error occurred. Please try again later.")
 	}
 }
 
-func (e *EnvApi) UploadEnvVariable(env, encryptedVars string) error {
+func (e *EnvApi) UploadEnvVariable(env, appID string, envData envvars.EnviromentVarsData) error {
+	token, err := e.login()
+	if err != nil {
+		return errors.Wrap(err, "failed to login")
+	}
+
+	url := e.baseUrl + "/apps/" + appID + "/" + env
+	jsonBody, err := json.Marshal(envData)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal request body")
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return errors.Wrap(err, "failed to create request")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return errors.Wrap(err, "failed to execute request")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		return errors.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
 	return nil
 }
 
-func (e *EnvApi) GetEncryptedVariables(env string) (string, error) {
-	return "", nil
+func (e *EnvApi) GetEncryptedVariables(env, appID string) (string, error) {
 
+	token, err := e.login()
+	if err != nil {
+		return "", errors.Wrap(err, "failed to login")
+	}
+
+	url := e.baseUrl + "/apps/" + appID + "/" + env
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to create request")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to execute request")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	var envData envvars.EnviromentVarsData
+	if err := json.NewDecoder(resp.Body).Decode(&envData); err != nil {
+		return "", errors.Wrap(err, "failed to decode response body")
+	}
+
+	return envData.Data, nil
 }

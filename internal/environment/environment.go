@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/Hyphen/cli/internal/environment/envvars"
 	"github.com/Hyphen/cli/internal/environment/infrastructure/envapi"
 	"github.com/Hyphen/cli/internal/secretkey"
 )
@@ -21,9 +22,8 @@ type EnviromentHandler interface {
 	EncryptEnvironmentVars(file string) (string, error)
 	DecryptEnvironmentVars(env string) ([]string, error)
 	DecryptedEnviromentVarsIntoAFile(env, fileName string) (string, error)
-
 	GetEncryptedEnviromentVars(env string) (string, error)
-	UploadEncryptedEnviromentVars(env, envVars string) error
+	UploadEncryptedEnviromentVars(env string, envData envvars.EnviromentVarsData) error
 	SourceEnviromentVars(env string) error
 	SecretKey() secretkey.SecretKeyer
 }
@@ -33,6 +33,7 @@ var EnvConfigFile = ".hyphen-env-key"
 type Enviroment struct {
 	secretKey  secretkey.SecretKeyer
 	repository Repository
+	config     Config
 }
 
 type Config struct {
@@ -62,6 +63,7 @@ func RestoreFromFile(file string) EnviromentHandler {
 	return &Enviroment{
 		secretKey:  secretkey.FromBase64(config.SecretKey),
 		repository: repository,
+		config:     config,
 	}
 }
 
@@ -75,6 +77,7 @@ func Initialize(appName, appId string) *Enviroment {
 	env := &Enviroment{
 		secretKey:  secretkey.FromBase64(config.SecretKey),
 		repository: repository,
+		config:     config,
 	}
 
 	if err := env.repository.Initialize(appName, appId); err != nil {
@@ -108,16 +111,19 @@ func (e *Enviroment) SecretKey() secretkey.SecretKeyer {
 }
 
 func (e *Enviroment) GetEncryptedEnviromentVars(env string) (string, error) {
-	return e.repository.GetEncryptedVariables(env)
+	env = getEnvName(env)
+	return e.repository.GetEncryptedVariables(env, e.config.AppId)
 }
 
-func (e *Enviroment) UploadEncryptedEnviromentVars(env, fileContent string) error {
-	encryptedVars, err := e.secretKey.Encrypt(fileContent)
-	if err != nil {
+func (e *Enviroment) UploadEncryptedEnviromentVars(env string, envData envvars.EnviromentVarsData) error {
+	if env == "" {
+		env = "default"
+	}
+	if err := envData.EncryptData(e.secretKey); err != nil {
 		return err
 	}
 
-	if err = e.repository.UploadEnvVariable(env, encryptedVars); err != nil {
+	if err := e.repository.UploadEnvVariable(env, e.config.AppId, envData); err != nil {
 		return err
 	}
 
@@ -125,6 +131,7 @@ func (e *Enviroment) UploadEncryptedEnviromentVars(env, fileContent string) erro
 }
 
 func (e *Enviroment) DecryptEnvironmentVars(env string) ([]string, error) {
+	env = getEnvName(env)
 	envVariables, err := e.GetEncryptedEnviromentVars(env)
 	if err != nil {
 		return []string{}, err
@@ -140,6 +147,8 @@ func (e *Enviroment) DecryptEnvironmentVars(env string) ([]string, error) {
 }
 
 func (e *Enviroment) DecryptedEnviromentVarsIntoAFile(env, fileName string) (string, error) {
+	env = getEnvName(env)
+
 	envVars, err := e.DecryptEnvironmentVars(env)
 	if err != nil {
 		return "", err
@@ -215,13 +224,6 @@ func tmpFile() (*os.File, string) {
 	return file, file.Name()
 }
 
-func GetEnvFileByEnvironment(environment string) string {
-	if environment == "" || environment == "default" {
-		return ".env"
-	}
-	return fmt.Sprintf(".env.%s", strings.ToLower(environment))
-}
-
 func EnsureGitignore() error {
 	const gitDirPath = ".git"
 	const gitignorePath = ".gitignore"
@@ -280,4 +282,19 @@ func EnsureGitignore() error {
 func ConfigExists() bool {
 	_, err := os.Stat(EnvConfigFile)
 	return !os.IsNotExist(err)
+}
+
+func getEnvName(env string) string {
+	if env == "" {
+		return "default"
+	}
+
+	return strings.ToLower(env)
+}
+
+func GetEnvFileByEnvironment(environment string) string {
+	if environment == "" || environment == "default" {
+		return ".env"
+	}
+	return fmt.Sprintf(".env.%s", strings.ToLower(environment))
 }
