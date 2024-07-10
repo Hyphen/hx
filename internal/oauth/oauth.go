@@ -10,12 +10,37 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
+	"runtime"
+)
+
+var (
+	devBaseUrl  = "https://dev-auth.hyphen.ai"
+	prodBaseUrl = "https://auth.hyphen.ai"
+	clientID    = "8d5fb36d-2886-4c53-ab70-e6203e781fbc"
+	redirectURI = "http://localhost:5001/token"
+	secretKey   = "klUG3PV9lmeddshcKJEf5YTDXl"
 )
 
 type TokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	IDToken      string `json:"id_token"`
+}
+
+var errorMessages = map[int]string{
+	http.StatusBadRequest:          "Bad request. Please check the request parameters and try again.",
+	http.StatusUnauthorized:        "Unauthorized. Please check your credentials and try again.",
+	http.StatusInternalServerError: "Internal server error. Please try again later.",
+}
+
+func baseUrl() string {
+	if os.Getenv("HYPHEN_CLI_ENV") == "dev" {
+		return devBaseUrl
+	}
+
+	return prodBaseUrl
 }
 
 func generatePKCE() (string, string, error) {
@@ -34,12 +59,13 @@ func generatePKCE() (string, string, error) {
 	return codeVerifierStr, codeChallenge, nil
 }
 
-func exchangeCodeForToken(code, codeVerifier, clientID, redirectURI string) (*TokenResponse, error) {
-	tokenURL := "https://dev-auth.hyphen.ai/oauth2/token"
+func exchangeCodeForToken(code, codeVerifier string) (*TokenResponse, error) {
+	tokenURL := fmt.Sprintf("%s/oauth2/token", baseUrl())
 
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("client_id", clientID)
+	data.Set("client_secret", secretKey)
 	data.Set("code_verifier", codeVerifier)
 	data.Set("code", code)
 	data.Set("redirect_uri", redirectURI)
@@ -71,21 +97,38 @@ func exchangeCodeForToken(code, codeVerifier, clientID, redirectURI string) (*To
 
 	return &tokenResponse, nil
 }
-func StartOAuthServer() {
-	clientID := "8d5fb36d-2886-4c53-ab70-e6203e781fbc"
-	redirectURI := "http://localhost:5001/token"
-	authServerURL := "https://dev-auth.hyphen.ai/oauth2/auth"
+
+func openBrowser(url string) error {
+	var cmd string
+	var args []string
+
+	switch runtime.GOOS {
+	case "linux":
+		cmd = "xdg-open"
+	case "windows":
+		cmd = "rundll32"
+		args = []string{"url.dll,FileProtocolHandler"}
+	case "darwin":
+		cmd = "open"
+	default:
+		return fmt.Errorf("unsupported platform")
+	}
+
+	args = append(args, url)
+	return exec.Command(cmd, args...).Start()
+}
+
+func StartOAuthServer() (*TokenResponse, error) {
+	authServerURL := fmt.Sprintf("%s/oauth2/auth", baseUrl())
 
 	codeVerifier, codeChallenge, err := generatePKCE()
 	if err != nil {
-		fmt.Println("Error generating PKCE:", err)
-		return
+		return nil, err
 	}
 
 	authURL, err := url.Parse(authServerURL)
 	if err != nil {
-		fmt.Println("Error parsing auth server URL:", err)
-		return
+		return nil, err
 	}
 
 	query := authURL.Query()
@@ -102,26 +145,53 @@ func StartOAuthServer() {
 	fmt.Println("Visit the following URL to authenticate:")
 	fmt.Println(authURL.String())
 
+	_ = openBrowser(authURL.String())
+
+	tokenChan := make(chan *TokenResponse)
+	errorChan := make(chan error)
+	defer close(tokenChan)
+	defer close(errorChan)
+
 	http.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
-		// fmt.Println("Received request", r)
 		code := r.URL.Query().Get("code")
 		fmt.Println("Code:", code)
 		if code == "" {
-			http.Error(w, "Authorization code not found", http.StatusBadRequest)
+			http.Error(w, errorMessages[http.StatusBadRequest], http.StatusBadRequest)
+			errorChan <- fmt.Errorf("authorization code not found")
 			return
 		}
 
-		token, err := exchangeCodeForToken(code, codeVerifier, clientID, redirectURI)
+		token, err := exchangeCodeForToken(code, codeVerifier)
 		if err != nil {
-			http.Error(w, "Failed to exchange code for token: "+err.Error(), http.StatusInternalServerError)
+			statusCode := http.StatusInternalServerError
+			if respErr, ok := err.(*url.Error); ok && respErr.Timeout() {
+				statusCode = http.StatusRequestTimeout
+			}
+			errorMessage, found := errorMessages[statusCode]
+			if !found {
+				errorMessage = "An unexpected error occurred. Please try again later."
+			}
+			http.Error(w, errorMessage, statusCode)
+			errorChan <- err
 			return
 		}
 
-		fmt.Fprintf(w, "Access Token: %s\n", token.AccessToken)
-		fmt.Fprintf(w, "Refresh Token: %s\n", token.RefreshToken)
-		fmt.Fprintf(w, "ID Token: %s\n", token.IDToken)
+		tokenChan <- token
 	})
 
-	fmt.Println("Starting local server on http://localhost:5001")
-	http.ListenAndServe(":5001", nil)
+	server := &http.Server{Addr: ":5001"}
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errorChan <- err
+		}
+	}()
+
+	select {
+	case token := <-tokenChan:
+		server.Close() // Gracefully shut down the server
+		return token, nil
+	case err := <-errorChan:
+		server.Close() // Gracefully shut down the server
+		return nil, err
+	}
 }
