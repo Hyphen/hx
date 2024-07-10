@@ -20,6 +20,7 @@ var InitCmd = &cobra.Command{
 			fmt.Println("Error:", err)
 			fmt.Println("Pliase create an alias for 'envx' to 'hyphen env'")
 		}
+		fmt.Println("Please source the console or close and open the terminal to use the alias 'envx'")
 
 		if err := login(); err != nil {
 			fmt.Println("Error:", err)
