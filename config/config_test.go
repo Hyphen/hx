@@ -107,8 +107,8 @@ func TestSaveCredentialsSuccess(t *testing.T) {
 	configDir := "/mocked/path"
 	credentialFile := filepath.Join(configDir, CredentialFile)
 	credentialsContent := fmt.Sprintf(
-		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\nhyphen_id_token=\"%s\"",
-		"user_access_token", "user_refresh_token", "user_id_token")
+		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\nhyphen_id_token=\"%s\"\nexpiry_time=%d",
+		"user_access_token", "user_refresh_token", "user_id_token", 12)
 
 	mockEnv.On("GetConfigDirectory").Return(configDir)
 	mockEnv.On("EnsureDir", configDir).Return(nil)
@@ -128,8 +128,8 @@ func TestSaveCredentialsFailures(t *testing.T) {
 	configDir := "/mocked/path"
 	credentialFile := filepath.Join(configDir, CredentialFile)
 	credentialsContent := fmt.Sprintf(
-		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\nhyphen_id_token=\"%s\"",
-		"user_access_token", "user_refresh_token", "user_id_token")
+		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\nhyphen_id_token=\"%s\"\nexpiry_time=%d",
+		"user_access_token", "user_refresh_token", "user_id_token", 12)
 
 	tests := []struct {
 		name       string
@@ -174,7 +174,8 @@ func TestGetCredentialsSuccess(t *testing.T) {
 	credentialsToml := `[default]
 hyphen_access_token="user_access_token"
 hyphen_refresh_token="user_refresh_token"
-hyphen_id_token="user_id_token"`
+hyphen_id_token="user_id_token"
+expiry_time=12`
 
 	mockEnv.On("GetConfigDirectory").Return(configDir)
 	mockEnv.On("ReadFile", credentialFile).Return([]byte(credentialsToml), nil)
