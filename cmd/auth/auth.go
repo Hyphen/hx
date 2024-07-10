@@ -1,9 +1,7 @@
 package auth
 
 import (
-	"fmt"
-
-	"github.com/Hyphen/cli/config"
+	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/spf13/cobra"
 )
 
@@ -19,11 +17,5 @@ by providing credentials.`,
 }
 
 func login() {
-	var username, password string
-	fmt.Print("Enter Username: ")
-	fmt.Scanln(&username)
-	fmt.Print("Enter Password: ")
-	fmt.Scanln(&password)
-
-	config.SaveCredentials(username, password)
+	oauth.StartOAuthServer()
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/Hyphen/cli/cmd/auth"
 	"github.com/Hyphen/cli/cmd/env"
+	"github.com/Hyphen/cli/cmd/initialize"
 	"github.com/Hyphen/cli/cmd/update"
 	"github.com/Hyphen/cli/cmd/version"
 	"github.com/spf13/cobra"
@@ -22,6 +23,7 @@ func init() {
 	rootCmd.AddCommand(version.VersionCmd)
 	rootCmd.AddCommand(update.UpdateCmd)
 	rootCmd.AddCommand(env.EnvCmd)
+	rootCmd.AddCommand(initialize.InitCmd)
 }
 
 func Execute() {
