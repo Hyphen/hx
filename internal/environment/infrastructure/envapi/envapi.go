@@ -39,10 +39,8 @@ func (e *EnvApi) getAuthToken() (string, error) {
 }
 
 func (e *EnvApi) Initialize(apiName, apiId string) error {
-	fmt.Println("Initializing API")
 	token, err := e.getAuthToken()
 	if err != nil {
-		// Providing user-friendly message
 		return WrapError(errors.Wrap(err, "Failed to login"), "Unable to login. Please check your credentials and try again.")
 	}
 
@@ -73,7 +71,6 @@ func (e *EnvApi) Initialize(apiName, apiId string) error {
 	if resp.StatusCode == 201 {
 		return nil
 	}
-	fmt.Println(resp)
 
 	switch resp.StatusCode {
 	case 401:
