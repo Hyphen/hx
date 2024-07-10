@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"time"
 )
 
 var (
@@ -27,6 +28,8 @@ type TokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	IDToken      string `json:"id_token"`
+	ExpiresIn    int    `json:"expires_in"` // Token validity duration in seconds
+	ExpiryTime   int64  `json:"-"`          // Unix timestamp when the token expires
 }
 
 var errorMessages = map[int]string{
@@ -39,7 +42,6 @@ func baseUrl() string {
 	if os.Getenv("HYPHEN_CLI_ENV") == "dev" {
 		return devBaseUrl
 	}
-
 	return prodBaseUrl
 }
 
@@ -84,7 +86,6 @@ func exchangeCodeForToken(code, codeVerifier string) (*TokenResponse, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		// Read and log the response body for more details
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		bodyString := string(bodyBytes)
 		return nil, fmt.Errorf("failed to exchange code for token: %s", bodyString)
@@ -94,6 +95,9 @@ func exchangeCodeForToken(code, codeVerifier string) (*TokenResponse, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
 		return nil, err
 	}
+
+	// Calculate and store the expiry time
+	tokenResponse.ExpiryTime = time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second).Unix()
 
 	return &tokenResponse, nil
 }
@@ -137,7 +141,7 @@ func StartOAuthServer() (*TokenResponse, error) {
 	query.Set("redirect_uri", redirectURI)
 	query.Set("code_challenge", codeChallenge)
 	query.Set("code_challenge_method", "S256")
-	query.Set("scope", "openid")
+	query.Set("scope", "openid offline_access")
 	query.Set("state", "random_state")
 
 	authURL.RawQuery = query.Encode()
@@ -154,7 +158,6 @@ func StartOAuthServer() (*TokenResponse, error) {
 
 	http.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
-		fmt.Println("Code:", code)
 		if code == "" {
 			http.Error(w, errorMessages[http.StatusBadRequest], http.StatusBadRequest)
 			errorChan <- fmt.Errorf("authorization code not found")
@@ -176,6 +179,21 @@ func StartOAuthServer() (*TokenResponse, error) {
 			return
 		}
 
+		// Serve a completion page
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprintf(w, `
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<title>Authentication Complete</title>
+			</head>
+			<body>
+				<h1>Authentication Complete</h1>
+				<h2>You can now close this window.</h2>
+			</body>
+			</html>
+		`)
+
 		tokenChan <- token
 	})
 
@@ -194,4 +212,47 @@ func StartOAuthServer() (*TokenResponse, error) {
 		server.Close() // Gracefully shut down the server
 		return nil, err
 	}
+}
+
+func IsTokenExpired(expiryTime int64) bool {
+	return time.Now().Unix() > expiryTime
+}
+
+func RefreshToken(refreshToken string) (*TokenResponse, error) {
+	tokenURL := fmt.Sprintf("%s/oauth2/token", baseUrl())
+
+	data := url.Values{}
+	data.Set("grant_type", "refresh_token")
+	data.Set("client_id", clientID)
+	data.Set("client_secret", secretKey)
+	data.Set("refresh_token", refreshToken)
+
+	req, err := http.NewRequest("POST", tokenURL, bytes.NewBufferString(data.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyString := string(bodyBytes)
+		return nil, fmt.Errorf("failed to refresh token: %s", bodyString)
+	}
+
+	var tokenResponse TokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
+		return nil, err
+	}
+
+	// Calculate and store the new expiry time
+	tokenResponse.ExpiryTime = time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second).Unix()
+
+	return &tokenResponse, nil
 }

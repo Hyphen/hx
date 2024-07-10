@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Hyphen/cli/cmd/auth"
 	"github.com/Hyphen/cli/cmd/env"
 	"github.com/Hyphen/cli/cmd/initialize"
 	"github.com/Hyphen/cli/cmd/update"
@@ -19,7 +18,6 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(auth.AuthCmd)
 	rootCmd.AddCommand(version.VersionCmd)
 	rootCmd.AddCommand(update.UpdateCmd)
 	rootCmd.AddCommand(env.EnvCmd)

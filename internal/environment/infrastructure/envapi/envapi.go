@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Hyphen/cli/config"
 	"github.com/Hyphen/cli/internal/environment/envvars"
+	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/pkg/errors"
 )
 
@@ -20,14 +22,25 @@ func New() *EnvApi {
 	}
 }
 
-// TODO: this should come from the engine package
-func (e *EnvApi) login() (string, error) {
-	return "eyJhbGciOiJSUzI1NiIsImtpZCI6IjI3OWNmYWY4LTY5YjctNDJjYS1iYjE4LTNlNDNmYTJjYmVlYyIsInR5cCI6IkpXVCJ9.eyJhdWQiOltdLCJjbGllbnRfaWQiOiI1MDhhZTViZS04YTdmLTRkY2YtOTY4NS1lMDlmMGE2YjY4ZmUiLCJlbWFpbCI6Imx1aXMubWlyYW5kYUByaGlub2xhYnMuY28iLCJleHAiOjE3MTk5NjAwMjAsImZhbWlseV9uYW1lIjoiTWlyYW5kYSIsImdpdmVuX25hbWUiOiJMdWlzIiwiaWF0IjoxNzE5OTU2NDIwLCJpc19oeXBoZW5faW50ZXJuYWwiOmZhbHNlLCJpc3MiOiJodHRwczovL2Rldi1hdXRoLmh5cGhlbi5haSIsImp0aSI6IjJlNzE5NTk2LTZhNTMtNDljMy1hZjBkLWVjYmE2MDdkN2Q4NyIsIm5iZiI6MTcxOTk1NjQyMCwic2NwIjpbIm9wZW5pZCIsIm9mZmxpbmVfYWNjZXNzIiwicHJvZmlsZSIsImVtYWlsIl0sInN1YiI6IjI4MjI0NWYwLWRlZDYtNGMyOC05MGJhLTRlMmRlZmFiYmJkNiJ9.aYcSs7t8SMw6fv405xBjupddtkeXCGYSkK1ia04lPEufpss-pOWt82fgAQ8VaqEdagkuGOI8mZynQuKukKLYXBf4R0QAZWa4VTDdSukPl0cocdVpnfzOP6htDphPy5YaO_vCZ__DMgUz-SbHLzyLRXGYuYHx9GKBgJAIe75qE6eIdkUCtjWEY1ELHIKXgUQP8T6u_gYM1IBH0m4Hlt1t__9MLcsD1G_bL3srsq-vgddGpCcvpHXB0UEa0nHWH4r1opyJth3s33bOndQRQ09S961TDIxS-fILIu7RliG9MP2rZanyANf71zyU2tuYk0Pxsij0yvHrAPhvoe0TXRkaqq4LaFqZFwCECwIeayKwvDXnhCIfNC0Yk8dQpcXjCOuu7tqe_W45LYlczEceDvZ_3pBpx0DI_u7FexoFdRXX1xuHXzS3iCL5-QraAYPa5fDql3LHn7Wu2quKrf12qNYl6jRuOM6FsGPDYlozFkBXRKHnJwE83smqGZFkWgWYiJsXttgjeHL_YrmP7zCuZBZROOeE39_4c3mDgjfqMMh9eS4YiIRmMVv1emFsV11BQFqVjMLakhd8XjeqE1xkHd9A7LGA4YEcM6dMg0DRMiuXM4qR_IbPTqdw7WRJfP70SxmrI0Oe7Dchly5NpG_hX4Y5td1eos-d6xyo6zFlSvQxa0Y", nil
+func (e *EnvApi) getAuthToken() (string, error) {
+	creadentials, err := config.LoadCredentials()
+	if err != nil {
+		return "", err
+	}
+	if oauth.IsTokenExpired(creadentials.Default.ExpiryTime) {
+		tokenResponse, err := oauth.RefreshToken(creadentials.Default.HyphenRefreshToken)
+		if err != nil {
+			return "", err
+		}
+		config.SaveCredentials(tokenResponse.AccessToken, tokenResponse.RefreshToken, tokenResponse.IDToken, tokenResponse.ExpiryTime)
+		return tokenResponse.AccessToken, nil
+	}
+	return creadentials.Default.HyphenAccessToken, nil
 }
 
 func (e *EnvApi) Initialize(apiName, apiId string) error {
 	fmt.Println("Initializing API")
-	token, err := e.login()
+	token, err := e.getAuthToken()
 	if err != nil {
 		// Providing user-friendly message
 		return WrapError(errors.Wrap(err, "Failed to login"), "Unable to login. Please check your credentials and try again.")
@@ -74,7 +87,7 @@ func (e *EnvApi) Initialize(apiName, apiId string) error {
 }
 
 func (e *EnvApi) UploadEnvVariable(env, appID string, envData envvars.EnviromentVarsData) error {
-	token, err := e.login()
+	token, err := e.getAuthToken()
 	if err != nil {
 		return WrapError(errors.Wrap(err, "Failed to login"), "Unable to login. Please check your credentials and try again.")
 	}
@@ -117,7 +130,7 @@ func (e *EnvApi) UploadEnvVariable(env, appID string, envData envvars.Enviroment
 
 func (e *EnvApi) GetEncryptedVariables(env, appID string) (string, error) {
 
-	token, err := e.login()
+	token, err := e.getAuthToken()
 	if err != nil {
 		return "", WrapError(errors.Wrap(err, "Failed to login"), "Unable to login. Please check your credentials and try again.")
 	}
