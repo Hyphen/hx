@@ -21,7 +21,7 @@ var PushCmd = &cobra.Command{
 	Args:    cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		// Initialize env with an empty string
-		env := "defult"
+		env := "default"
 
 		// If an environment is provided in args, use it
 		if len(args) == 1 {

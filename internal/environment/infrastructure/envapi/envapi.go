@@ -3,7 +3,6 @@ package envapi
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/Hyphen/cli/config"
@@ -78,7 +77,6 @@ func (e *EnvApi) Initialize(apiName, apiId string) error {
 	case 409:
 		return WrapError(errors.New("Conflict"), "Conflict detected. The resource may already exist.")
 	default:
-		fmt.Println(resp)
 		return WrapError(errors.Errorf("Unexpected status code: %d", resp.StatusCode), "An unexpected error occurred. Please try again later.")
 	}
 }
