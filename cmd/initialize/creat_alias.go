@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 )
 
 func addAlias(alias, command string) error {
@@ -26,14 +25,21 @@ func addAlias(alias, command string) error {
 }
 
 func detectShell() string {
-	shell := os.Getenv("SHELL")
-	if shell == "" && runtime.GOOS == "windows" {
-		shell = os.Getenv("ComSpec")
-		if strings.Contains(shell, "powershell") {
+	if runtime.GOOS == "windows" {
+		// Check if we're running in PowerShell
+		if os.Getenv("PSModulePath") != "" {
 			return "powershell"
 		}
+		// Check for PowerShell Core
+		if os.Getenv("PWSH_DISTRIBUTION_CHANNEL") != "" {
+			return "powershell"
+		}
+		// If not PowerShell, assume it's CMD
 		return "cmd"
 	}
+
+	// For non-Windows systems, use the existing logic
+	shell := os.Getenv("SHELL")
 	return filepath.Base(shell)
 }
 
