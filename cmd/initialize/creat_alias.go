@@ -59,7 +59,23 @@ func getShellConfigFile(shell string) (string, error) {
 	case "fish":
 		return filepath.Join(homeDir, ".config", "fish", "config.fish"), nil
 	case "powershell":
-		return filepath.Join(homeDir, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"), nil
+		profilePath := filepath.Join(homeDir, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1")
+		// Check if the directory exists, create it if it doesn't
+		dir := filepath.Dir(profilePath)
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return "", fmt.Errorf("failed to create directory for PowerShell profile: %v", err)
+			}
+		}
+		// Create the file if it doesn't exist
+		if _, err := os.Stat(profilePath); os.IsNotExist(err) {
+			file, err := os.Create(profilePath)
+			if err != nil {
+				return "", fmt.Errorf("failed to create PowerShell profile file: %v", err)
+			}
+			file.Close()
+		}
+		return profilePath, nil
 	case "cmd":
 		return "", fmt.Errorf("cmd does not support aliases directly. Use a batch file instead.")
 	default:
