@@ -17,10 +17,10 @@ var InitCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 
 		if err := addAlias("envx", "hyphen env"); err != nil {
-			fmt.Println("Error:", err)
-			fmt.Println("Pliase create an alias for 'envx' to 'hyphen env'")
+			fmt.Println("Warning: ", err)
+		} else {
+			fmt.Println("Please source the console or close and open the terminal to use the alias 'envx'")
 		}
-		fmt.Println("Please source the console or close and open the terminal to use the alias 'envx'")
 
 		if err := login(); err != nil {
 			fmt.Println("Error:", err)
