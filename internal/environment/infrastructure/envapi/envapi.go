@@ -11,30 +11,45 @@ import (
 	"github.com/pkg/errors"
 )
 
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 type EnvApi struct {
-	baseUrl string
+	baseUrl      string
+	httpClient   HTTPClient
+	oauthService oauth.OAuthServiceInterface
+	configLoader func() (config.CredentialsConfig, error)
+	configSaver  func(string, string, string, int64) error
 }
 
 func New() *EnvApi {
 	return &EnvApi{
-		baseUrl: "http://localhost:4001",
+		baseUrl:      "http://localhost:4001",
+		httpClient:   &http.Client{},
+		oauthService: oauth.DefaultOAuthService(),
+		configLoader: config.LoadCredentials,
+		configSaver:  config.SaveCredentials,
 	}
 }
 
 func (e *EnvApi) getAuthToken() (string, error) {
-	creadentials, err := config.LoadCredentials()
+	credentials, err := e.configLoader()
 	if err != nil {
 		return "", err
 	}
-	if oauth.IsTokenExpired(creadentials.Default.ExpiryTime) {
-		tokenResponse, err := oauth.RefreshToken(creadentials.Default.HyphenRefreshToken)
+	if e.oauthService.IsTokenExpired(credentials.Default.ExpiryTime) {
+		tokenResponse, err := e.oauthService.RefreshToken(credentials.Default.HyphenRefreshToken)
 		if err != nil {
 			return "", err
 		}
-		config.SaveCredentials(tokenResponse.AccessToken, tokenResponse.RefreshToken, tokenResponse.IDToken, tokenResponse.ExpiryTime)
+		err = e.configSaver(tokenResponse.AccessToken, tokenResponse.RefreshToken, tokenResponse.IDToken, tokenResponse.ExpiryTime)
+		if err != nil {
+			return "", err
+		}
 		return tokenResponse.AccessToken, nil
 	}
-	return creadentials.Default.HyphenAccessToken, nil
+	return credentials.Default.HyphenAccessToken, nil
 }
 
 func (e *EnvApi) Initialize(apiName, apiId string) error {
@@ -60,8 +75,7 @@ func (e *EnvApi) Initialize(apiName, apiId string) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := e.httpClient.Do(req)
 	if err != nil {
 		return WrapError(errors.Wrap(err, "API request failed"), "Failed to communicate with the server. Please check your network connection and try again.")
 	}
@@ -100,8 +114,7 @@ func (e *EnvApi) UploadEnvVariable(env, appID string, envData envvars.Enviroment
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := e.httpClient.Do(req)
 	if err != nil {
 		return WrapError(errors.Wrap(err, "Failed to execute request"), "Failed to communicate with the server. Please check your network connection and try again.")
 	}
@@ -124,7 +137,6 @@ func (e *EnvApi) UploadEnvVariable(env, appID string, envData envvars.Enviroment
 }
 
 func (e *EnvApi) GetEncryptedVariables(env, appID string) (string, error) {
-
 	token, err := e.getAuthToken()
 	if err != nil {
 		return "", WrapError(errors.Wrap(err, "Failed to login"), "Unable to login. Please check your credentials and try again.")
@@ -138,8 +150,7 @@ func (e *EnvApi) GetEncryptedVariables(env, appID string) (string, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := e.httpClient.Do(req)
 	if err != nil {
 		return "", WrapError(errors.Wrap(err, "Failed to execute request"), "Failed to communicate with the server. Please check your network connection and try again.")
 	}

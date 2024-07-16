@@ -28,14 +28,58 @@ type TokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	IDToken      string `json:"id_token"`
-	ExpiresIn    int    `json:"expires_in"` // Token validity duration in seconds
-	ExpiryTime   int64  `json:"-"`          // Unix timestamp when the token expires
+	ExpiresIn    int    `json:"expires_in"`
+	ExpiryTime   int64  `json:"-"`
 }
 
 var errorMessages = map[int]string{
 	http.StatusBadRequest:          "Bad request. Please check the request parameters and try again.",
 	http.StatusUnauthorized:        "Unauthorized. Please check your credentials and try again.",
 	http.StatusInternalServerError: "Internal server error. Please try again later.",
+}
+
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+type TimeProvider interface {
+	Now() time.Time
+}
+
+type RealTimeProvider struct{}
+
+func (rtp *RealTimeProvider) Now() time.Time {
+	return time.Now()
+}
+
+type BrowserOpener func(string) error
+
+type OAuthServiceInterface interface {
+	IsTokenExpired(expiryTime int64) bool
+	RefreshToken(refreshToken string) (*TokenResponse, error)
+}
+
+// Ensure OAuthService implements OAuthServiceInterface
+var _ OAuthServiceInterface = (*OAuthService)(nil)
+
+type OAuthService struct {
+	httpClient    HTTPClient
+	timeProvider  TimeProvider
+	baseURLGetter func() string
+	browserOpener BrowserOpener
+}
+
+func DefaultOAuthService() *OAuthService {
+	return NewOAuthService(&http.Client{}, &RealTimeProvider{}, openBrowser)
+}
+
+func NewOAuthService(httpClient HTTPClient, timeProvider TimeProvider, browserOpener BrowserOpener) *OAuthService {
+	return &OAuthService{
+		httpClient:    httpClient,
+		timeProvider:  timeProvider,
+		baseURLGetter: baseUrl,
+		browserOpener: browserOpener,
+	}
 }
 
 func baseUrl() string {
@@ -46,7 +90,7 @@ func baseUrl() string {
 	return prodBaseUrl
 }
 
-func generatePKCE() (string, string, error) {
+func (s *OAuthService) generatePKCE() (string, string, error) {
 	codeVerifier := make([]byte, 32)
 	_, err := rand.Read(codeVerifier)
 	if err != nil {
@@ -62,8 +106,8 @@ func generatePKCE() (string, string, error) {
 	return codeVerifierStr, codeChallenge, nil
 }
 
-func exchangeCodeForToken(code, codeVerifier string) (*TokenResponse, error) {
-	tokenURL := fmt.Sprintf("%s/oauth2/token", baseUrl())
+func (s *OAuthService) exchangeCodeForToken(code, codeVerifier string) (*TokenResponse, error) {
+	tokenURL := fmt.Sprintf("%s/oauth2/token", s.baseURLGetter())
 
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
@@ -79,8 +123,7 @@ func exchangeCodeForToken(code, codeVerifier string) (*TokenResponse, error) {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -97,8 +140,7 @@ func exchangeCodeForToken(code, codeVerifier string) (*TokenResponse, error) {
 		return nil, err
 	}
 
-	// Calculate and store the expiry time
-	tokenResponse.ExpiryTime = time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second).Unix()
+	tokenResponse.ExpiryTime = s.timeProvider.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second).Unix()
 
 	return &tokenResponse, nil
 }
@@ -123,10 +165,10 @@ func openBrowser(url string) error {
 	return exec.Command(cmd, args...).Start()
 }
 
-func StartOAuthServer() (*TokenResponse, error) {
-	authServerURL := fmt.Sprintf("%s/oauth2/auth", baseUrl())
+func (s *OAuthService) StartOAuthServer() (*TokenResponse, error) {
+	authServerURL := fmt.Sprintf("%s/oauth2/auth", s.baseURLGetter())
 
-	codeVerifier, codeChallenge, err := generatePKCE()
+	codeVerifier, codeChallenge, err := s.generatePKCE()
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +192,7 @@ func StartOAuthServer() (*TokenResponse, error) {
 	fmt.Println("Visit the following URL to authenticate:")
 	fmt.Println(authURL.String())
 
-	_ = openBrowser(authURL.String())
+	_ = s.browserOpener(authURL.String())
 
 	tokenChan := make(chan *TokenResponse)
 	errorChan := make(chan error)
@@ -165,7 +207,7 @@ func StartOAuthServer() (*TokenResponse, error) {
 			return
 		}
 
-		token, err := exchangeCodeForToken(code, codeVerifier)
+		token, err := s.exchangeCodeForToken(code, codeVerifier)
 		if err != nil {
 			statusCode := http.StatusInternalServerError
 			if respErr, ok := err.(*url.Error); ok && respErr.Timeout() {
@@ -180,7 +222,6 @@ func StartOAuthServer() (*TokenResponse, error) {
 			return
 		}
 
-		// Serve a completion page
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprintf(w, `
 			<!DOCTYPE html>
@@ -207,20 +248,20 @@ func StartOAuthServer() (*TokenResponse, error) {
 
 	select {
 	case token := <-tokenChan:
-		server.Close() // Gracefully shut down the server
+		server.Close()
 		return token, nil
 	case err := <-errorChan:
-		server.Close() // Gracefully shut down the server
+		server.Close()
 		return nil, err
 	}
 }
 
-func IsTokenExpired(expiryTime int64) bool {
-	return time.Now().Unix() > expiryTime
+func (s *OAuthService) IsTokenExpired(expiryTime int64) bool {
+	return s.timeProvider.Now().Unix() > expiryTime
 }
 
-func RefreshToken(refreshToken string) (*TokenResponse, error) {
-	tokenURL := fmt.Sprintf("%s/oauth2/token", baseUrl())
+func (s *OAuthService) RefreshToken(refreshToken string) (*TokenResponse, error) {
+	tokenURL := fmt.Sprintf("%s/oauth2/token", s.baseURLGetter())
 
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
@@ -234,8 +275,7 @@ func RefreshToken(refreshToken string) (*TokenResponse, error) {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -252,8 +292,7 @@ func RefreshToken(refreshToken string) (*TokenResponse, error) {
 		return nil, err
 	}
 
-	// Calculate and store the new expiry time
-	tokenResponse.ExpiryTime = time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second).Unix()
+	tokenResponse.ExpiryTime = s.timeProvider.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second).Unix()
 
 	return &tokenResponse, nil
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Hyphen/cli/internal/environment/envvars"
+	"github.com/stretchr/testify/assert"
 )
 
 // MockRepository implements the Repository interface for testing
@@ -216,4 +217,217 @@ func TestEncryptAndDecryptEnvironmentVars(t *testing.T) {
 			t.Errorf("Decrypted variable = %v, want %v", v, expectedDecryptedVars[i])
 		}
 	}
+}
+
+func TestGetEnvName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", "default"},
+		{"production", "production"},
+		{"STAGING", "staging"},
+		{"Dev", "dev"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := getEnvName(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetEnvFileByEnvironment(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", ".env"},
+		{"default", ".env"},
+		{"production", ".env.production"},
+		{"STAGING", ".env.staging"},
+		{"Dev", ".env.dev"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := GetEnvFileByEnvironment(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestUploadEncryptedEnviromentVars(t *testing.T) {
+	mockKey := &MockSecretKey{}
+	mockRepo := &MockRepository{}
+	env := &Enviroment{
+		secretKey:  mockKey,
+		repository: mockRepo,
+		config:     Config{AppId: "test-app-id"},
+	}
+
+	mockRepo.UploadEnvVariableFunc = func(env, appID string, envData envvars.EnviromentVarsData) error {
+		assert.Equal(t, "test-env", env)
+		assert.Equal(t, "test-app-id", appID)
+		assert.NotEmpty(t, envData.Data)
+		return nil
+	}
+
+	envData := envvars.EnviromentVarsData{
+		Size:           "10",
+		CountVariables: 2,
+		Data:           "TEST_VAR=test_value\nANOTHER_VAR=another_value",
+	}
+
+	err := env.UploadEncryptedEnviromentVars("test-env", envData)
+	assert.NoError(t, err)
+}
+
+func TestGetEncryptedEnviromentVars(t *testing.T) {
+	mockRepo := &MockRepository{}
+	env := &Enviroment{
+		repository: mockRepo,
+		config:     Config{AppId: "test-app-id"},
+	}
+
+	expectedVars := "encrypted_vars"
+	mockRepo.GetEncryptedVariablesFunc = func(env, appID string) (string, error) {
+		assert.Equal(t, "test-env", env)
+		assert.Equal(t, "test-app-id", appID)
+		return expectedVars, nil
+	}
+
+	vars, err := env.GetEncryptedEnviromentVars("test-env")
+	assert.NoError(t, err)
+	assert.Equal(t, expectedVars, vars)
+}
+
+func TestEnsureGitignore(t *testing.T) {
+	// Create a temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "gitignore-test")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	// Change to the temporary directory
+	oldWd, err := os.Getwd()
+	assert.NoError(t, err)
+	err = os.Chdir(tmpDir)
+	assert.NoError(t, err)
+	defer os.Chdir(oldWd)
+
+	// Create a .git directory to simulate a Git project
+	err = os.Mkdir(".git", 0755)
+	assert.NoError(t, err)
+
+	// Test when .gitignore doesn't exist
+	err = EnsureGitignore()
+	assert.NoError(t, err)
+
+	content, err := os.ReadFile(".gitignore")
+	assert.NoError(t, err)
+	assert.Contains(t, string(content), EnvConfigFile)
+
+	// Test when .gitignore already exists
+	err = os.WriteFile(".gitignore", []byte("existing_entry\n"), 0644)
+	assert.NoError(t, err)
+
+	err = EnsureGitignore()
+	assert.NoError(t, err)
+
+	content, err = os.ReadFile(".gitignore")
+	assert.NoError(t, err)
+	assert.Contains(t, string(content), "existing_entry")
+	assert.Contains(t, string(content), EnvConfigFile)
+}
+
+func TestConfigExists(t *testing.T) {
+	// Test when config doesn't exist
+	assert.False(t, ConfigExists())
+
+	// Create a temporary config file
+	tmpFile, err := os.CreateTemp("", "env-config")
+	assert.NoError(t, err)
+	tmpFile.Close()
+	defer os.Remove(tmpFile.Name())
+
+	// Set the EnvConfigFile to the temporary file
+	oldConfigFile := EnvConfigFile
+	EnvConfigFile = tmpFile.Name()
+	defer func() { EnvConfigFile = oldConfigFile }()
+
+	// Test when config exists
+	assert.True(t, ConfigExists())
+}
+
+func TestDecryptEnvironmentVars(t *testing.T) {
+	mockKey := &MockSecretKey{}
+	mockRepo := &MockRepository{}
+	env := &Enviroment{
+		secretKey:  mockKey,
+		repository: mockRepo,
+		config:     Config{AppId: "test-app-id"},
+	}
+
+	encryptedVars := base64.URLEncoding.EncodeToString([]byte("TEST_VAR=test_value\nANOTHER_VAR=another_value"))
+	mockRepo.GetEncryptedVariablesFunc = func(env, appID string) (string, error) {
+		return encryptedVars, nil
+	}
+
+	vars, err := env.DecryptEnvironmentVars("test-env")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"TEST_VAR=test_value", "ANOTHER_VAR=another_value"}, vars)
+}
+
+func TestSetRepository(t *testing.T) {
+	originalRepo := repository
+	defer func() { repository = originalRepo }()
+
+	newRepo := &MockRepository{}
+	SetRepository(newRepo)
+
+	assert.Equal(t, newRepo, repository)
+}
+
+func TestRestore(t *testing.T) {
+	// Create a temporary config file
+	tmpFile, err := os.CreateTemp("", "env-config")
+	assert.NoError(t, err)
+	defer os.Remove(tmpFile.Name())
+
+	configContent := `
+app_name = "test-app"
+app_id = "test-app-id"
+secret_key = "mockBase64Key"
+`
+	_, err = tmpFile.WriteString(configContent)
+	assert.NoError(t, err)
+	tmpFile.Close()
+
+	// Set the EnvConfigFile to the temporary file
+	oldConfigFile := EnvConfigFile
+	EnvConfigFile = tmpFile.Name()
+	defer func() { EnvConfigFile = oldConfigFile }()
+
+	// Run the Restore function
+	SetRepository(&MockRepository{})
+	envHandler := Restore()
+
+	assert.NotNil(t, envHandler)
+	assert.Equal(t, "mockBase64Key", envHandler.SecretKey().Base64())
+}
+
+func TestTmpDir(t *testing.T) {
+	dir := tmpDir()
+	defer os.RemoveAll(dir)
+
+	assert.DirExists(t, dir)
+}
+
+func TestTmpFile(t *testing.T) {
+	file, name := tmpFile()
+	defer os.Remove(name)
+
+	assert.NotNil(t, file)
+	assert.FileExists(t, name)
 }

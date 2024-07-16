@@ -30,13 +30,16 @@ var InitCmd = &cobra.Command{
 }
 
 func login() error {
-	token, err := oauth.StartOAuthServer()
+	oauthService := oauth.DefaultOAuthService()
+	token, err := oauthService.StartOAuthServer()
 	if err != nil {
-		return err
-	}
-	if err := config.SaveCredentials(token.AccessToken, token.RefreshToken, token.IDToken, token.ExpiryTime); err != nil {
-		return err
+		return fmt.Errorf("failed to start OAuth server: %w", err)
 	}
 
+	if err := config.SaveCredentials(token.AccessToken, token.RefreshToken, token.IDToken, token.ExpiryTime); err != nil {
+		return fmt.Errorf("failed to save credentials: %w", err)
+	}
+
+	fmt.Println("Login successful!")
 	return nil
 }
