@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	devBaseUrl  = "https://dev-auth.hyphen.ai"
+	devBaseUrl  = ""
 	prodBaseUrl = "https://auth.hyphen.ai"
 	clientID    = "8d5fb36d-2886-4c53-ab70-e6203e781fbc"
 	redirectURI = "http://localhost:5001/token"
@@ -39,7 +39,8 @@ var errorMessages = map[int]string{
 }
 
 func baseUrl() string {
-	if os.Getenv("HYPHEN_CLI_ENV") == "dev" {
+	if os.Getenv("HYPHEN_CLI_ENV") != "" {
+		devBaseUrl = os.Getenv("HYPHEN_CLI_ENV")
 		return devBaseUrl
 	}
 	return prodBaseUrl

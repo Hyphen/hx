@@ -3,7 +3,7 @@
 ## Main Commands
 
 ## Env variables
-- `HYPHEN_CLI_ENV`: this should be `dev` to use the dev enviroment `https://dev-auth.hyphen.ai`
+- `HYPHEN_CLI_ENV`: this should be the dev base url, example: `https://dev-auth.hyphen.ai`
 
 ### `hyphen`
 
