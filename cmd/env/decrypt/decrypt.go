@@ -16,10 +16,10 @@ var DecryptCmd = &cobra.Command{
 	Use:     "decrypt",
 	Aliases: []string{"d"},
 	Short:   "Decrypt a raw data dump",
-	Long:    `Decrypts a raw data dump from CloudEnv, showing the decrypted environment variables.`,
+	Long:    `Decrypts a raw data dump from Hyphen, showing the decrypted environment variables.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if decryptString == "" && decryptFile == "" {
-			fmt.Println("Usage: cloudenv decrypt -s [STRING] or cloudenv decrypt -f [FILE]")
+			fmt.Println("Usage: hyphen env decrypt -s [STRING] or hyphen env decrypt -f [FILE]")
 			return
 		}
 		if decryptString != "" && decryptFile != "" {

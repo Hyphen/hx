@@ -17,7 +17,7 @@ var EncryptCmd = &cobra.Command{
 	Long:    `Encrypts a file containing environment variables.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) < 1 {
-			fmt.Println("Usage: cloudenv encrypt [FILE]")
+			fmt.Println("Usage: hyphen env encrypt [FILE]")
 			return
 		}
 
