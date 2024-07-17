@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// ConfigureCmd represents the configure command
 var InitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "init hyphen cli",

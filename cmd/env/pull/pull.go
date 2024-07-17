@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Define a variable to hold the value of the file flag
 var fileName string
 
 var PullCmd = &cobra.Command{
@@ -18,25 +17,20 @@ var PullCmd = &cobra.Command{
 writes them into the given file.`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		// Initialize env with an empty string
 		env := "default"
 
-		// If an environment is provided in args, use it
 		if len(args) == 1 {
 			env = args[0]
 		}
 
-		// Get the default environment file name
 		envFile := environment.GetEnvFileByEnvironment(env)
 
-		// If the -f flag is set, use its value as the file name
 		if fileName != "" {
 			envFile = fileName
 		}
 
 		envHandler := environment.Restore()
 
-		// Decrypt environment variables and save them into the specified file
 		_, err := envHandler.DecryptedEnviromentVarsIntoAFile(env, envFile)
 		if err != nil {
 			fmt.Printf("Error saving environment variables to file %s: %v\n", envFile, err)
