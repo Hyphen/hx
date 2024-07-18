@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/Hyphen/cli/config"
 	"github.com/Hyphen/cli/internal/environment/envvars"
@@ -25,8 +26,12 @@ type EnvApi struct {
 }
 
 func New() *EnvApi {
+	baseUrl := os.Getenv("HYPHEN_CUSTOM_ENV")
+	if baseUrl == "" {
+		baseUrl = "https://dev-api.hyphen.ai/env"
+	}
 	return &EnvApi{
-		baseUrl:      "http://localhost:4001",
+		baseUrl:      baseUrl,
 		httpClient:   &http.Client{},
 		oauthService: oauth.DefaultOAuthService(),
 		configLoader: config.LoadCredentials,

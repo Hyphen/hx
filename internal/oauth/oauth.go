@@ -17,8 +17,6 @@ import (
 )
 
 var (
-	devBaseUrl  = ""
-	prodBaseUrl = "https://auth.hyphen.ai"
 	clientID    = "8d5fb36d-2886-4c53-ab70-e6203e781fbc"
 	redirectURI = "http://localhost:5001/token"
 	secretKey   = "klUG3PV9lmeddshcKJEf5YTDXl"
@@ -63,9 +61,9 @@ type OAuthServiceInterface interface {
 var _ OAuthServiceInterface = (*OAuthService)(nil)
 
 type OAuthService struct {
+	baseUrl       string
 	httpClient    HTTPClient
 	timeProvider  TimeProvider
-	baseURLGetter func() string
 	browserOpener BrowserOpener
 }
 
@@ -74,20 +72,17 @@ func DefaultOAuthService() *OAuthService {
 }
 
 func NewOAuthService(httpClient HTTPClient, timeProvider TimeProvider, browserOpener BrowserOpener) *OAuthService {
+	baseUrl := os.Getenv("HYPHEN_CUSTOM_AUTH")
+	if baseUrl == "" {
+		baseUrl = "https://auth.hyphen.ai"
+	}
+
 	return &OAuthService{
+		baseUrl:       baseUrl,
 		httpClient:    httpClient,
 		timeProvider:  timeProvider,
-		baseURLGetter: baseUrl,
 		browserOpener: browserOpener,
 	}
-}
-
-func baseUrl() string {
-	if os.Getenv("HYPHEN_CLI_ENV") != "" {
-		devBaseUrl = os.Getenv("HYPHEN_CLI_ENV")
-		return devBaseUrl
-	}
-	return prodBaseUrl
 }
 
 func (s *OAuthService) generatePKCE() (string, string, error) {
@@ -107,7 +102,7 @@ func (s *OAuthService) generatePKCE() (string, string, error) {
 }
 
 func (s *OAuthService) exchangeCodeForToken(code, codeVerifier string) (*TokenResponse, error) {
-	tokenURL := fmt.Sprintf("%s/oauth2/token", s.baseURLGetter())
+	tokenURL := fmt.Sprintf("%s/oauth2/token", s.baseUrl)
 
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
@@ -166,7 +161,7 @@ func openBrowser(url string) error {
 }
 
 func (s *OAuthService) StartOAuthServer() (*TokenResponse, error) {
-	authServerURL := fmt.Sprintf("%s/oauth2/auth", s.baseURLGetter())
+	authServerURL := fmt.Sprintf("%s/oauth2/auth", s.baseUrl)
 
 	codeVerifier, codeChallenge, err := s.generatePKCE()
 	if err != nil {
@@ -261,7 +256,7 @@ func (s *OAuthService) IsTokenExpired(expiryTime int64) bool {
 }
 
 func (s *OAuthService) RefreshToken(refreshToken string) (*TokenResponse, error) {
-	tokenURL := fmt.Sprintf("%s/oauth2/token", s.baseURLGetter())
+	tokenURL := fmt.Sprintf("%s/oauth2/token", s.baseUrl)
 
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")

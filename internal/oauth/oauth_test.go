@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -51,17 +50,6 @@ func TestNewOAuthService(t *testing.T) {
 	assert.Equal(t, httpClient, service.httpClient)
 	assert.Equal(t, timeProvider, service.timeProvider)
 	assert.NotNil(t, service.browserOpener)
-}
-
-func TestBaseUrl(t *testing.T) {
-	// Test production URL
-	assert.Equal(t, prodBaseUrl, baseUrl())
-
-	// Test dev URL
-	oldEnv := os.Getenv("HYPHEN_CLI_ENV")
-	os.Setenv("HYPHEN_CLI_ENV", "http://dev.example.com")
-	defer os.Setenv("HYPHEN_CLI_ENV", oldEnv)
-	assert.Equal(t, "http://dev.example.com", baseUrl())
 }
 
 func TestGeneratePKCE(t *testing.T) {

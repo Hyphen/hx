@@ -42,7 +42,7 @@ func (m *MockOAuthService) RefreshToken(refreshToken string) (*oauth.TokenRespon
 func TestNew(t *testing.T) {
 	api := New()
 	assert.NotNil(t, api)
-	assert.Equal(t, "http://localhost:4001", api.baseUrl)
+	assert.Equal(t, "https://dev-api.hyphen.ai/env", api.baseUrl)
 	assert.NotNil(t, api.httpClient)
 	assert.NotNil(t, api.oauthService)
 	assert.NotNil(t, api.configLoader)
@@ -95,7 +95,7 @@ func TestGetAuthToken_Refresh(t *testing.T) {
 		AccessToken:  "new_access_token",
 		RefreshToken: "new_refresh_token",
 		IDToken:      "new_id_token",
-		ExpiryTime:   2000000000,
+		ExpiresIn:    3600,
 	}, nil)
 
 	token, err := api.getAuthToken()
