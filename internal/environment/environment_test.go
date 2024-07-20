@@ -442,3 +442,35 @@ func TestTmpFile(t *testing.T) {
 	assert.NotNil(t, file)
 	assert.FileExists(t, name)
 }
+
+func TestCheckAppId(t *testing.T) {
+	tests := []struct {
+		name        string
+		appId       string
+		expectError bool
+		suggested   string
+	}{
+		{"Valid lowercase", "myapp123", false, ""},
+		{"Valid with hyphen and underscore", "my-app_123", false, ""},
+		{"Uppercase letters", "MyApp123", true, "myapp123"},
+		{"Spaces", "My App 123", true, "my-app-123"},
+		{"Special characters", "My@App#123", true, "my-app-123"},
+		{"Mixed case and special chars", "My@App 123", true, "my-app-123"},
+		{"Only special chars", "@#$%", true, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := CheckAppId(tt.appId)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.suggested != "" {
+					assert.Contains(t, err.Error(), tt.suggested)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
