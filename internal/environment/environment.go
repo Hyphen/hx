@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -111,14 +112,19 @@ func (e *Enviroment) SecretKey() secretkey.SecretKeyer {
 }
 
 func (e *Enviroment) GetEncryptedEnviromentVars(env string) (string, error) {
-	env = getEnvName(env)
+	env, err := GetEnvName(env)
+	if err != nil {
+		return "", err
+	}
 	return e.repository.GetEncryptedVariables(env, e.config.AppId)
 }
 
 func (e *Enviroment) UploadEncryptedEnviromentVars(env string, envData envvars.EnviromentVarsData) error {
-	if env == "" {
-		env = "default"
+	env, err := GetEnvName(env)
+	if err != nil {
+		return err
 	}
+
 	if err := envData.EncryptData(e.secretKey); err != nil {
 		return err
 	}
@@ -131,7 +137,10 @@ func (e *Enviroment) UploadEncryptedEnviromentVars(env string, envData envvars.E
 }
 
 func (e *Enviroment) DecryptEnvironmentVars(env string) ([]string, error) {
-	env = getEnvName(env)
+	env, err := GetEnvName(env)
+	if err != nil {
+		return []string{}, err
+	}
 	envVariables, err := e.GetEncryptedEnviromentVars(env)
 	if err != nil {
 		return []string{}, err
@@ -147,7 +156,10 @@ func (e *Enviroment) DecryptEnvironmentVars(env string) ([]string, error) {
 }
 
 func (e *Enviroment) DecryptedEnviromentVarsIntoAFile(env, fileName string) (string, error) {
-	env = getEnvName(env)
+	env, err := GetEnvName(env)
+	if err != nil {
+		return "", err
+	}
 
 	envVars, err := e.DecryptEnvironmentVars(env)
 	if err != nil {
@@ -284,12 +296,44 @@ func ConfigExists() bool {
 	return !os.IsNotExist(err)
 }
 
-func getEnvName(env string) string {
+func GetEnvName(env string) (string, error) {
 	if env == "" {
-		return "default"
+		return "default", nil
 	}
 
-	return strings.ToLower(env)
+	// Convert to lowercase
+	name := strings.ToLower(env)
+
+	// Check for unpermitted characters
+	validRegex := regexp.MustCompile("^[a-z0-9-_]+$")
+	if !validRegex.MatchString(name) {
+		// Create a suggested valid name
+		suggested := strings.ReplaceAll(name, " ", "-")
+		suggested = regexp.MustCompile("[^a-z0-9-_]").ReplaceAllString(suggested, "-")
+		suggested = regexp.MustCompile("-+").ReplaceAllString(suggested, "-")
+		suggested = strings.Trim(suggested, "-")
+
+		return "", fmt.Errorf("you are using unpermitted characters. A valid env name can only contain lowercase letters, numbers, hyphens, and underscores. Suggested valid name: %s", suggested)
+	}
+
+	return name, nil
+}
+
+func CheckAppId(appId string) error {
+
+	// Check for unpermitted characters
+	validRegex := regexp.MustCompile("^[a-z0-9-_]+$")
+	if !validRegex.MatchString(appId) {
+		// Create a suggested valid name
+		suggested := strings.ReplaceAll(appId, " ", "-")
+		suggested = regexp.MustCompile("[^a-z0-9-_]").ReplaceAllString(suggested, "-")
+		suggested = regexp.MustCompile("-+").ReplaceAllString(suggested, "-")
+		suggested = strings.Trim(suggested, "-")
+
+		return fmt.Errorf("you are using unpermitted characters. A valid env name can only contain lowercase letters, numbers, hyphens, and underscores. Suggested valid name: %s", suggested)
+	}
+
+	return nil
 }
 
 func GetEnvFileByEnvironment(environment string) string {

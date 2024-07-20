@@ -60,16 +60,24 @@ func PromptForAppName(reader io.Reader) (string, error) {
 
 func PromptForAppId(reader io.Reader, defaultAppId string) (string, error) {
 	r := bufio.NewReader(reader)
-	fmt.Printf("App ID [%s]: ", defaultAppId)
-	appId, err := r.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("error reading input: %w", err)
+	for {
+		fmt.Printf("App ID [%s]: ", defaultAppId)
+		appId, err := r.ReadString('\n')
+		if err != nil {
+			return "", fmt.Errorf("error reading input: %w", err)
+		}
+		appId = strings.TrimSpace(appId)
+		if appId == "" {
+			appId = defaultAppId
+		}
+
+		if err := environment.CheckAppId(appId); err != nil {
+			fmt.Printf("Invalid App ID: %v\n", err)
+			fmt.Println("Please try again.")
+			continue
+		}
+		return appId, nil
 	}
-	appId = strings.TrimSpace(appId)
-	if appId == "" {
-		appId = defaultAppId
-	}
-	return appId, nil
 }
 
 func PromptForOverwrite(reader io.Reader) bool {

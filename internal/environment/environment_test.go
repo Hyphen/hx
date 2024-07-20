@@ -221,19 +221,30 @@ func TestEncryptAndDecryptEnvironmentVars(t *testing.T) {
 
 func TestGetEnvName(t *testing.T) {
 	tests := []struct {
+		name     string
 		input    string
 		expected string
+		hasError bool
 	}{
-		{"", "default"},
-		{"production", "production"},
-		{"STAGING", "staging"},
-		{"Dev", "dev"},
+		{"Empty input", "", "default", false},
+		{"Lowercase input", "production", "production", false},
+		{"Uppercase input", "STAGING", "staging", false},
+		{"Mixed case input", "Dev", "dev", false},
+		{"Invalid characters", "Test 123!@#", "", true},
+		{"Valid with hyphen and underscore", "test-env_1", "test-env_1", false},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := getEnvName(tt.input)
-			assert.Equal(t, tt.expected, result)
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := GetEnvName(tt.input)
+
+			if tt.hasError {
+				assert.Error(t, err, "Expected an error for input: %s", tt.input)
+				assert.Empty(t, result, "Expected empty result for input: %s", tt.input)
+			} else {
+				assert.NoError(t, err, "Unexpected error for input: %s", tt.input)
+				assert.Equal(t, tt.expected, result, "Unexpected result for input: %s", tt.input)
+			}
 		})
 	}
 }

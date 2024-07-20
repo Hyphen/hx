@@ -20,18 +20,20 @@ Example usage:
   hyphen env create default
   hyphen env create production
 
-The command will create a file named based on the environment, such as 'default.env' or 'production.env'.`,
+The command will create a file named based on the environment, such as '.env.dev' or '.env.prod'.`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		// Initialize env with an empty string
 		env := ""
 
-		// If an environment is provided in args, use it
 		if len(args) == 1 {
 			env = args[0]
 		}
+		env, err := environment.GetEnvName(env)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 
-		// Get the default environment file name
 		fileName = environment.GetEnvFileByEnvironment(env)
 
 		// Check if the file already exists to avoid overwriting
@@ -40,11 +42,9 @@ The command will create a file named based on the environment, such as 'default.
 			os.Exit(1)
 		}
 
-		// Example content, this should be replaced with actual content or logic to create the file content.
 		content := []byte("# Environment variables\nKEY=Value\n")
 
-		// Write the initial content to the file
-		err := os.WriteFile(fileName, content, 0644)
+		err = os.WriteFile(fileName, content, 0644)
 		if err != nil {
 			fmt.Printf("Error creating file %s: %v\n", fileName, err)
 			os.Exit(1)
