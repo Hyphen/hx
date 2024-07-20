@@ -320,12 +320,10 @@ func GetEnvName(env string) (string, error) {
 }
 
 func CheckAppId(appId string) error {
-
-	// Check for unpermitted characters
 	validRegex := regexp.MustCompile("^[a-z0-9-_]+$")
 	if !validRegex.MatchString(appId) {
-		// Create a suggested valid name
-		suggested := strings.ReplaceAll(appId, " ", "-")
+		suggested := strings.ToLower(appId)
+		suggested = strings.ReplaceAll(suggested, " ", "-")
 		suggested = regexp.MustCompile("[^a-z0-9-_]").ReplaceAllString(suggested, "-")
 		suggested = regexp.MustCompile("-+").ReplaceAllString(suggested, "-")
 		suggested = strings.Trim(suggested, "-")
