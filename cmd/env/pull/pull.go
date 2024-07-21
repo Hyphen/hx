@@ -31,7 +31,7 @@ writes them into the given file.`,
 
 		envHandler := environment.Restore()
 
-		_, err := envHandler.DecryptedEnviromentVarsIntoAFile(env, envFile)
+		_, err := envHandler.DecryptedEnvironmentVarsIntoAFile(env, envFile)
 		if err != nil {
 			fmt.Printf("Error saving environment variables to file %s: %v\n", envFile, err)
 			os.Exit(1)

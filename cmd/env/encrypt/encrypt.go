@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var envHandler environment.EnviromentHandler
+var envHandler environment.EnvironmentHandler
 
 var EncryptCmd = &cobra.Command{
 	Use:     "encrypt [FILE]",
@@ -39,6 +39,6 @@ var EncryptCmd = &cobra.Command{
 	},
 }
 
-func setEnvHandler(handler environment.EnviromentHandler) {
+func setEnvHandler(handler environment.EnvironmentHandler) {
 	envHandler = handler
 }

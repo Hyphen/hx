@@ -19,19 +19,18 @@ func SetRepository(repo Repository) {
 	repository = repo
 }
 
-type EnviromentHandler interface {
+type EnvironmentHandler interface {
 	EncryptEnvironmentVars(file string) (string, error)
 	DecryptEnvironmentVars(env string) ([]string, error)
-	DecryptedEnviromentVarsIntoAFile(env, fileName string) (string, error)
-	GetEncryptedEnviromentVars(env string) (string, error)
-	UploadEncryptedEnviromentVars(env string, envData envvars.EnviromentVarsData) error
-	SourceEnviromentVars(env string) error
+	DecryptedEnvironmentVarsIntoAFile(env, fileName string) (string, error)
+	GetEncryptedEnvironmentVars(env string) (string, error)
+	UploadEncryptedEnvironmentVars(env string, envData envvars.EnvironmentVarsData) error
 	SecretKey() secretkey.SecretKeyer
 }
 
 var EnvConfigFile = ".hyphen-env-key"
 
-type Enviroment struct {
+type Environment struct {
 	secretKey  secretkey.SecretKeyer
 	repository Repository
 	config     Config
@@ -43,11 +42,11 @@ type Config struct {
 	SecretKey string `toml:"secret_key"`
 }
 
-func Restore() EnviromentHandler {
+func Restore() EnvironmentHandler {
 	return RestoreFromFile(EnvConfigFile)
 }
 
-func RestoreFromFile(file string) EnviromentHandler {
+func RestoreFromFile(file string) EnvironmentHandler {
 	config := Config{}
 
 	if _, err := os.Stat(file); os.IsNotExist(err) {
@@ -61,21 +60,21 @@ func RestoreFromFile(file string) EnviromentHandler {
 		os.Exit(1)
 	}
 
-	return &Enviroment{
+	return &Environment{
 		secretKey:  secretkey.FromBase64(config.SecretKey),
 		repository: repository,
 		config:     config,
 	}
 }
 
-func Initialize(appName, appId string) *Enviroment {
+func Initialize(appName, appId string) *Environment {
 	config := Config{
 		AppName:   appName,
 		AppId:     appId,
 		SecretKey: secretkey.New().Base64(),
 	}
 
-	env := &Enviroment{
+	env := &Environment{
 		secretKey:  secretkey.FromBase64(config.SecretKey),
 		repository: repository,
 		config:     config,
@@ -107,11 +106,11 @@ func Initialize(appName, appId string) *Enviroment {
 
 }
 
-func (e *Enviroment) SecretKey() secretkey.SecretKeyer {
+func (e *Environment) SecretKey() secretkey.SecretKeyer {
 	return e.secretKey
 }
 
-func (e *Enviroment) GetEncryptedEnviromentVars(env string) (string, error) {
+func (e *Environment) GetEncryptedEnvironmentVars(env string) (string, error) {
 	env, err := GetEnvName(env)
 	if err != nil {
 		return "", err
@@ -119,7 +118,7 @@ func (e *Enviroment) GetEncryptedEnviromentVars(env string) (string, error) {
 	return e.repository.GetEncryptedVariables(env, e.config.AppId)
 }
 
-func (e *Enviroment) UploadEncryptedEnviromentVars(env string, envData envvars.EnviromentVarsData) error {
+func (e *Environment) UploadEncryptedEnvironmentVars(env string, envData envvars.EnvironmentVarsData) error {
 	env, err := GetEnvName(env)
 	if err != nil {
 		return err
@@ -136,12 +135,12 @@ func (e *Enviroment) UploadEncryptedEnviromentVars(env string, envData envvars.E
 	return nil
 }
 
-func (e *Enviroment) DecryptEnvironmentVars(env string) ([]string, error) {
+func (e *Environment) DecryptEnvironmentVars(env string) ([]string, error) {
 	env, err := GetEnvName(env)
 	if err != nil {
 		return []string{}, err
 	}
-	envVariables, err := e.GetEncryptedEnviromentVars(env)
+	envVariables, err := e.GetEncryptedEnvironmentVars(env)
 	if err != nil {
 		return []string{}, err
 	}
@@ -155,7 +154,7 @@ func (e *Enviroment) DecryptEnvironmentVars(env string) ([]string, error) {
 
 }
 
-func (e *Enviroment) DecryptedEnviromentVarsIntoAFile(env, fileName string) (string, error) {
+func (e *Environment) DecryptedEnvironmentVarsIntoAFile(env, fileName string) (string, error) {
 	env, err := GetEnvName(env)
 	if err != nil {
 		return "", err
@@ -183,7 +182,7 @@ func (e *Enviroment) DecryptedEnviromentVarsIntoAFile(env, fileName string) (str
 	return fileName, nil
 }
 
-func (e *Enviroment) EncryptEnvironmentVars(file string) (string, error) {
+func (e *Environment) EncryptEnvironmentVars(file string) (string, error) {
 	// Open the file containing the environment variables
 	f, err := os.Open(file)
 	if err != nil {
@@ -212,10 +211,6 @@ func (e *Enviroment) EncryptEnvironmentVars(file string) (string, error) {
 	}
 
 	return encrypted, nil
-}
-
-func (e *Enviroment) SourceEnviromentVars(env string) error {
-	return nil
 }
 
 func tmpDir() string {

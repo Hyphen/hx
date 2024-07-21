@@ -14,7 +14,7 @@ import (
 type MockRepository struct {
 	InitializeFunc            func(apiName, apiId string) error
 	GetEncryptedVariablesFunc func(env, appID string) (string, error)
-	UploadEnvVariableFunc     func(env, appID string, envData envvars.EnviromentVarsData) error
+	UploadEnvVariableFunc     func(env, appID string, envData envvars.EnvironmentVarsData) error
 }
 
 func (m *MockRepository) Initialize(apiName, apiId string) error {
@@ -31,7 +31,7 @@ func (m *MockRepository) GetEncryptedVariables(env, appID string) (string, error
 	return "", nil
 }
 
-func (m *MockRepository) UploadEnvVariable(env, appID string, envData envvars.EnviromentVarsData) error {
+func (m *MockRepository) UploadEnvVariable(env, appID string, envData envvars.EnvironmentVarsData) error {
 	if m.UploadEnvVariableFunc != nil {
 		return m.UploadEnvVariableFunc(env, appID, envData)
 	}
@@ -121,7 +121,7 @@ func TestInitialize(t *testing.T) {
 
 func TestEncryptEnvironmentVars(t *testing.T) {
 	mockKey := &MockSecretKey{}
-	env := &Enviroment{secretKey: mockKey}
+	env := &Environment{secretKey: mockKey}
 
 	// Create a temporary file
 	file, err := os.CreateTemp("", "env-vars")
@@ -153,7 +153,7 @@ func TestDecryptEnvironmentVarsIntoAFile(t *testing.T) {
 	mockRepo := &MockRepository{}
 	SetRepository(mockRepo)
 
-	env := &Enviroment{
+	env := &Environment{
 		secretKey:  mockKey,
 		repository: mockRepo,
 	}
@@ -164,9 +164,9 @@ func TestDecryptEnvironmentVarsIntoAFile(t *testing.T) {
 		return envVars, nil
 	}
 
-	tmpFileLocation, err := env.DecryptedEnviromentVarsIntoAFile("mockEnv", "mockApp")
+	tmpFileLocation, err := env.DecryptedEnvironmentVarsIntoAFile("mockEnv", "mockApp")
 	if err != nil {
-		t.Fatalf("DecryptedEnviromentVarsIntoAFile error = %v", err)
+		t.Fatalf("DecryptedEnvironmentVarsIntoAFile error = %v", err)
 	}
 	defer os.Remove(tmpFileLocation)
 
@@ -183,7 +183,7 @@ func TestDecryptEnvironmentVarsIntoAFile(t *testing.T) {
 
 func TestEncryptAndDecryptEnvironmentVars(t *testing.T) {
 	mockKey := &MockSecretKey{}
-	env := &Enviroment{secretKey: mockKey}
+	env := &Environment{secretKey: mockKey}
 
 	// Create a temporary file
 	file, err := os.CreateTemp("", "env-vars")
@@ -269,35 +269,35 @@ func TestGetEnvFileByEnvironment(t *testing.T) {
 	}
 }
 
-func TestUploadEncryptedEnviromentVars(t *testing.T) {
+func TestUploadEncryptedEnvironmentVars(t *testing.T) {
 	mockKey := &MockSecretKey{}
 	mockRepo := &MockRepository{}
-	env := &Enviroment{
+	env := &Environment{
 		secretKey:  mockKey,
 		repository: mockRepo,
 		config:     Config{AppId: "test-app-id"},
 	}
 
-	mockRepo.UploadEnvVariableFunc = func(env, appID string, envData envvars.EnviromentVarsData) error {
+	mockRepo.UploadEnvVariableFunc = func(env, appID string, envData envvars.EnvironmentVarsData) error {
 		assert.Equal(t, "test-env", env)
 		assert.Equal(t, "test-app-id", appID)
 		assert.NotEmpty(t, envData.Data)
 		return nil
 	}
 
-	envData := envvars.EnviromentVarsData{
+	envData := envvars.EnvironmentVarsData{
 		Size:           "10",
 		CountVariables: 2,
 		Data:           "TEST_VAR=test_value\nANOTHER_VAR=another_value",
 	}
 
-	err := env.UploadEncryptedEnviromentVars("test-env", envData)
+	err := env.UploadEncryptedEnvironmentVars("test-env", envData)
 	assert.NoError(t, err)
 }
 
-func TestGetEncryptedEnviromentVars(t *testing.T) {
+func TestGetEncryptedEnvironmentVars(t *testing.T) {
 	mockRepo := &MockRepository{}
-	env := &Enviroment{
+	env := &Environment{
 		repository: mockRepo,
 		config:     Config{AppId: "test-app-id"},
 	}
@@ -309,7 +309,7 @@ func TestGetEncryptedEnviromentVars(t *testing.T) {
 		return expectedVars, nil
 	}
 
-	vars, err := env.GetEncryptedEnviromentVars("test-env")
+	vars, err := env.GetEncryptedEnvironmentVars("test-env")
 	assert.NoError(t, err)
 	assert.Equal(t, expectedVars, vars)
 }
@@ -374,7 +374,7 @@ func TestConfigExists(t *testing.T) {
 func TestDecryptEnvironmentVars(t *testing.T) {
 	mockKey := &MockSecretKey{}
 	mockRepo := &MockRepository{}
-	env := &Enviroment{
+	env := &Environment{
 		secretKey:  mockKey,
 		repository: mockRepo,
 		config:     Config{AppId: "test-app-id"},

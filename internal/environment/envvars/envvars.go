@@ -9,16 +9,16 @@ import (
 	"github.com/Hyphen/cli/internal/secretkey"
 )
 
-// EnviromentVarsData represents environment variables data.
-type EnviromentVarsData struct {
+// EnvironmentVarsData represents environment variables data.
+type EnvironmentVarsData struct {
 	Size           string `json:"size"`
 	CountVariables int    `json:"countVariables"`
 	Data           string `json:"data"`
 }
 
 // GetEnvironmentVarsData processes the environment variables from the given file.
-func New(fileName string) (EnviromentVarsData, error) {
-	var data EnviromentVarsData
+func New(fileName string) (EnvironmentVarsData, error) {
+	var data EnvironmentVarsData
 
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -49,7 +49,7 @@ func New(fileName string) (EnviromentVarsData, error) {
 
 	return data, nil
 }
-func (e *EnviromentVarsData) EncryptData(key secretkey.SecretKeyer) error {
+func (e *EnvironmentVarsData) EncryptData(key secretkey.SecretKeyer) error {
 	encryptData, err := key.Encrypt(e.Data)
 	if err != nil {
 		return err

@@ -10,7 +10,7 @@ import (
 	"github.com/Hyphen/cli/internal/secretkey"
 )
 
-// mockEnvHandler now fields the correct signature for all methods in environment.EnviromentHandler
+// mockEnvHandler now fields the correct signature for all methods in environment.EnvironmentHandler
 type mockEnvHandler struct{}
 
 func (m *mockEnvHandler) EncryptEnvironmentVars(file string) (string, error) {
@@ -21,19 +21,19 @@ func (m *mockEnvHandler) DecryptEnvironmentVars(env string) ([]string, error) {
 	return []string{"VAR=VALUE"}, nil
 }
 
-func (m *mockEnvHandler) DecryptedEnviromentVarsIntoAFile(env, fileName string) (string, error) {
+func (m *mockEnvHandler) DecryptedEnvironmentVarsIntoAFile(env, fileName string) (string, error) {
 	return "", nil
 }
 
-func (m *mockEnvHandler) GetEncryptedEnviromentVars(env string) (string, error) {
+func (m *mockEnvHandler) GetEncryptedEnvironmentVars(env string) (string, error) {
 	return "", nil
 }
 
-func (m *mockEnvHandler) UploadEncryptedEnviromentVars(env string, envData envvars.EnviromentVarsData) error {
+func (m *mockEnvHandler) UploadEncryptedEnvironmentVars(env string, envData envvars.EnvironmentVarsData) error {
 	return nil
 }
 
-func (m *mockEnvHandler) SourceEnviromentVars(env string) error {
+func (m *mockEnvHandler) SourceEnvironmentVars(env string) error {
 	return nil
 }
 

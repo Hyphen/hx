@@ -9,7 +9,7 @@ import (
 )
 
 type RunCommander struct {
-	envHanler environment.EnviromentHandler
+	envHanler environment.EnvironmentHandler
 }
 
 func InitRunCommander() *RunCommander {

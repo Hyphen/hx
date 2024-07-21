@@ -162,7 +162,7 @@ func TestUploadEnvVariable(t *testing.T) {
 	}
 	mockHTTP.On("Do", mock.Anything).Return(mockResp, nil)
 
-	envData := envvars.EnviromentVarsData{
+	envData := envvars.EnvironmentVarsData{
 		Size:           "10",
 		CountVariables: 5,
 		Data:           "encrypted_data",
@@ -194,7 +194,7 @@ func TestGetEncryptedVariables(t *testing.T) {
 
 	mockOAuth.On("IsTokenExpired", int64(1000000000)).Return(false)
 
-	envData := envvars.EnviromentVarsData{
+	envData := envvars.EnvironmentVarsData{
 		Size:           "10",
 		CountVariables: 5,
 		Data:           "encrypted_data",

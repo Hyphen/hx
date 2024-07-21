@@ -11,10 +11,10 @@ import (
 )
 
 var MergeCmd = &cobra.Command{
-	Use:   "merge [ENVIROMENT] [FILE]",
+	Use:   "merge [ENVIRONMENT] [FILE]",
 	Short: "Merge environment variables into a file",
 	Long: `This command reads the specified environment, decrypts the variables, 
-and merges them into the given file, giving preference to the pulled variables. The enviroment should be pushed first`,
+and merges them into the given file, giving preference to the pulled variables. The environment should be pushed first`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		env := args[0]

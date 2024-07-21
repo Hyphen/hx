@@ -41,7 +41,7 @@ var PushCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		err = envHandler.UploadEncryptedEnviromentVars(env, envVar)
+		err = envHandler.UploadEncryptedEnvironmentVars(env, envVar)
 		if err != nil {
 			fmt.Printf("Error uploading environment variables from file %s to environment %s: %v\n", fileName, env, err)
 			os.Exit(1)

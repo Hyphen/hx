@@ -101,7 +101,7 @@ func (e *EnvApi) Initialize(apiName, apiId string) error {
 	}
 }
 
-func (e *EnvApi) UploadEnvVariable(env, appID string, envData envvars.EnviromentVarsData) error {
+func (e *EnvApi) UploadEnvVariable(env, appID string, envData envvars.EnvironmentVarsData) error {
 	token, err := e.getAuthToken()
 	if err != nil {
 		return WrapError(errors.Wrap(err, "Failed to login"), "Unable to login. Please check your credentials and try again.")
@@ -173,7 +173,7 @@ func (e *EnvApi) GetEncryptedVariables(env, appID string) (string, error) {
 		}
 	}
 
-	var envData envvars.EnviromentVarsData
+	var envData envvars.EnvironmentVarsData
 	if err := json.NewDecoder(resp.Body).Decode(&envData); err != nil {
 		return "", WrapError(errors.Wrap(err, "Failed to decode response body"), "Failed to process the server response. Please try again.")
 	}
