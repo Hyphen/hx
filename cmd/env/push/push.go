@@ -15,7 +15,7 @@ var PushCmd = &cobra.Command{
 	Use:     "push [ENVIRONMENT]",
 	Aliases: []string{"p"},
 	Short:   "Push an existing environmental variable file",
-	Long:    `Pushes the contents of an existing environmental variable file to heyphen for the specified environment.`,
+	Long:    `Pushes the contents of an existing environmental variable file to hyphen for the specified environment.`,
 	Args:    cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		env := "default"
@@ -47,7 +47,7 @@ var PushCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("Successfully pushed contents of %s to heyphen environment %s\n", fileName, env)
+		fmt.Printf("Successfully pushed contents of %s to hyphen environment %s\n", fileName, env)
 	},
 }
 
