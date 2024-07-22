@@ -42,7 +42,7 @@ func (m *MockOAuthService) RefreshToken(refreshToken string) (*oauth.TokenRespon
 func TestNew(t *testing.T) {
 	api := New()
 	assert.NotNil(t, api)
-	assert.Equal(t, "https://dev-api.hyphen.ai/env", api.baseUrl)
+	assert.Equal(t, "https://api.hyphen.ai/env", api.baseUrl)
 	assert.NotNil(t, api.httpClient)
 	assert.NotNil(t, api.oauthService)
 	assert.NotNil(t, api.configLoader)
