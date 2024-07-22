@@ -16,11 +16,23 @@ var CreateCmd = &cobra.Command{
 	Short:   "Create an environment file",
 	Long: `Creates a new environment file for the specified environment.
 
-Example usage:
-  hyphen env create default
-  hyphen env create production
+The command will create a file with the name based on the environment, such as '.env.dev' or '.env.prod'.
+If no environment is specified, it will create a file for the default environment.
 
-The command will create a file with the name based on the environment, such as '.env.dev' or '.env.prod'.`,
+Examples:
+  # Create a file for the default environment
+  hyrule env create
+
+  # Create a file for the development environment
+  hyrule env create development
+
+  # Create a file for the production environment
+  hyrule env create production
+
+  # Create a file for a custom environment
+  hyrule env create staging
+
+Note: This command will not overwrite existing files to prevent accidental data loss.`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		env := ""

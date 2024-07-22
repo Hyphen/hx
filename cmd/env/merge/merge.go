@@ -14,7 +14,19 @@ var MergeCmd = &cobra.Command{
 	Use:   "merge [ENVIRONMENT] [FILE]",
 	Short: "Merge environment variables into a file",
 	Long: `This command reads the specified environment, decrypts the variables, 
-and merges them into the given file, giving preference to the pulled variables. The environment should be pushed first`,
+and merges them into the given file, giving preference to the pulled variables. The environment should be pushed first.
+
+Examples:
+  # Merge variables from the default environment into .env file
+  hyrule env merge default .env
+
+  # Merge variables from the production environment into .env.prod file
+  hyrule env merge production .env.prod
+
+  # Merge variables from the staging environment into a custom file
+  hyrule env merge staging custom_env_file.txt
+
+Note: Make sure to push the environment variables before merging.`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		env := args[0]

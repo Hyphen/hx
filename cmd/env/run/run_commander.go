@@ -20,12 +20,12 @@ func InitRunCommander() *RunCommander {
 
 func (r *RunCommander) getEnvironmentVariables(env string) ([]string, error) {
 	if StreamVars {
-		return r.readEnvFileStremed(env)
+		return r.readEnvFileStreamed(env)
 	}
 	return readEnvFile(env)
 }
 
-func (r *RunCommander) readEnvFileStremed(env string) ([]string, error) {
+func (r *RunCommander) readEnvFileStreamed(env string) ([]string, error) {
 	return r.envHanler.DecryptEnvironmentVars(env)
 }
 

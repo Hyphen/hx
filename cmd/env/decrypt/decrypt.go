@@ -16,7 +16,16 @@ var DecryptCmd = &cobra.Command{
 	Use:     "decrypt",
 	Aliases: []string{"d"},
 	Short:   "Decrypt a raw data dump",
-	Long:    `Decrypts a raw data dump from Hyphen, showing the decrypted environment variables.`,
+	Long: `Decrypts a raw data dump from Hyphen, showing the decrypted environment variables.
+
+Examples:
+  # Decrypt an encrypted string
+  hyrule env decrypt -s "encrypted_string_here"
+
+  # Decrypt the contents of an encrypted file
+  hyrule env decrypt -f encrypted_vars.txt
+
+Note: Make sure to handle the decrypted information securely, as it may contain sensitive data.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if decryptString == "" && decryptFile == "" {
 			fmt.Println("Usage: hyphen env decrypt -s [STRING] or hyphen env decrypt -f [FILE]")

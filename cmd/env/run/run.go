@@ -16,9 +16,21 @@ var RunCmd = &cobra.Command{
 	Short: "Run a command using some environment variables",
 	Long: `Executes the specified command with the environment variables sourced from the specified environment file.
 
-Example usage:
+Examples:
+  # Run a command using the default environment
   hyrule env run default go run main.go
-  hyrule env run production some_script.sh`,
+
+  # Run a command using a specific environment
+  hyrule env run production some_script.sh
+
+  # Run a command using a custom environment file
+  hyrule env run staging --file .env.staging node server.js
+
+  # Run a command while streaming environment variables
+  hyrule env run development --stream python app.py
+
+  # Run a command with additional arguments
+  hyrule env run test npm run test -- --watch`,
 	Args: cobra.MinimumNArgs(2), // Ensure at least two arguments are provided: ENVIRONMENT and COMMAND
 	Run:  runCommand,
 }
@@ -41,6 +53,6 @@ func runCommand(cmd *cobra.Command, args []string) {
 }
 
 func init() {
-	RunCmd.Flags().StringVarP(&envFile, "file", "f", "", "specific environment file to use")
-	RunCmd.Flags().BoolVarP(&StreamVars, "stream", "s", false, "stream environment variables")
+	RunCmd.Flags().StringVarP(&envFile, "file", "f", "", "Specify a custom environment file (e.g., .env.prod or config.env)")
+	RunCmd.Flags().BoolVarP(&StreamVars, "stream", "s", false, "Stream environment variables from the ENV service")
 }

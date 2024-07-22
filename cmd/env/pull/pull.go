@@ -11,10 +11,23 @@ import (
 var fileName string
 
 var PullCmd = &cobra.Command{
-	Use:   "pull [environment]",
+	Use:   "pull [ENVIRONMENT]",
 	Short: "Decrypt and put environment variables into a file",
 	Long: `This command reads the specified environment, decrypts the variables, and 
-writes them into the given file.`,
+writes them into the given file.
+
+Examples:
+  # Pull variables from the default environment
+  hyrule env pull
+
+  # Pull variables from a specific environment
+  hyrule env pull production
+
+  # Pull variables and save to a custom file
+  hyrule env pull staging --file .env.staging
+
+  # Pull variables from production and save to a custom file
+  hyrule env pull production --file .env.prod`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		env := "default"
