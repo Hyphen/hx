@@ -95,13 +95,13 @@ hyphen env encrypt [FILE]
 ```
 
 
-### `hyphen env merge [ENV] [FILE]`
+### `hyphen env merge [ENVIRONMENT] [FILE]`
 
 Merge environment variables into a file.
 
 Usage:
 ```bash
-hyphen env merge [ENV] [FILE]
+hyphen env merge [ENVIRONMENT] [FILE]
 ```
 
 Flags:
