@@ -15,7 +15,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Service interfaces for dependency injection
 type HTTPClient interface {
 	Get(url string) (*http.Response, error)
 }
@@ -27,7 +26,6 @@ type FileHandler interface {
 	Rename(oldpath, newpath string) error
 }
 
-// Default implementations
 type DefaultHTTPClient struct{}
 type DefaultFileHandler struct{}
 
@@ -51,10 +49,8 @@ func (d DefaultFileHandler) Rename(oldpath, newpath string) error {
 	return os.Rename(oldpath, newpath)
 }
 
-// CommandRunner is a function type for running commands, to facilitate mocking in tests
 type CommandRunner func(name string, arg ...string) *exec.Cmd
 
-// Config struct for dependencies and settings
 type Updater struct {
 	Version           string
 	BaseURL           string
@@ -116,14 +112,12 @@ func (u *Updater) Run(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Fetch the latest version
 	latestVersion, err := u.fetchLatestVersion()
 	if err != nil {
 		fmt.Printf("Failed to fetch the latest version: %v\n", err)
 		return
 	}
 
-	// Compare the versions
 	if latestVersion == cliVersion.GetVersion() {
 		fmt.Println("You are already using the latest version of Hyphen CLI.")
 		return
@@ -140,7 +134,6 @@ func (u *Updater) Run(cmd *cobra.Command, args []string) {
 }
 
 func (u *Updater) fetchLatestVersion() (string, error) {
-	// Use the BaseURL and append /versions?latest=true
 	url := fmt.Sprintf("%s/api/downloads/hyphen-cli/versions?latest=true", u.BaseURL)
 	resp, err := u.HTTPClient.Get(url)
 	if err != nil {

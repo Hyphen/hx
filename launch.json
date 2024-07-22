@@ -1,0 +1,125 @@
+{
+    "version": "0.1.0",
+    "configurations": [
+        {
+            "name": "Launch CLI",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": [],
+            "env": {},
+            "showLog": true
+        },
+        {
+            "name": "Version Command",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["version"],
+            "env": {},
+            "showLog": true
+        },
+        {
+            "name": "Update Command",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["update"],
+            "env": {},
+            "showLog": true
+        },
+        {
+            "name": "Init Command",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["init"],
+            "env": {},
+            "showLog": true
+        },
+        {
+            "name": "Env Init Command",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["env", "init"],
+            "env": {},
+            "showLog": true
+        },
+        {
+            "name": "Env Create Command",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["env", "create", "production"],
+            "env": {},
+            "showLog": true
+        },
+        {
+            "name": "Env Decrypt Command",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["env", "decrypt", "-s", "encrypted_string"],
+            "env": {},
+            "showLog": true
+        },
+        {
+            "name": "Env Encrypt Command",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["env", "encrypt", "file_to_encrypt.env"],
+            "env": {},
+            "showLog": true
+        },
+        {
+            "name": "Env Merge Command",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["env", "merge", "production", "file_to_merge.env"],
+            "env": {},
+            "showLog": true
+        },
+        {
+            "name": "Env Push Command",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["env", "push", "production"],
+            "env": {},
+            "showLog": true
+        },
+        {
+            "name": "Env Run Command",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["env", "run", "production", "echo", "Hello World"],
+            "env": {},
+            "showLog": true
+        },
+        {
+            "name": "Launch Tests",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}",
+            "args": ["-v"],
+            "showLog": true
+        }
+    ]
+}
+

@@ -2,10 +2,11 @@ package config
 
 import (
 	"fmt"
-	"github.com/BurntSushi/toml"
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"github.com/BurntSushi/toml"
 )
 
 type CredentialsConfig struct {
@@ -13,7 +14,10 @@ type CredentialsConfig struct {
 }
 
 type Credentials struct {
-	HyphenAccessToken string `toml:"hyphen_access_token"`
+	HyphenAccessToken  string `toml:"hyphen_access_token"`
+	HyphenRefreshToken string `toml:"hyphen_refresh_token"`
+	HypenIDToken       string `toml:"hyphen_id_token"`
+	ExpiryTime         int64  `toml:"expiry_time"`
 }
 
 // Filepaths for credential storage
@@ -72,27 +76,27 @@ func (se *systemEnvironment) ReadFile(path string) ([]byte, error) {
 var Env Environment = &systemEnvironment{}
 
 // SaveCredentials stores credentials in a system-dependent location
-func SaveCredentials(username, password string) {
+func SaveCredentials(accessToken, refreshToken, IDToken string, expiryTime int64) error {
 	configDir := Env.GetConfigDirectory()
 	if err := Env.EnsureDir(configDir); err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
 
 	credentialFilePath := filepath.Join(configDir, CredentialFile)
-	credentialsContent := fmt.Sprintf("[default]\nhyphen_access_token=\"%s:%s\"", username, password)
+	credentialsContent := fmt.Sprintf(
+		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\nhyphen_id_token=\"%s\"\nexpiry_time=%d",
+		accessToken, refreshToken, IDToken, expiryTime)
 
 	// Write the credentials to the file
 	if err := Env.WriteFile(credentialFilePath, []byte(credentialsContent), 0644); err != nil {
-		fmt.Println("Error writing credentials to file:", err)
-		return
+		return fmt.Errorf("Error writing credentials to file: %w", err)
 	}
 
-	fmt.Println("Credentials saved successfully to", credentialFilePath)
+	return nil
 }
 
-// GetCredentials retrieves credentials from a configuration file
-func GetCredentials() (CredentialsConfig, error) {
+// LoadCredentials retrieves credentials from a configuration file
+func LoadCredentials() (CredentialsConfig, error) {
 	configDir := Env.GetConfigDirectory()
 	credentialFilePath := filepath.Join(configDir, CredentialFile)
 

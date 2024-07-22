@@ -32,6 +32,10 @@ func TestEnsureDir(t *testing.T) {
 	se := &systemEnvironment{}
 	err := se.EnsureDir(dirName)
 	assert.Nil(t, err, "EnsureDir should not return an error")
+
+	// Clean up by removing the directory
+	cleanupErr := os.Remove(dirName)
+	assert.Nil(t, cleanupErr, "Removing test directory failed which can affect other tests")
 }
 
 // Test for WriteFile
@@ -46,7 +50,6 @@ func TestWriteFile(t *testing.T) {
 
 	// Clean up by removing the file
 	cleanupErr := os.Remove(filename)
-	// Make sure that no error occurred during file removal, ensure cleanup was successful
 	assert.Nil(t, cleanupErr, "Removing test file failed which can affect other tests")
 }
 
@@ -63,7 +66,6 @@ func TestReadFile(t *testing.T) {
 
 	// Clean up by removing the file
 	cleanupErr := os.Remove(filename)
-	// Make sure that no error occurred during file removal, ensure cleanup was successful
 	assert.Nil(t, cleanupErr, "Removing test file failed which can affect other tests")
 }
 
@@ -104,13 +106,16 @@ func TestSaveCredentialsSuccess(t *testing.T) {
 
 	configDir := "/mocked/path"
 	credentialFile := filepath.Join(configDir, CredentialFile)
-	credentialsContent := fmt.Sprintf("[default]\nhyphen_access_token=\"%s:%s\"", "user", "pass")
+	credentialsContent := fmt.Sprintf(
+		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\nhyphen_id_token=\"%s\"\nexpiry_time=%d",
+		"user_access_token", "user_refresh_token", "user_id_token", 12)
 
 	mockEnv.On("GetConfigDirectory").Return(configDir)
 	mockEnv.On("EnsureDir", configDir).Return(nil)
 	mockEnv.On("WriteFile", credentialFile, []byte(credentialsContent), os.FileMode(0644)).Return(nil)
 
-	SaveCredentials("user", "pass")
+	err := SaveCredentials("user_access_token", "user_refresh_token", "user_id_token", 12)
+	assert.Nil(t, err, "SaveCredentials should not return an error")
 
 	mockEnv.AssertExpectations(t) // verify that all mocked methods were called as expected
 }
@@ -122,7 +127,9 @@ func TestSaveCredentialsFailures(t *testing.T) {
 
 	configDir := "/mocked/path"
 	credentialFile := filepath.Join(configDir, CredentialFile)
-	credentialsContent := fmt.Sprintf("[default]\nhyphen_access_token=\"%s:%s\"", "user", "pass")
+	credentialsContent := fmt.Sprintf(
+		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\nhyphen_id_token=\"%s\"\nexpiry_time=%d",
+		"user_access_token", "user_refresh_token", "user_id_token", 12)
 
 	tests := []struct {
 		name       string
@@ -150,7 +157,8 @@ func TestSaveCredentialsFailures(t *testing.T) {
 			mockEnv.ExpectedCalls = nil // reset expectations
 			mockEnv.Calls = nil         // clean the call stack
 			tc.setupMocks()             // setup test-specific mocks
-			SaveCredentials("user", "pass")
+			err := SaveCredentials("user_access_token", "user_refresh_token", "user_id_token", 12)
+			assert.NotNil(t, err, "SaveCredentials should return an error")
 			mockEnv.AssertExpectations(t)
 		})
 	}
@@ -164,7 +172,10 @@ func TestGetCredentialsSuccess(t *testing.T) {
 	configDir := "/mocked/path"
 	credentialFile := filepath.Join(configDir, CredentialFile)
 	credentialsToml := `[default]
-hyphen_access_token="username:password"`
+hyphen_access_token="user_access_token"
+hyphen_refresh_token="user_refresh_token"
+hyphen_id_token="user_id_token"
+expiry_time=12`
 
 	mockEnv.On("GetConfigDirectory").Return(configDir)
 	mockEnv.On("ReadFile", credentialFile).Return([]byte(credentialsToml), nil)
@@ -173,7 +184,7 @@ hyphen_access_token="username:password"`
 	err := toml.Unmarshal([]byte(credentialsToml), &credentials)
 	assert.Nil(t, err, "Unmarshalling should succeed in test setup")
 
-	retrievedCredentials, err := GetCredentials()
+	retrievedCredentials, err := LoadCredentials()
 	assert.Nil(t, err, "GetCredentials should not return an error")
 	assert.Equal(t, credentials, retrievedCredentials, "Retrieved credentials should match expected")
 
@@ -215,7 +226,7 @@ func TestGetCredentialsFailures(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setupMocks()
-			_, err := GetCredentials()
+			_, err := LoadCredentials()
 			assert.EqualError(t, err, tc.expectedErr, "Error message should match for "+tc.name)
 			mockEnv.AssertExpectations(t)
 		})
