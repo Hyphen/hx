@@ -28,7 +28,7 @@ type EnvApi struct {
 func New() *EnvApi {
 	baseUrl := os.Getenv("HYPHEN_CUSTOM_ENV")
 	if baseUrl == "" {
-		baseUrl = "https://dev-api.hyphen.ai/env"
+		baseUrl = "https://api.hyphen.ai/env"
 	}
 	return &EnvApi{
 		baseUrl:      baseUrl,
