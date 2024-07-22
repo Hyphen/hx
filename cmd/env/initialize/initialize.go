@@ -14,8 +14,8 @@ import (
 var InitCmd = &cobra.Command{
 	Use:     "init",
 	Aliases: []string{"i"},
-	Short:   "Initialize the environment",
-	Long:    `This command initializes the environment with necessary configurations.`,
+	Short:   "Initialize the app to use ENV",
+	Long:    `This command initializes the app with the necessary configurations for ENV.`,
 	Run: func(cmd *cobra.Command, args []string) {
 
 		if environment.ConfigExists() {

@@ -20,7 +20,7 @@ Example usage:
   hyphen env create default
   hyphen env create production
 
-The command will create a file named based on the environment, such as '.env.dev' or '.env.prod'.`,
+The command will create a file with the name based on the environment, such as '.env.dev' or '.env.prod'.`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		env := ""
