@@ -71,12 +71,27 @@ func PromptForAppId(reader io.Reader, defaultAppId string) (string, error) {
 			appId = defaultAppId
 		}
 
-		if err := environment.CheckAppId(appId); err != nil {
-			fmt.Printf("Invalid App ID: %v\n", err)
-			fmt.Println("Please try again.")
+		if err := environment.CheckAppId(appId); err == nil {
+			return appId, nil
+		}
+
+		suggestedAppId := strings.ToLower(strings.ReplaceAll(appId, " ", "-"))
+		fmt.Printf("Do you want to use [%s]? (Y/n): ", suggestedAppId)
+		response, err := r.ReadString('\n')
+		if err != nil {
+			return "", fmt.Errorf("error reading input: %w", err)
+		}
+		response = strings.TrimSpace(strings.ToLower(response))
+
+		if response == "y" || response == "yes" || response == "" {
+			return suggestedAppId, nil
+		} else if response == "n" || response == "no" {
+			fmt.Println("Please enter a new App ID (lowercase with hyphens).")
+			continue
+		} else {
+			fmt.Println("Invalid response. Please enter 'y' or 'n'.")
 			continue
 		}
-		return appId, nil
 	}
 }
 
