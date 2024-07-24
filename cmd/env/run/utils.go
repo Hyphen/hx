@@ -78,3 +78,9 @@ func expandArgs(args []string) []string {
 	}
 	return expandedArgs
 }
+
+func pullEnvironmentFile(env, filePath string) error {
+	envHandler := environment.Restore()
+	_, err := envHandler.DecryptedEnvironmentVarsIntoAFile(env, filePath)
+	return err
+}

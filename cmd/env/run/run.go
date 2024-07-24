@@ -1,7 +1,10 @@
 package run
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -41,6 +44,25 @@ func runCommand(cmd *cobra.Command, args []string) {
 	command := args[1]
 	commandArgs := args[2:]
 
+	envFile := getEnvFile(env)
+
+	if !fileExists(envFile) {
+		fmt.Printf("Environment file %s does not exist. Do you want to pull it? (Y/n): ", envFile)
+		reader := bufio.NewReader(os.Stdin)
+		response, _ := reader.ReadString('\n')
+		response = strings.TrimSpace(strings.ToLower(response))
+
+		if response == "y" || response == "" {
+			if err := pullEnvironmentFile(env, envFile); err != nil {
+				fmt.Printf("Error pulling environment file: %v\n", err)
+				return
+			}
+			fmt.Println("Environment file successfully pulled.")
+		} else {
+			fmt.Println("Proceeding without environment file.")
+		}
+	}
+
 	envVars, err := runCommander.getEnvironmentVariables(env)
 	if err != nil {
 		fmt.Printf("Error exporting environment variables: %v\n", err)
@@ -50,9 +72,4 @@ func runCommand(cmd *cobra.Command, args []string) {
 	if err := runCommander.execute(command, commandArgs, envVars); err != nil {
 		fmt.Printf("Error executing command '%s': %v\n", command, err)
 	}
-}
-
-func init() {
-	RunCmd.Flags().StringVarP(&envFile, "file", "f", "", "Specify a custom environment file (e.g., .env.prod or config.env)")
-	RunCmd.Flags().BoolVarP(&StreamVars, "stream", "s", false, "Stream environment variables from the ENV service")
 }
