@@ -60,3 +60,8 @@ func runCommand(cmd *cobra.Command, args []string) {
 		fmt.Printf("Error executing command '%s': %v\n", command, err)
 	}
 }
+
+func init() {
+	RunCmd.Flags().StringVarP(&envFile, "file", "f", "", "Specify a custom environment file (e.g., .env.prod or config.env)")
+	RunCmd.Flags().BoolVarP(&StreamVars, "stream", "s", false, "Stream environment variables from the ENV service")
+}
