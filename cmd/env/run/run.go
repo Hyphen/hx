@@ -1,10 +1,7 @@
 package run
 
 import (
-	"bufio"
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -18,6 +15,9 @@ var RunCmd = &cobra.Command{
 	Use:   "run [ENVIRONMENT] [COMMAND] [ARGS...]",
 	Short: "Run a command using some environment variables",
 	Long: `Executes the specified command with the environment variables sourced from the specified environment file.
+
+Warning:
+  If the specified environment file does not exist, environment variables will be streamed.
 
 Examples:
   # Run a command using the default environment
@@ -47,20 +47,7 @@ func runCommand(cmd *cobra.Command, args []string) {
 	envFile := getEnvFile(env)
 
 	if !fileExists(envFile) {
-		fmt.Printf("Environment file %s does not exist. Do you want to pull it? (Y/n): ", envFile)
-		reader := bufio.NewReader(os.Stdin)
-		response, _ := reader.ReadString('\n')
-		response = strings.TrimSpace(strings.ToLower(response))
-
-		if response == "y" || response == "" {
-			if err := pullEnvironmentFile(env, envFile); err != nil {
-				fmt.Printf("Error pulling environment file: %v\n", err)
-				return
-			}
-			fmt.Println("Environment file successfully pulled.")
-		} else {
-			fmt.Println("Proceeding without environment file.")
-		}
+		StreamVars = true
 	}
 
 	envVars, err := runCommander.getEnvironmentVariables(env)
