@@ -16,6 +16,9 @@ var RunCmd = &cobra.Command{
 	Short: "Run a command using some environment variables",
 	Long: `Executes the specified command with the environment variables sourced from the specified environment file.
 
+Warning:
+  If the specified environment file does not exist in the current directory, environment variables will be streamed.
+
 Examples:
   # Run a command using the default environment
   hyrule env run default go run main.go
@@ -40,6 +43,12 @@ func runCommand(cmd *cobra.Command, args []string) {
 	env := args[0]
 	command := args[1]
 	commandArgs := args[2:]
+
+	envFile := getEnvFile(env)
+
+	if !fileExists(envFile) {
+		StreamVars = true
+	}
 
 	envVars, err := runCommander.getEnvironmentVariables(env)
 	if err != nil {
