@@ -17,7 +17,7 @@ var RunCmd = &cobra.Command{
 	Long: `Executes the specified command with the environment variables sourced from the specified environment file.
 
 Warning:
-  If the specified environment file does not exist, environment variables will be streamed.
+  If the specified environment file does not exist in the current directory, environment variables will be streamed.
 
 Examples:
   # Run a command using the default environment
