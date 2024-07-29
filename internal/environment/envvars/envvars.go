@@ -58,3 +58,11 @@ func (e *EnvironmentVarsData) EncryptData(key secretkey.SecretKeyer) error {
 
 	return nil
 }
+
+type EnvironmentInformation struct {
+	Size           string `json:"size"`
+	CountVariables int    `json:"countVariables"`
+	Data           string `json:"data"`
+	AppId          string `json:"appId"`
+	EnvId          string `json:"envId"`
+}

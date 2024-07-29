@@ -5,6 +5,7 @@ import (
 	"github.com/Hyphen/cli/cmd/env/decrypt"
 	"github.com/Hyphen/cli/cmd/env/encrypt"
 	"github.com/Hyphen/cli/cmd/env/initialize"
+	"github.com/Hyphen/cli/cmd/env/list"
 	"github.com/Hyphen/cli/cmd/env/merge"
 	"github.com/Hyphen/cli/cmd/env/pull"
 	"github.com/Hyphen/cli/cmd/env/push"
@@ -27,5 +28,6 @@ func init() {
 	EnvCmd.AddCommand(encrypt.EncryptCmd)
 	EnvCmd.AddCommand(pull.PullCmd)
 	EnvCmd.AddCommand(create.CreateCmd)
+	EnvCmd.AddCommand(list.ListCmd)
 
 }

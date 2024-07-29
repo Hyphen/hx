@@ -15,6 +15,7 @@ type MockRepository struct {
 	InitializeFunc            func(apiName, apiId string) error
 	GetEncryptedVariablesFunc func(env, appID string) (string, error)
 	UploadEnvVariableFunc     func(env, appID string, envData envvars.EnvironmentVarsData) error
+	ListEnvironmentsFunc      func(appID string, pageSize, pageNum int) ([]envvars.EnvironmentInformation, error)
 }
 
 func (m *MockRepository) Initialize(apiName, apiId string) error {
@@ -36,6 +37,13 @@ func (m *MockRepository) UploadEnvVariable(env, appID string, envData envvars.En
 		return m.UploadEnvVariableFunc(env, appID, envData)
 	}
 	return nil
+}
+
+func (m *MockRepository) ListEnvironments(appID string, pageSize, pageNum int) ([]envvars.EnvironmentInformation, error) {
+	if m.ListEnvironmentsFunc != nil {
+		return m.ListEnvironmentsFunc(appID, pageSize, pageNum)
+	}
+	return nil, nil
 }
 
 // MockSecretKeyer for testing

@@ -25,6 +25,7 @@ type EnvironmentHandler interface {
 	DecryptedEnvironmentVarsIntoAFile(env, fileName string) (string, error)
 	GetEncryptedEnvironmentVars(env string) (string, error)
 	UploadEncryptedEnvironmentVars(env string, envData envvars.EnvironmentVarsData) error
+	ListEnvironments(pageSize, pageNum int) ([]envvars.EnvironmentInformation, error)
 	SecretKey() secretkey.SecretKeyer
 }
 
@@ -211,6 +212,10 @@ func (e *Environment) EncryptEnvironmentVars(file string) (string, error) {
 	}
 
 	return encrypted, nil
+}
+
+func (e *Environment) ListEnvironments(pageSize, pageNum int) ([]envvars.EnvironmentInformation, error) {
+	return e.repository.ListEnvironments(e.config.AppId, pageSize, pageNum)
 }
 
 func tmpDir() string {

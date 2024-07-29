@@ -41,6 +41,25 @@ func (m *mockEnvHandler) SecretKey() secretkey.SecretKeyer {
 	return nil
 }
 
+func (m *mockEnvHandler) ListEnvironments(pageSize, pageNum int) ([]envvars.EnvironmentInformation, error) {
+	return []envvars.EnvironmentInformation{
+		{
+			Size:           "235 bytes",
+			CountVariables: 6,
+			Data:           "mockData1",
+			AppId:          "test",
+			EnvId:          "default",
+		},
+		{
+			Size:           "34 bytes",
+			CountVariables: 1,
+			Data:           "mockData2",
+			AppId:          "test",
+			EnvId:          "prod",
+		},
+	}, nil
+}
+
 func TestEncryptCmd(t *testing.T) {
 	// Setup temporary test file
 	file, err := os.CreateTemp("", "testfile")
