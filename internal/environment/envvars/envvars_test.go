@@ -81,3 +81,27 @@ func TestEncryptData(t *testing.T) {
 		t.Errorf("Expected decrypted data '%s', got '%s'", envContent, decryptedData)
 	}
 }
+
+func TestEnvVarsToArray(t *testing.T) {
+	envContent := "VAR1=value1\nVAR2=value2\nVAR3=value3\n"
+	fileName := createTestFile(t, envContent)
+	defer os.Remove(fileName)
+
+	data, err := New(fileName)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	envVarsArray := data.EnvVarsToArray()
+	expectedArray := []string{"VAR1=value1", "VAR2=value2", "VAR3=value3", ""}
+
+	if len(envVarsArray) != len(expectedArray) {
+		t.Fatalf("Expected array length %d, got %d", len(expectedArray), len(envVarsArray))
+	}
+
+	for i, v := range envVarsArray {
+		if v != expectedArray[i] {
+			t.Errorf("Expected array element '%s', got '%s' at index %d", expectedArray[i], v, i)
+		}
+	}
+}
