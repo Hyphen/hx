@@ -32,8 +32,8 @@ func New(fileName string) (EnvironmentVarsData, error) {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		contentBuilder.WriteString(line + "\n")
 		if strings.Contains(line, "=") {
+			contentBuilder.WriteString(line + "\n")
 			countVariables++
 		}
 	}
@@ -43,12 +43,13 @@ func New(fileName string) (EnvironmentVarsData, error) {
 	}
 
 	content := contentBuilder.String()
-	data.Size = strconv.Itoa(len(content)) + " bytes" // Convert size to string and format it
+	data.Size = strconv.Itoa(len(content)) + " bytes"
 	data.CountVariables = countVariables
 	data.Data = content
 
 	return data, nil
 }
+
 func (e *EnvironmentVarsData) EncryptData(key secretkey.SecretKeyer) error {
 	encryptData, err := key.Encrypt(e.Data)
 	if err != nil {
@@ -57,6 +58,10 @@ func (e *EnvironmentVarsData) EncryptData(key secretkey.SecretKeyer) error {
 	e.Data = encryptData
 
 	return nil
+}
+
+func (e *EnvironmentVarsData) EnvVarsToArray() []string {
+	return strings.Split(e.Data, "\n")
 }
 
 type EnvironmentInformation struct {
