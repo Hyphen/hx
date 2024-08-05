@@ -528,7 +528,7 @@ func TestCheckIsEnvironmentHaveBeenUpdated(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			updateRequired := checkIsEnvironmentHaveBeenUpdated(tt.environmentInEnvCloud, tt.envVars)
+			updateRequired := isEnvironmentDirty(tt.environmentInEnvCloud, tt.envVars)
 			assert.Equal(t, tt.expectedUpdateRequired, updateRequired)
 		})
 	}

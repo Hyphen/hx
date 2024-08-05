@@ -125,7 +125,7 @@ func (e *Environment) UploadEncryptedEnvironmentVars(env string, envData envvars
 	}
 
 	environmentInEnvCloud, _ := e.DecryptEnvironmentVars(env)
-	if !checkIsEnvironmentHaveBeenUpdated(environmentInEnvCloud, envData.EnvVarsToArray()) {
+	if !isEnvironmentDirty(environmentInEnvCloud, envData.EnvVarsToArray()) {
 		fmt.Println("Everything up-to-date")
 		os.Exit(0)
 	}
@@ -141,7 +141,7 @@ func (e *Environment) UploadEncryptedEnvironmentVars(env string, envData envvars
 	return nil
 }
 
-func checkIsEnvironmentHaveBeenUpdated(environmentInEnvCloud, envVars []string) bool {
+func isEnvironmentDirty(environmentInEnvCloud, envVars []string) bool {
 	varsSet := make(map[string]bool)
 	for _, envVar := range envVars {
 		varsSet[envVar] = true
