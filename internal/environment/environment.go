@@ -124,6 +124,12 @@ func (e *Environment) UploadEncryptedEnvironmentVars(env string, envData envvars
 		return err
 	}
 
+	environmentInEnvCloud, _ := e.DecryptEnvironmentVars(env)
+	if !isEnvironmentDirty(environmentInEnvCloud, envData.EnvVarsToArray()) {
+		fmt.Println("Everything up-to-date")
+		os.Exit(0)
+	}
+
 	if err := envData.EncryptData(e.secretKey); err != nil {
 		return err
 	}
@@ -133,6 +139,23 @@ func (e *Environment) UploadEncryptedEnvironmentVars(env string, envData envvars
 	}
 
 	return nil
+}
+
+func isEnvironmentDirty(environmentInEnvCloud, envVars []string) bool {
+	varsSet := make(map[string]bool)
+	for _, envVar := range envVars {
+		varsSet[envVar] = true
+	}
+
+	for _, envVar := range environmentInEnvCloud {
+		if varsSet[envVar] {
+			delete(varsSet, envVar)
+		} else {
+			return true
+		}
+	}
+
+	return len(varsSet) != 0
 }
 
 func (e *Environment) DecryptEnvironmentVars(env string) ([]string, error) {

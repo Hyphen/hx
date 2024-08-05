@@ -474,3 +474,62 @@ func TestCheckAppId(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckIsEnvironmentHaveBeenUpdated(t *testing.T) {
+	tests := []struct {
+		name                   string
+		environmentInEnvCloud  []string
+		envVars                []string
+		expectedUpdateRequired bool
+	}{
+		{
+			name:                   "No update required",
+			environmentInEnvCloud:  []string{"VAR1=value1", "VAR2=value2"},
+			envVars:                []string{"VAR1=value1", "VAR2=value2"},
+			expectedUpdateRequired: false,
+		},
+		{
+			name:                   "Update required - new variable",
+			environmentInEnvCloud:  []string{"VAR1=value1"},
+			envVars:                []string{"VAR1=value1", "VAR2=value2"},
+			expectedUpdateRequired: true,
+		},
+		{
+			name:                   "Update required - modified variable",
+			environmentInEnvCloud:  []string{"VAR1=value1"},
+			envVars:                []string{"VAR1=value2"},
+			expectedUpdateRequired: true,
+		},
+		{
+			name:                   "Update required - variable removed",
+			environmentInEnvCloud:  []string{"VAR1=value1", "VAR2=value2"},
+			envVars:                []string{"VAR1=value1"},
+			expectedUpdateRequired: true,
+		},
+		{
+			name:                   "Empty environment in cloud",
+			environmentInEnvCloud:  []string{},
+			envVars:                []string{"VAR1=value1"},
+			expectedUpdateRequired: true,
+		},
+		{
+			name:                   "Empty new environment variables",
+			environmentInEnvCloud:  []string{"VAR1=value1"},
+			envVars:                []string{},
+			expectedUpdateRequired: true,
+		},
+		{
+			name:                   "Both empty",
+			environmentInEnvCloud:  []string{},
+			envVars:                []string{},
+			expectedUpdateRequired: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			updateRequired := isEnvironmentDirty(tt.environmentInEnvCloud, tt.envVars)
+			assert.Equal(t, tt.expectedUpdateRequired, updateRequired)
+		})
+	}
+}
