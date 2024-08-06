@@ -70,13 +70,13 @@ func listEnvironments(pageSize, pageNum int) error {
 	for _, envFile := range localEnvs {
 		envId := environment.GetEnvironmentByEnvFile(envFile)
 		envData, err := envvars.New(envFile)
+		if err != nil {
+			return fmt.Errorf("failed to create environment data: %w", err)
+		}
+
 		var status string
 		if _, exists := cloudEnvIds[envId]; !exists {
-			if err != nil {
-				return fmt.Errorf("failed to create environment data: %w", err)
-			}
 			status = "Unsynced"
-
 		} else {
 			if envHandler.IsEnvironmentDirty(envId, envData.EnvVarsToArray()) {
 				status = "Outdated"
