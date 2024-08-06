@@ -71,3 +71,11 @@ type EnvironmentInformation struct {
 	AppId          string `json:"appId"`
 	EnvId          string `json:"envId"`
 }
+
+func (e *EnvironmentInformation) ToEnvironmentVarsData() EnvironmentVarsData {
+	return EnvironmentVarsData{
+		Size:           e.Size,
+		CountVariables: e.CountVariables,
+		Data:           e.Data,
+	}
+}

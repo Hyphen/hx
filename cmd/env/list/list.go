@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/Hyphen/cli/internal/environment"
+	"github.com/Hyphen/cli/internal/environment/envvars"
 	"github.com/aquasecurity/table"
 	"github.com/spf13/cobra"
 )
@@ -42,22 +43,65 @@ func init() {
 
 func listEnvironments(pageSize, pageNum int) error {
 	envHandler := environment.Restore()
-	envs, err := envHandler.ListEnvironments(pageSize, pageNum)
+	cloudEnvs, err := envHandler.ListCloudEnvironments(pageSize, pageNum)
 	if err != nil {
 		return fmt.Errorf("failed to list environments: %w", err)
 	}
 
-	if len(envs) == 0 {
+	localEnvs, err := envHandler.ListLocalEnvironments()
+	if err != nil {
+		return fmt.Errorf("failed to list environments: %w", err)
+	}
+
+	if len(cloudEnvs) == 0 && len(localEnvs) == 0 {
 		fmt.Println("No environments found.")
 		return nil
 	}
 
 	t := table.New(os.Stdout)
 
-	t.SetHeaders("Environment ID", "Size", "Variables Count")
+	t.SetHeaders("Environment ID", "Size", "Variables Count", "Status")
 
-	for _, env := range envs {
-		t.AddRow(env.EnvId, env.Size, fmt.Sprintf("%d", env.CountVariables))
+	cloudEnvIds := make(map[string]bool)
+	for _, env := range cloudEnvs {
+		cloudEnvIds[env.EnvId] = true
+	}
+
+	for _, envFile := range localEnvs {
+		envId := environment.GetEnvironmentByEnvFile(envFile)
+		envData, err := envvars.New(envFile)
+		var status string
+		if _, exists := cloudEnvIds[envId]; !exists {
+			if err != nil {
+				return fmt.Errorf("failed to create environment data: %w", err)
+			}
+			status = "Unsynced"
+
+		} else {
+			if envHandler.IsEnvironmentDirty(envId, envData.EnvVarsToArray()) {
+				status = "Outdated"
+			} else {
+				status = "Update"
+			}
+		}
+
+		t.AddRow(envId, envData.Size, fmt.Sprintf("%d", envData.CountVariables), status)
+
+	}
+
+	localEnvsIds := make(map[string]bool)
+	for _, envFile := range localEnvs {
+		envId := environment.GetEnvironmentByEnvFile(envFile)
+		localEnvsIds[envId] = true
+	}
+
+	for _, env := range cloudEnvs {
+		var status string
+		if _, exists := localEnvsIds[env.EnvId]; !exists {
+			status = "On Cloud"
+			t.AddRow(env.EnvId, env.Size, fmt.Sprintf("%d", env.CountVariables), status)
+		}
+
 	}
 
 	t.Render()

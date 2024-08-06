@@ -107,7 +107,7 @@ func (e *EnvApi) UploadEnvVariable(env, appID string, envData envvars.Environmen
 		return WrapError(errors.Wrap(err, "Failed to login"), "Unable to login. Please check your credentials and try again.")
 	}
 
-	url := fmt.Sprintf("%s/apps/%s/envs/%s", e.baseUrl, appID, env)
+	url := fmt.Sprintf("%s/apps/%s/environments/%s", e.baseUrl, appID, env)
 	jsonBody, err := json.Marshal(envData)
 	if err != nil {
 		return WrapError(errors.Wrap(err, "Failed to marshal request body"), "Failed to prepare the request. Please try again.")
@@ -148,7 +148,7 @@ func (e *EnvApi) GetEncryptedVariables(env, appID string) (string, error) {
 		return "", WrapError(errors.Wrap(err, "Failed to login"), "Unable to login. Please check your credentials and try again.")
 	}
 
-	url := fmt.Sprintf("%s/apps/%s/envs/%s", e.baseUrl, appID, env)
+	url := fmt.Sprintf("%s/apps/%s/environments/%s", e.baseUrl, appID, env)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", WrapError(errors.Wrap(err, "Failed to create request"), "Failed to create the API request. Please try again.")
