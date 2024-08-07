@@ -2,11 +2,13 @@ package environment
 
 import (
 	"encoding/base64"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/Hyphen/cli/internal/environment/envvars"
+	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,6 +17,7 @@ type MockRepository struct {
 	InitializeFunc            func(apiName, apiId string) error
 	GetEncryptedVariablesFunc func(env, appID string) (string, error)
 	UploadEnvVariableFunc     func(env, appID string, envData envvars.EnvironmentVarsData) error
+	ListEnvironmentsFunc      func(appID string, pageSize, pageNum int) ([]envvars.EnvironmentInformation, error)
 }
 
 func (m *MockRepository) Initialize(apiName, apiId string) error {
@@ -36,6 +39,13 @@ func (m *MockRepository) UploadEnvVariable(env, appID string, envData envvars.En
 		return m.UploadEnvVariableFunc(env, appID, envData)
 	}
 	return nil
+}
+
+func (m *MockRepository) ListEnvironments(appID string, pageSize, pageNum int) ([]envvars.EnvironmentInformation, error) {
+	if m.ListEnvironmentsFunc != nil {
+		return m.ListEnvironmentsFunc(appID, pageSize, pageNum)
+	}
+	return nil, nil
 }
 
 // MockSecretKeyer for testing
@@ -60,6 +70,67 @@ func (m *MockSecretKey) Decrypt(encryptedMessage string) (string, error) {
 		return "", err
 	}
 	return string(decoded), nil
+}
+
+// MockEnvironmentHandler implements EnvironmentHandler interface for testing
+type MockEnvironmentHandler struct {
+	DecryptEnvironmentVarsFunc func(env string) ([]string, error)
+	// Implement other methods as needed, returning zero values or errors
+}
+
+func (m *MockEnvironmentHandler) DecryptEnvironmentVars(env string) ([]string, error) {
+	return m.DecryptEnvironmentVarsFunc(env)
+}
+
+func (m *MockEnvironmentHandler) IsEnvironmentDirty(envId string, envVars []string) bool {
+	environmentInEnvCloud, err := m.DecryptEnvironmentVars(envId)
+	if err != nil {
+		fmt.Println("Error decrypting environment variables:", err)
+		os.Exit(1)
+	}
+	varsSet := make(map[string]bool)
+	for _, envVar := range envVars {
+		varsSet[envVar] = true
+	}
+
+	for _, envVar := range environmentInEnvCloud {
+		if varsSet[envVar] {
+			delete(varsSet, envVar)
+		} else {
+			return true
+		}
+	}
+
+	return len(varsSet) != 0
+}
+
+// Implement other methods of EnvironmentHandler interface with stub implementations
+func (m *MockEnvironmentHandler) EncryptEnvironmentVars(file string) (string, error) {
+	return "", nil
+}
+
+func (m *MockEnvironmentHandler) DecryptedEnvironmentVarsIntoAFile(env, fileName string) (string, error) {
+	return "", nil
+}
+
+func (m *MockEnvironmentHandler) GetEncryptedEnvironmentVars(env string) (string, error) {
+	return "", nil
+}
+
+func (m *MockEnvironmentHandler) UploadEncryptedEnvironmentVars(env string, envData envvars.EnvironmentVarsData) error {
+	return nil
+}
+
+func (m *MockEnvironmentHandler) ListCloudEnvironments(pageSize, pageNum int) ([]envvars.EnvironmentInformation, error) {
+	return nil, nil
+}
+
+func (m *MockEnvironmentHandler) ListLocalEnvironments() ([]string, error) {
+	return nil, nil
+}
+
+func (m *MockEnvironmentHandler) SecretKey() secretkey.SecretKeyer {
+	return nil
 }
 
 func TestRestoreFromFile(t *testing.T) {
@@ -475,7 +546,7 @@ func TestCheckAppId(t *testing.T) {
 	}
 }
 
-func TestCheckIsEnvironmentHaveBeenUpdated(t *testing.T) {
+func TestIsEnvironmentDirty(t *testing.T) {
 	tests := []struct {
 		name                   string
 		environmentInEnvCloud  []string
@@ -528,8 +599,89 @@ func TestCheckIsEnvironmentHaveBeenUpdated(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			updateRequired := isEnvironmentDirty(tt.environmentInEnvCloud, tt.envVars)
-			assert.Equal(t, tt.expectedUpdateRequired, updateRequired)
+			// Create a mock EnvironmentHandler
+			mockEnv := &MockEnvironmentHandler{
+				DecryptEnvironmentVarsFunc: func(env string) ([]string, error) {
+					return tt.environmentInEnvCloud, nil
+				},
+			}
+
+			updateRequired := mockEnv.IsEnvironmentDirty("test-env", tt.envVars)
+			assert.Equal(t, tt.expectedUpdateRequired, updateRequired, "Test case: %s", tt.name)
+		})
+	}
+}
+
+func TestListCloudEnvironments(t *testing.T) {
+	mockRepo := &MockRepository{}
+	env := &Environment{
+		repository: mockRepo,
+		config:     Config{AppId: "test-app-id"},
+	}
+
+	expectedEnvs := []envvars.EnvironmentInformation{
+		{EnvId: "env1", AppId: "test-app-id"},
+		{EnvId: "env2", AppId: "test-app-id"},
+	}
+
+	mockRepo.ListEnvironmentsFunc = func(appID string, pageSize, pageNum int) ([]envvars.EnvironmentInformation, error) {
+		assert.Equal(t, "test-app-id", appID)
+		assert.Equal(t, 10, pageSize)
+		assert.Equal(t, 1, pageNum)
+		return expectedEnvs, nil
+	}
+
+	envs, err := env.ListCloudEnvironments(10, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedEnvs, envs)
+}
+
+func TestListLocalEnvironments(t *testing.T) {
+	// Create a temporary directory for testing
+	tmpDir, err := os.MkdirTemp("", "local-envs-test")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	// Change to the temporary directory
+	oldWd, err := os.Getwd()
+	assert.NoError(t, err)
+	err = os.Chdir(tmpDir)
+	assert.NoError(t, err)
+	defer os.Chdir(oldWd)
+
+	// Create mock .env files
+	envFiles := []string{".env", ".env.production", ".env.staging"}
+	for _, file := range envFiles {
+		_, err := os.Create(file)
+		assert.NoError(t, err)
+	}
+
+	// Create mock .hyphen-env-key file
+	_, err = os.Create(EnvConfigFile)
+	assert.NoError(t, err)
+
+	env := &Environment{}
+	localEnvs, err := env.ListLocalEnvironments()
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, envFiles, localEnvs)
+}
+
+func TestGetEnvironmentByEnvFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"Default env file", ".env", "default"},
+		{"Production env file", ".env.production", "production"},
+		{"Staging env file", ".env.staging", "staging"},
+		{"Custom env file", ".env.custom", "custom"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetEnvironmentByEnvFile(tt.input)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }

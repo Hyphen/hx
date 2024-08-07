@@ -63,3 +63,19 @@ func (e *EnvironmentVarsData) EncryptData(key secretkey.SecretKeyer) error {
 func (e *EnvironmentVarsData) EnvVarsToArray() []string {
 	return strings.Split(e.Data, "\n")
 }
+
+type EnvironmentInformation struct {
+	Size           string `json:"size"`
+	CountVariables int    `json:"countVariables"`
+	Data           string `json:"data"`
+	AppId          string `json:"appId"`
+	EnvId          string `json:"envId"`
+}
+
+func (e *EnvironmentInformation) ToEnvironmentVarsData() EnvironmentVarsData {
+	return EnvironmentVarsData{
+		Size:           e.Size,
+		CountVariables: e.CountVariables,
+		Data:           e.Data,
+	}
+}

@@ -130,6 +130,19 @@ Flags:
 - `-f, --file`: Specific environment file to use
 - `-s, --stream`: Stream environment variables
 
+
+### hyphen env list
+List all environments and their information in a table format.
+
+Usage:
+```bash
+hyphen env list [flags]
+```
+
+ Flags:
+  - --pageSize, -s: Number of environments per page (default is 10)
+  - --pageNum, -n: Page number to display (default is 1)
+
 ## Initialization Command
 
 ### `hyphen init`

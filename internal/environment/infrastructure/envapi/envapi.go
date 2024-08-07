@@ -107,7 +107,7 @@ func (e *EnvApi) UploadEnvVariable(env, appID string, envData envvars.Environmen
 		return WrapError(errors.Wrap(err, "Failed to login"), "Unable to login. Please check your credentials and try again.")
 	}
 
-	url := fmt.Sprintf("%s/apps/%s/envs/%s", e.baseUrl, appID, env)
+	url := fmt.Sprintf("%s/apps/%s/environments/%s", e.baseUrl, appID, env)
 	jsonBody, err := json.Marshal(envData)
 	if err != nil {
 		return WrapError(errors.Wrap(err, "Failed to marshal request body"), "Failed to prepare the request. Please try again.")
@@ -148,7 +148,7 @@ func (e *EnvApi) GetEncryptedVariables(env, appID string) (string, error) {
 		return "", WrapError(errors.Wrap(err, "Failed to login"), "Unable to login. Please check your credentials and try again.")
 	}
 
-	url := fmt.Sprintf("%s/apps/%s/envs/%s", e.baseUrl, appID, env)
+	url := fmt.Sprintf("%s/apps/%s/environments/%s", e.baseUrl, appID, env)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", WrapError(errors.Wrap(err, "Failed to create request"), "Failed to create the API request. Please try again.")
@@ -179,4 +179,48 @@ func (e *EnvApi) GetEncryptedVariables(env, appID string) (string, error) {
 	}
 
 	return envData.Data, nil
+}
+
+func (e *EnvApi) ListEnvironments(appID string, pageSize, pageNum int) ([]envvars.EnvironmentInformation, error) {
+	token, err := e.getAuthToken()
+	if err != nil {
+		return []envvars.EnvironmentInformation{}, WrapError(errors.Wrap(err, "Failed to login"), "Unable to login. Please check your credentials and try again.")
+	}
+
+	url := fmt.Sprintf("%s/apps/%s/environments?pageSize=%d&pageNum=%d", e.baseUrl, appID, pageSize, pageNum)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return []envvars.EnvironmentInformation{}, WrapError(errors.Wrap(err, "Failed to create request"), "Failed to create the API request. Please try again.")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	resp, err := e.httpClient.Do(req)
+	if err != nil {
+		return []envvars.EnvironmentInformation{}, WrapError(errors.Wrap(err, "Failed to execute request"), "Failed to communicate with the server. Please check your network connection and try again.")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		switch resp.StatusCode {
+		case 401:
+			return []envvars.EnvironmentInformation{}, WrapError(errors.New("Unauthorized"), "Unauthorized access. Please check your API token.")
+		case 404:
+			return []envvars.EnvironmentInformation{}, WrapError(errors.New("Not Found"), "The requested resource could not be found.")
+		default:
+			return []envvars.EnvironmentInformation{}, WrapError(errors.Errorf("Unexpected status code: %d", resp.StatusCode), "An unexpected error occurred. Please try again later.")
+		}
+	}
+
+	var envsWithPaging struct {
+		Total    int                              `json:"total"`
+		Data     []envvars.EnvironmentInformation `json:"data"`
+		PageSize int                              `json:"pageSize"`
+		PageNum  int                              `json:"pageNum"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&envsWithPaging); err != nil {
+		return []envvars.EnvironmentInformation{}, WrapError(errors.Wrap(err, "Failed to decode response body"), "Failed to process the server response. Please try again.")
+	}
+
+	return envsWithPaging.Data, nil
 }

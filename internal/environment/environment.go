@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -25,6 +26,9 @@ type EnvironmentHandler interface {
 	DecryptedEnvironmentVarsIntoAFile(env, fileName string) (string, error)
 	GetEncryptedEnvironmentVars(env string) (string, error)
 	UploadEncryptedEnvironmentVars(env string, envData envvars.EnvironmentVarsData) error
+	ListCloudEnvironments(pageSize, pageNum int) ([]envvars.EnvironmentInformation, error)
+	IsEnvironmentDirty(envId string, envVars []string) bool
+	ListLocalEnvironments() ([]string, error)
 	SecretKey() secretkey.SecretKeyer
 }
 
@@ -124,8 +128,7 @@ func (e *Environment) UploadEncryptedEnvironmentVars(env string, envData envvars
 		return err
 	}
 
-	environmentInEnvCloud, _ := e.DecryptEnvironmentVars(env)
-	if !isEnvironmentDirty(environmentInEnvCloud, envData.EnvVarsToArray()) {
+	if !e.IsEnvironmentDirty(env, envData.EnvVarsToArray()) {
 		fmt.Println("Everything up-to-date")
 		os.Exit(0)
 	}
@@ -141,7 +144,18 @@ func (e *Environment) UploadEncryptedEnvironmentVars(env string, envData envvars
 	return nil
 }
 
-func isEnvironmentDirty(environmentInEnvCloud, envVars []string) bool {
+func (e *Environment) IsEnvironmentDirty(envId string, envVars []string) bool {
+	_, err := e.GetEncryptedEnvironmentVars(envId)
+	//this will be an error if it does not find the id in the db
+	//so we ignore the error and return true indicating its a new environment
+	if err != nil {
+		return true
+	}
+	environmentInEnvCloud, err := e.DecryptEnvironmentVars(envId)
+	if err != nil {
+		fmt.Println("Error decrypting environment variables:", err)
+		os.Exit(1)
+	}
 	varsSet := make(map[string]bool)
 	for _, envVar := range envVars {
 		varsSet[envVar] = true
@@ -234,6 +248,36 @@ func (e *Environment) EncryptEnvironmentVars(file string) (string, error) {
 	}
 
 	return encrypted, nil
+}
+
+func (e *Environment) ListCloudEnvironments(pageSize, pageNum int) ([]envvars.EnvironmentInformation, error) {
+	return e.repository.ListEnvironments(e.config.AppId, pageSize, pageNum)
+}
+
+func (e *Environment) ListLocalEnvironments() ([]string, error) {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get current directory: %v", err)
+	}
+
+	configFilePath := filepath.Join(currentDir, EnvConfigFile)
+	if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("You are not in a .hyphen-env directory. The %s file is missing.", EnvConfigFile)
+	}
+
+	entries, err := os.ReadDir(currentDir)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read directory contents: %v", err)
+	}
+
+	var envFiles []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), ".env") {
+			envFiles = append(envFiles, entry.Name())
+		}
+	}
+
+	return envFiles, nil
 }
 
 func tmpDir() string {
@@ -357,4 +401,12 @@ func GetEnvFileByEnvironment(environment string) string {
 		return ".env"
 	}
 	return fmt.Sprintf(".env.%s", strings.ToLower(environment))
+}
+
+func GetEnvironmentByEnvFile(envFile string) string {
+	if envFile == ".env" {
+		return "default"
+	}
+
+	return strings.TrimPrefix(envFile, ".env.")
 }
