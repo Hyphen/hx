@@ -55,3 +55,29 @@ jobs:
     with:
       git_tag: ${{ github.ref_name }}
     secrets: inherit
+
+  mock-upload:
+    name: Mock Upload to R2
+    needs: build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Mock R2 Upload
+        run: |
+          echo "Mocking R2 upload process"
+          for artifact in hyphen-*; do
+            echo "Would upload $artifact to s3://cdn-hyphen-ai/hyphen-cli/PR-${{ github.event.pull_request.number }}/$artifact"
+          done
+
+      - name: Validate artifacts
+        run: |
+          for artifact in hyphen-*; do
+            if [[ ! -f "$artifact" ]]; then
+              echo "Error: Artifact $artifact not found"
+              exit 1
+            fi
+            echo "Artifact $artifact is valid"
+          done
