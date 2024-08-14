@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+*'
   pull_request:
     branches:
       - main
@@ -44,3 +46,12 @@ jobs:
     uses: ./.github/workflows/build.yml
     secrets: inherit
     needs: test
+
+  upload:
+    name: Upload to R2
+    needs: build
+    if: github.event_name == 'push' && contains(github.ref, '.')
+    uses: ./.github/workflows/upload-to-r2.yml
+    with:
+      git_tag: ${{ github.ref_name }}
+    secrets: inherit
