@@ -33,5 +33,13 @@ jobs:
       - name: Upload artifacts to R2
         run: |
           for artifact in hyphen-*; do
-            aws s3 cp $artifact s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/${{ inputs.git_tag }}/$artifact
+            if [ -d "$artifact" ]; then
+              # If it's a directory, use recursive copy
+              aws s3 cp "$artifact" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/${{ inputs.git_tag }}/$artifact" --recursive
+            elif [ -f "$artifact" ]; then
+              # If it's a file, use regular copy
+              aws s3 cp "$artifact" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/${{ inputs.git_tag }}/$artifact"
+            else
+              echo "Warning: $artifact is neither a file nor a directory. Skipping."
+            fi
           done
