@@ -32,19 +32,26 @@ jobs:
       - name: Upload artifacts to R2
         run: |
           for artifact in hyphen-*; do
+            # Extract version from artifact name
+            version=$(echo $artifact | sed -E 's/hyphen-([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+            
             if [ -d "$artifact" ]; then
               # If it's a directory, find the executable inside
-              exe_file=$(find "$artifact" -type f -executable)
+              exe_file=$(find "$artifact" -type f -executable -o -name "*.exe")
               if [ -n "$exe_file" ]; then
-                aws s3 cp "$exe_file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/${{ inputs.git_tag }}/$artifact" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+                filename=$(basename "$exe_file")
+                aws s3 cp "$exe_file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/$version/$filename" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
               else
                 echo "Warning: No executable found in $artifact. Skipping."
               fi
             elif [ -f "$artifact" ]; then
               # If it's a file, use regular copy
-              aws s3 cp "$artifact" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/${{ inputs.git_tag }}/$artifact" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+              aws s3 cp "$artifact" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/$version/$artifact" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
             else
               echo "Warning: $artifact is neither a file nor a directory. Skipping."
             fi
           done
 
+      - name: Verify upload
+        run: |
+          aws s3 ls "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/" --recursive --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
