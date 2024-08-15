@@ -33,8 +33,13 @@ jobs:
         run: |
           for artifact in hyphen-*; do
             if [ -d "$artifact" ]; then
-              # If it's a directory, use recursive copy
-              aws s3 cp "$artifact" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/${{ inputs.git_tag }}/$artifact" --recursive --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+              # If it's a directory, find the executable inside
+              exe_file=$(find "$artifact" -type f -executable)
+              if [ -n "$exe_file" ]; then
+                aws s3 cp "$exe_file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/${{ inputs.git_tag }}/$artifact" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+              else
+                echo "Warning: No executable found in $artifact. Skipping."
+              fi
             elif [ -f "$artifact" ]; then
               # If it's a file, use regular copy
               aws s3 cp "$artifact" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/${{ inputs.git_tag }}/$artifact" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
@@ -42,3 +47,4 @@ jobs:
               echo "Warning: $artifact is neither a file nor a directory. Skipping."
             fi
           done
+
