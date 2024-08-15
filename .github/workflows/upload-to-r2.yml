@@ -28,17 +28,16 @@ jobs:
           aws configure set aws_access_key_id ${{ env.CDN_R2_ACCESS_KEY_ID }}
           aws configure set aws_secret_access_key ${{ env.CDN_R2_SECRET_ACCESS_KEY }}
           aws configure set region auto
-          aws configure set endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
 
       - name: Upload artifacts to R2
         run: |
           for artifact in hyphen-*; do
             if [ -d "$artifact" ]; then
               # If it's a directory, use recursive copy
-              aws s3 cp "$artifact" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/${{ inputs.git_tag }}/$artifact" --recursive
+              aws s3 cp "$artifact" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/${{ inputs.git_tag }}/$artifact" --recursive --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
             elif [ -f "$artifact" ]; then
               # If it's a file, use regular copy
-              aws s3 cp "$artifact" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/${{ inputs.git_tag }}/$artifact"
+              aws s3 cp "$artifact" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/${{ inputs.git_tag }}/$artifact" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
             else
               echo "Warning: $artifact is neither a file nor a directory. Skipping."
             fi
