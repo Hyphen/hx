@@ -36,13 +36,13 @@ jobs:
             version=$(echo $artifact | sed -E 's/hyphen-([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
             
             if [ -d "$artifact" ]; then
-              # If it's a directory, find the executable inside
-              exe_file=$(find "$artifact" -type f -executable -o -name "*.exe")
-              if [ -n "$exe_file" ]; then
-                filename=$(basename "$exe_file")
-                aws s3 cp "$exe_file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/$version/$filename" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+              # If it's a directory, find the file inside (executable or not)
+              file=$(find "$artifact" -type f)
+              if [ -n "$file" ]; then
+                filename=$(basename "$file")
+                aws s3 cp "$file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/$version/$filename" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
               else
-                echo "Warning: No executable found in $artifact. Skipping."
+                echo "Warning: No file found in $artifact. Skipping."
               fi
             elif [ -f "$artifact" ]; then
               # If it's a file, use regular copy
