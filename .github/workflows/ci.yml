@@ -50,8 +50,7 @@ jobs:
   upload:
     name: Upload to R2
     needs: build
-    # if: github.event_name == 'push' && contains(github.ref, '.')
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'push' && contains(github.ref, '.')
     uses: ./.github/workflows/upload-to-r2.yml
     with:
       git_tag: ${{ github.ref_name }}
