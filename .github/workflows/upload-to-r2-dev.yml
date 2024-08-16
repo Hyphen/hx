@@ -76,7 +76,7 @@ jobs:
           if [ -d "$artifact" ]; then
             file=$(find "$artifact" -type f -name "$artifact*" -print -quit)
             if [ -n "$file" ]; then
-              upload_file "$file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/$VERSION/$(basename $file)"
+              upload_file "$file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli-dev/$VERSION/$(basename $file)"
             else
               echo "Warning: Expected file not found in $artifact directory"
             fi
