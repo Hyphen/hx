@@ -89,10 +89,10 @@ jobs:
       run: |
         echo "Verifying uploaded files:"
         expected_files=(
-          "hyphen-cli/$VERSION/hyphen-$VERSION-linux"
-          "hyphen-cli/$VERSION/hyphen-$VERSION-macos"
-          "hyphen-cli/$VERSION/hyphen-$VERSION-macos-arm"
-          "hyphen-cli/$VERSION/hyphen-$VERSION-windows"
+          "hyphen-cli-dev/$VERSION/hyphen-$VERSION-linux"
+          "hyphen-cli-dev/$VERSION/hyphen-$VERSION-macos"
+          "hyphen-cli-dev/$VERSION/hyphen-$VERSION-macos-arm"
+          "hyphen-cli-dev/$VERSION/hyphen-$VERSION-windows"
         )
         
         for file in "${expected_files[@]}"; do
