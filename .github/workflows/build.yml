@@ -2,10 +2,6 @@ name: Build
 
 on:
   workflow_call:
-    inputs:
-      latest_release:
-        required: true
-        type: string
 
 jobs:
   build:
@@ -43,9 +39,21 @@ jobs:
         with:
           fetch-depth: 0 
 
+      - name: Get Latest Release
+        id: get_latest_release
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const latestRelease = await github.rest.repos.getLatestRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            return latestRelease.data.tag_name;
+
       - name: Setup Environment Variables
         run: |
-          echo "LATEST_RELEASE=${{ inputs.latest_release }}" >> $GITHUB_ENV
+          echo "VERSION=${{ steps.get_latest_release.outputs.result }}" >> $GITHUB_ENV
           echo "GOOS=${{ matrix.goos }}" >> $GITHUB_ENV
           echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
         shell: bash
@@ -55,27 +63,27 @@ jobs:
 
       - name: Build for Unix-like systems
         if: runner.os != 'Windows'
-        run: go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.Version=${{ env.LATEST_RELEASE }}" -o hyphen-${{ env.LATEST_RELEASE }}-${{ matrix.arch }}
+        run: go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.Version=${{ env.VERSION }}" -o hyphen-${{ env.VERSION }}-${{ matrix.arch }}
         shell: bash
 
       - name: Build for Windows
         if: runner.os == 'Windows'
-        run: pwsh -Command 'go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.Version=${{ env.LATEST_RELEASE }}" -o hyphen-${{ env.LATEST_RELEASE }}-${{ matrix.arch }}.exe'
+        run: pwsh -Command 'go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.Version=${{ env.VERSION }}" -o hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe'
 
       - name: Set execution permissions
         if: runner.os != 'Windows'
-        run: chmod +x hyphen-${{ env.LATEST_RELEASE }}-${{ matrix.arch }}
+        run: chmod +x hyphen-${{ env.VERSION }}-${{ matrix.arch }}
 
       - name: Upload binaries for Unix-like systems
         if: runner.os != 'Windows'
         uses: actions/upload-artifact@v3
         with:
-          name: hyphen-${{ env.LATEST_RELEASE }}-${{ matrix.arch }}
-          path: hyphen-${{ env.LATEST_RELEASE }}-${{ matrix.arch }}
+          name: hyphen-${{ env.VERSION }}-${{ matrix.arch }}
+          path: hyphen-${{ env.VERSION }}-${{ matrix.arch }}
 
       - name: Upload binaries for Windows
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v3
         with:
-          name: hyphen-${{ env.LATEST_RELEASE }}-${{ matrix.arch }}
-          path: hyphen-${{ env.LATEST_RELEASE }}-${{ matrix.arch }}.exe
+          name: hyphen-${{ env.VERSION }}-${{ matrix.arch }}
+          path: hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe

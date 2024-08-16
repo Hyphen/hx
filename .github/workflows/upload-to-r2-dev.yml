@@ -2,10 +2,6 @@ name: Upload to R2
 
 on:
   workflow_call:
-    inputs:
-      latest_release:
-        required: true
-        type: string
 
 env:
   CDN_R2_ACCOUNT_ID: e5146df3269d748421cee3ff9d6fa02a
@@ -20,6 +16,26 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+    - name: Check out code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Get Latest Release
+      id: get_latest_release
+      uses: actions/github-script@v7
+      with:
+        result-encoding: string
+        script: |
+          const latestRelease = await github.rest.repos.getLatestRelease({
+            owner: context.repo.owner,
+            repo: context.repo.repo
+          });
+          return latestRelease.data.tag_name;
+
+    - name: Set VERSION environment variable
+      run: echo "VERSION=${{ steps.get_latest_release.outputs.result }}" >> $GITHUB_ENV
+
     - name: Download artifacts
       uses: actions/download-artifact@v3
       with:
@@ -38,18 +54,17 @@ jobs:
           fi
         }
 
-        version="${{ inputs.latest_release }}"
         artifacts=(
-          "hyphen-$version-linux"
-          "hyphen-$version-macos"
-          "hyphen-$version-macos-arm"
-          "hyphen-$version-windows.exe"
+          "hyphen-$VERSION-linux"
+          "hyphen-$VERSION-macos"
+          "hyphen-$VERSION-macos-arm"
+          "hyphen-$VERSION-windows.exe"
         )
 
         for artifact in "${artifacts[@]}"; do
           file="./artifacts/$artifact/$artifact"
           if [ -f "$file" ]; then
-            upload_file "$file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/$version/$artifact"
+            upload_file "$file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/$VERSION/$artifact"
           else
             echo "Error: Expected file $file not found"
             exit 1
@@ -59,12 +74,11 @@ jobs:
     - name: Verify upload
       run: |
         echo "Verifying uploaded files:"
-        version="${{ inputs.latest_release }}"
         expected_files=(
-          "hyphen-cli/$version/hyphen-$version-linux"
-          "hyphen-cli/$version/hyphen-$version-macos"
-          "hyphen-cli/$version/hyphen-$version-macos-arm"
-          "hyphen-cli/$version/hyphen-$version-windows.exe"
+          "hyphen-cli/$VERSION/hyphen-$VERSION-linux"
+          "hyphen-cli/$VERSION/hyphen-$VERSION-macos"
+          "hyphen-cli/$VERSION/hyphen-$VERSION-macos-arm"
+          "hyphen-cli/$VERSION/hyphen-$VERSION-windows.exe"
         )
         
         for file in "${expected_files[@]}"; do
