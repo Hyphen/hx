@@ -46,6 +46,12 @@ jobs:
         echo "File details:"
         find . -type f -exec file {} \;
 
+    - name: Configure AWS CLI
+      run: |
+        aws configure set aws_access_key_id ${{ env.CDN_R2_ACCESS_KEY_ID }}
+        aws configure set aws_secret_access_key ${{ env.CDN_R2_SECRET_ACCESS_KEY }}
+        aws configure set region us-east-1
+
     - name: Upload artifacts to R2
       run: |
         upload_file() {
@@ -59,19 +65,23 @@ jobs:
           fi
         }
 
-        expected_artifacts=(
+        artifacts=(
           "hyphen-$VERSION-linux"
           "hyphen-$VERSION-macos"
           "hyphen-$VERSION-macos-arm"
-          "hyphen-$VERSION-windows.exe"
+          "hyphen-$VERSION-windows"
         )
 
-        for expected in "${expected_artifacts[@]}"; do
-          found_file=$(find . -type f -name "*$expected*" -print -quit)
-          if [ -n "$found_file" ]; then
-            upload_file "$found_file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/$VERSION/$(basename $found_file)"
+        for artifact in "${artifacts[@]}"; do
+          if [ -d "$artifact" ]; then
+            file=$(find "$artifact" -type f -name "$artifact*" -print -quit)
+            if [ -n "$file" ]; then
+              upload_file "$file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/$VERSION/$(basename $file)"
+            else
+              echo "Warning: Expected file not found in $artifact directory"
+            fi
           else
-            echo "Warning: Expected file matching *$expected* not found"
+            echo "Warning: Directory $artifact not found"
           fi
         done
 
@@ -82,7 +92,7 @@ jobs:
           "hyphen-cli/$VERSION/hyphen-$VERSION-linux"
           "hyphen-cli/$VERSION/hyphen-$VERSION-macos"
           "hyphen-cli/$VERSION/hyphen-$VERSION-macos-arm"
-          "hyphen-cli/$VERSION/hyphen-$VERSION-windows.exe"
+          "hyphen-cli/$VERSION/hyphen-$VERSION-windows"
         )
         
         for file in "${expected_files[@]}"; do
