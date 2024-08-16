@@ -1,0 +1,79 @@
+name: Upload to R2
+
+on:
+  workflow_call:
+    inputs:
+      latest_release:
+        required: true
+        type: string
+
+env:
+  CDN_R2_ACCOUNT_ID: e5146df3269d748421cee3ff9d6fa02a
+  CDN_R2_ACCESS_KEY_ID: ${{ secrets.CDN_R2_ACCESS_KEY_ID }}
+  CDN_R2_SECRET_ACCESS_KEY: ${{ secrets.CDN_R2_SECRET_ACCESS_KEY }}
+  CDN_R2_PUBLIC_BASE_URL: https://cdn.hyphen.ai
+  CDN_STORAGE_BUCKET_NAME: cdn-hyphen-ai
+
+jobs:
+  upload:
+    name: Upload artifacts to R2
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: ./artifacts
+
+    - name: Upload artifacts to R2
+      run: |
+        upload_file() {
+          local source="$1"
+          local destination="$2"
+          if aws s3 cp "$source" "$destination" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com; then
+            echo "Successfully uploaded: $source to $destination"
+          else
+            echo "Error: Failed to upload $source to $destination"
+            return 1
+          fi
+        }
+
+        version="${{ inputs.latest_release }}"
+        artifacts=(
+          "hyphen-$version-linux"
+          "hyphen-$version-macos"
+          "hyphen-$version-macos-arm"
+          "hyphen-$version-windows.exe"
+        )
+
+        for artifact in "${artifacts[@]}"; do
+          file="./artifacts/$artifact/$artifact"
+          if [ -f "$file" ]; then
+            upload_file "$file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/$version/$artifact"
+          else
+            echo "Error: Expected file $file not found"
+            exit 1
+          fi
+        done
+
+    - name: Verify upload
+      run: |
+        echo "Verifying uploaded files:"
+        version="${{ inputs.latest_release }}"
+        expected_files=(
+          "hyphen-cli/$version/hyphen-$version-linux"
+          "hyphen-cli/$version/hyphen-$version-macos"
+          "hyphen-cli/$version/hyphen-$version-macos-arm"
+          "hyphen-cli/$version/hyphen-$version-windows.exe"
+        )
+        
+        for file in "${expected_files[@]}"; do
+          if aws s3 ls "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/$file" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com; then
+            echo "Verified: $file"
+          else
+            echo "Error: File not found in R2: $file"
+            exit 1
+          fi
+        done
+        
+        echo "Verification successful. All expected files are present in R2."

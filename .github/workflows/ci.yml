@@ -47,12 +47,11 @@ jobs:
     secrets: inherit
     needs: test
 
-  upload:
+  upload-dev:
     name: Upload to R2
     needs: build
     if: github.event_name == 'push' && contains(github.ref, '.')
-    uses: ./.github/workflows/upload-to-r2.yml
+    uses: ./.github/workflows/upload-to-r2-dev.yml
     with:
-      git_tag: ${{ github.ref_name }}
+      latest_release: ${{ steps.get_latest_release.outputs.result }}
     secrets: inherit
-
