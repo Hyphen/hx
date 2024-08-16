@@ -38,8 +38,9 @@ jobs:
 
     - name: Download artifacts
       uses: actions/download-artifact@v3
-      with:
-        path: ./artifacts
+
+    - name: Display structure of downloaded files
+      run: ls -R
 
     - name: Upload artifacts to R2
       run: |
@@ -62,11 +63,10 @@ jobs:
         )
 
         for artifact in "${artifacts[@]}"; do
-          file="./artifacts/$artifact/$artifact"
-          if [ -f "$file" ]; then
-            upload_file "$file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/$VERSION/$artifact"
+          if [ -f "$artifact" ]; then
+            upload_file "$artifact" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli/$VERSION/$artifact"
           else
-            echo "Error: Expected file $file not found"
+            echo "Error: Expected file $artifact not found"
             exit 1
           fi
         done
