@@ -77,10 +77,13 @@ jobs:
               return JSON.stringify({ version: '0.0.0', bumpInfo: { major: false, minor: false, patch: false } });
             }
 
+      
       - name: Determine version bump
         id: version_bump
         run: |
           latest_release='${{ steps.get_latest_release.outputs.result }}'
+          latest_release=$(echo "$latest_release" | sed 's/^"\(.*\)"$/\1/' | sed 's/\\"/"/g')
+          
           latest_version=$(echo $latest_release | jq -r '.version')
           bump_info=$(echo $latest_release | jq -r '.bumpInfo')
           echo "Latest version: $latest_version"
@@ -101,6 +104,7 @@ jobs:
           
           echo "Determined bump type: $bump_type"
           echo "bump_type=${bump_type}" >> $GITHUB_OUTPUT
+
 
       - name: Update version
         id: update_version
