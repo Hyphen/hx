@@ -44,7 +44,6 @@ jobs:
   version-bump:
     name: Update Version Based on Conventional Commits
     runs-on: ubuntu-latest
-    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
       new_version: ${{ steps.update_version.outputs.new_version }}
     steps:
@@ -77,7 +76,6 @@ jobs:
               return JSON.stringify({ version: '0.0.0', bumpInfo: { major: false, minor: false, patch: false } });
             }
 
-      
       - name: Determine version bump
         id: version_bump
         run: |
@@ -92,14 +90,14 @@ jobs:
           commits=$(git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"%s")
           
           bump_type="none"
-          if [[ $latest_version != *"-rc."* ]]; then
-            if echo "$commits" | grep -qE '^(BREAKING CHANGE:|[^:]+!:)' && $(echo $bump_info | jq -r '.major') == false; then
-              bump_type="major"
-            elif echo "$commits" | grep -qE '^feat(\(.+\))?:' && $(echo $bump_info | jq -r '.minor') == false; then
-              bump_type="minor"
-            elif echo "$commits" | grep -qE '^(fix|perf|refactor|build|chore|ci|docs|style|test)(\(.+\))?:' && $(echo $bump_info | jq -r '.patch') == false; then
-              bump_type="patch"
-            fi
+          if echo "$commits" | grep -qE '^(BREAKING CHANGE:|[^:]+!:)' && $(echo $bump_info | jq -r '.major') == false; then
+            bump_type="major"
+          elif echo "$commits" | grep -qE '^feat(\(.+\))?:' && $(echo $bump_info | jq -r '.minor') == false; then
+            bump_type="minor"
+          elif echo "$commits" | grep -qE '^(fix|perf|refactor|build|chore|ci|docs|style|test)(\(.+\))?:' && $(echo $bump_info | jq -r '.patch') == false; then
+            bump_type="patch"
+          elif [[ $latest_version == *"-rc."* ]]; then
+            bump_type="rc"
           fi
           
           echo "Determined bump type: $bump_type"
@@ -124,15 +122,15 @@ jobs:
             rc_version="${ADDR[1]}"
             rc_number="${rc_version#rc.}"
             
-            if [[ $bump_type == "major" ]]; then
+            if [[ $bump_type == "major" && $(echo $bump_info | jq -r '.major') == false ]]; then
               IFS='.' read -ra VER <<< "$base_version"
               new_version="$((${VER[0]} + 1)).0.0-rc.1"
               bump_info=$(echo $bump_info | jq '.major = true | .minor = false | .patch = false')
-            elif [[ $bump_type == "minor" ]]; then
+            elif [[ $bump_type == "minor" && $(echo $bump_info | jq -r '.minor') == false ]]; then
               IFS='.' read -ra VER <<< "$base_version"
               new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
               bump_info=$(echo $bump_info | jq '.minor = true | .patch = false')
-            elif [[ $bump_type == "patch" ]]; then
+            elif [[ $bump_type == "patch" && $(echo $bump_info | jq -r '.patch') == false ]]; then
               IFS='.' read -ra VER <<< "$base_version"
               new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
               bump_info=$(echo $bump_info | jq '.patch = true')
@@ -159,57 +157,6 @@ jobs:
           echo "New version: $new_version"
           echo "new_version=${new_version}" >> $GITHUB_OUTPUT
           echo "bump_info=$(echo $bump_info | jq -c)" >> $GITHUB_OUTPUT
-
-      - name: Create or update RC release
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            const { new_version, bump_info } = process.env;
-            
-            try {
-              const releases = await github.rest.repos.listReleases({
-                owner: context.repo.owner,
-                repo: context.repo.repo
-              });
-              
-              const rcRelease = releases.data.find(release => release.tag_name.includes('-rc.'));
-              
-              const releaseBody = `This is the latest release candidate.
-
-              Version: ${new_version}
-              Commit: ${context.sha}
-              BUMP_INFO: ${bump_info}`;
-              
-              if (rcRelease) {
-                console.log(`Updating existing RC release: ${rcRelease.tag_name} to ${new_version}`);
-                await github.rest.repos.updateRelease({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  release_id: rcRelease.id,
-                  tag_name: `v${new_version}`,
-                  name: `Release Candidate ${new_version}`,
-                  body: releaseBody,
-                  prerelease: true
-                });
-              } else {
-                console.log(`Creating new RC release: ${new_version}`);
-                await github.rest.repos.createRelease({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  tag_name: `v${new_version}`,
-                  name: `Release Candidate ${new_version}`,
-                  body: releaseBody,
-                  prerelease: true
-                });
-              }
-            } catch (error) {
-              console.error('Error updating or creating RC release:', error);
-              throw error;
-            }
-        env:
-          new_version: ${{ steps.update_version.outputs.new_version }}
-          bump_info: ${{ steps.update_version.outputs.bump_info }}
 
   build:
     name: Build
