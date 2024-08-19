@@ -113,14 +113,13 @@ jobs:
           echo "Bump type: $bump_type"
           echo "Current bump info: $current_bump_info"
           
-          update_rc_only=true  
+          update_rc_only=false 
           
           IFS='.-' read -ra VER <<< "$version"
           base_version="${VER[0]}.${VER[1]}.${VER[2]}"
           rc_number="${VER[3]:-0}"
           
           if [[ $update_rc_only == true ]]; then
-            # Only update the RC number
             new_version="${base_version}-rc.$((rc_number + 1))"
             new_bump_info=$current_bump_info
           else
@@ -139,7 +138,15 @@ jobs:
             elif [[ $bump_type == "patch" && $(echo $current_bump_info | jq -r '.patch') == "false" ]]; then
               new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
             else
-              new_version="${base_version}-rc.$((rc_number + 1))"
+              if [[ $bump_type == "major" ]]; then
+                new_version="$((${VER[0]} + 1)).0.0-rc.1"
+              elif [[ $bump_type == "minor" ]]; then
+                new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
+              elif [[ $bump_type == "patch" ]]; then
+                new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
+              else
+                new_version="${base_version}-rc.$((rc_number + 1))"
+              fi
             fi
           fi
           
