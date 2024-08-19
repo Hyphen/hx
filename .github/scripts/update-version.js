@@ -7,10 +7,10 @@ function updateVersion() {
   const bumpType = process.env.BUMP_TYPE;
   const currentBumpInfo = latestRelease.bumpInfo;
 
-  console.log("::group::Debug Information");
-  console.log(`Current version: ${version}`);
-  console.log(`Bump type: ${bumpType}`);
-  console.log(`Current bump info: ${JSON.stringify(currentBumpInfo)}`);
+  console.error("Debug Information");
+  console.error(`Current version: ${version}`);
+  console.error(`Bump type: ${bumpType}`);
+  console.error(`Current bump info: ${JSON.stringify(currentBumpInfo)}`);
 
   const versionRegex = /^(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/;
   const match = version.match(versionRegex);
@@ -28,54 +28,53 @@ function updateVersion() {
 
   const baseVersion = `${major}.${minor}.${patch}`;
 
-  console.log(`Base version: ${baseVersion}`);
-  console.log(`RC number: ${rcNumber}`);
-  console.log("::endgroup::");
+  console.error(`Base version: ${baseVersion}`);
+  console.error(`RC number: ${rcNumber}`);
 
   let newBumpInfo, newVersion;
 
   if (bumpType === "major") {
     newBumpInfo = { major: true, minor: true, patch: true };
     newVersion = `${major + 1}.0.0-rc.1`;
-    console.log(`New bump info for major: ${JSON.stringify(newBumpInfo)}`);
+    console.error(`New bump info for major: ${JSON.stringify(newBumpInfo)}`);
   } else if (bumpType === "minor") {
     newBumpInfo = { ...currentBumpInfo, minor: true, patch: true };
-    console.log(`New bump info for minor: ${JSON.stringify(newBumpInfo)}`);
+    console.error(`New bump info for minor: ${JSON.stringify(newBumpInfo)}`);
     if (!currentBumpInfo.minor) {
       newVersion = `${major}.${minor + 1}.0-rc.1`;
-      console.log(`New version for minor bump when minor was false: ${newVersion}`);
+      console.error(`New version for minor bump when minor was false: ${newVersion}`);
     } else {
       if (!rcNumber || isNaN(rcNumber)) {
-        console.log("RC number is empty or invalid, setting to 1");
+        console.error("RC number is empty or invalid, setting to 1");
         rcNumber = 1;
       } else {
-        console.log(`Current RC number: ${rcNumber}`);
+        console.error(`Current RC number: ${rcNumber}`);
         rcNumber++;
       }
       newVersion = `${baseVersion}-rc.${rcNumber}`;
-      console.log(`New version for minor bump when minor was true: ${newVersion}`);
+      console.error(`New version for minor bump when minor was true: ${newVersion}`);
     }
   } else {
     newBumpInfo = { ...currentBumpInfo, patch: true };
-    console.log(`New bump info for patch: ${JSON.stringify(newBumpInfo)}`);
+    console.error(`New bump info for patch: ${JSON.stringify(newBumpInfo)}`);
     if (!currentBumpInfo.patch) {
       newVersion = `${major}.${minor}.${patch + 1}-rc.1`;
-      console.log(`New version for patch bump when patch was false: ${newVersion}`);
+      console.error(`New version for patch bump when patch was false: ${newVersion}`);
     } else {
       if (!rcNumber || isNaN(rcNumber)) {
-        console.log("RC number is empty or invalid, setting to 1");
+        console.error("RC number is empty or invalid, setting to 1");
         rcNumber = 1;
       } else {
-        console.log(`Current RC number: ${rcNumber}`);
+        console.error(`Current RC number: ${rcNumber}`);
         rcNumber++;
       }
       newVersion = `${baseVersion}-rc.${rcNumber}`;
-      console.log(`New version for patch bump when patch was true: ${newVersion}`);
+      console.error(`New version for patch bump when patch was true: ${newVersion}`);
     }
   }
 
-  console.log(`Final new version: ${newVersion}`);
-  console.log(`Final new bump info: ${JSON.stringify(newBumpInfo)}`);
+  console.error(`Final new version: ${newVersion}`);
+  console.error(`Final new bump info: ${JSON.stringify(newBumpInfo)}`);
 
   return { newVersion, newBumpInfo };
 }
