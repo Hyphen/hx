@@ -134,12 +134,13 @@ jobs:
               echo "New version for minor bump when minor was false: $new_version"
             else
               if [[ -z "$rc_number" || ! "$rc_number" =~ ^[0-9]+$ ]]; then
-                echo "RC number is empty or invalid, setting to 0"
-                rc_number=0
+                echo "RC number is empty or invalid, setting to 1"
+                rc_number=1
+              else
+                echo "Current RC number: $rc_number"
+                rc_number=$((rc_number + 1))
               fi
-              echo "Current RC number: $rc_number"
-              new_rc=$((rc_number + 1))
-              new_version="${base_version}-rc.${new_rc}"
+              new_version="${base_version}-rc.${rc_number}"
               echo "New version for minor bump when minor was true: $new_version"
             fi
           else
@@ -150,12 +151,13 @@ jobs:
               echo "New version for patch bump when patch was false: $new_version"
             else
               if [[ -z "$rc_number" || ! "$rc_number" =~ ^[0-9]+$ ]]; then
-                echo "RC number is empty or invalid, setting to 0"
-                rc_number=0
+                echo "RC number is empty or invalid, setting to 1"
+                rc_number=1
+              else
+                echo "Current RC number: $rc_number"
+                rc_number=$((rc_number + 1))
               fi
-              echo "Current RC number: $rc_number"
-              new_rc=$((rc_number + 1))
-              new_version="${base_version}-rc.${new_rc}"
+              new_version="${base_version}-rc.${rc_number}"
               echo "New version for patch bump when patch was true: $new_version"
             fi
           fi
