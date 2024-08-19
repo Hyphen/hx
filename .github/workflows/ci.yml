@@ -72,9 +72,6 @@ jobs:
               return '0.0.0';
             }
 
-      - name: Install conventional-changelog-cli
-        run: npm install -g conventional-changelog-cli
-
       - name: Determine version bump
         id: version_bump
         run: |
@@ -85,7 +82,7 @@ jobs:
           
           bump_type="none"
           if [[ $latest_version != *"-rc."* ]]; then
-            if echo "$commits" | grep -qE '^BREAKING CHANGE:'; then
+            if echo "$commits" | grep -qE '^BREAKING CHANGE:' || echo "$commits" | grep -qE '^[^:]+!:'; then
               bump_type="major"
             elif echo "$commits" | grep -qE '^feat(\(.+\))?:'; then
               bump_type="minor"
