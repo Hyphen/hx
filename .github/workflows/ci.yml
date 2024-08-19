@@ -119,21 +119,23 @@ jobs:
           
           if [[ $bump_type == "major" ]]; then
             new_bump_info=$(echo $current_bump_info | jq -c '.major = true | .minor = true | .patch = true')
+            new_version="$((${VER[0]} + 1)).0.0-rc.1"
           elif [[ $bump_type == "minor" ]]; then
             new_bump_info=$(echo $current_bump_info | jq -c '.minor = true | .patch = true')
+            if [[ $(echo $current_bump_info | jq -r '.minor') == "false" ]]; then
+              new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
+            else
+              new_rc=$((rc_number + 1))
+              new_version="${base_version}-rc.${new_rc}"
+            fi
           else
             new_bump_info=$(echo $current_bump_info | jq -c '.patch = true')
-          fi
-          
-          if [[ $bump_type == "major" && $(echo $current_bump_info | jq -r '.major') == "false" ]]; then
-            new_version="$((${VER[0]} + 1)).0.0-rc.1"
-          elif [[ $bump_type == "minor" && $(echo $current_bump_info | jq -r '.minor') == "false" ]]; then
-            new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
-          elif [[ $bump_type == "patch" && $(echo $current_bump_info | jq -r '.patch') == "false" ]]; then
-            new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
-          else
-            new_rc=$((rc_number + 1))
-            new_version="${base_version}-rc.${new_rc}"
+            if [[ $(echo $current_bump_info | jq -r '.patch') == "false" ]]; then
+              new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
+            else
+              new_rc=$((rc_number + 1))
+              new_version="${base_version}-rc.${new_rc}"
+            fi
           fi
           
           echo "New version: $new_version"
