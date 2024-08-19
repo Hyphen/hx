@@ -41,14 +41,93 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./coverage.txt
 
+  version-bump:
+    name: Update Development Version
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    outputs:
+      new_version: ${{ steps.update_dev_release.outputs.new_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Get latest release
+        id: get_latest_release
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          result-encoding: string
+          script: |
+            try {
+              const release = await github.rest.repos.getLatestRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo
+              });
+              return release.data.tag_name.replace('v', '');
+            } catch (e) {
+              return '0.0.0';
+            }
+
+      - name: Update development version
+        id: update_dev_release
+        run: |
+          version=${{ steps.get_latest_release.outputs.result }}
+          IFS='.' read -ra ADDR <<< "$version"
+          new_version="${ADDR[0]}.${ADDR[1]}.$((${ADDR[2]} + 1))-dev.$(date +'%Y%m%d%H%M%S')"
+          echo "new_version=${new_version}" >> $GITHUB_OUTPUT
+
+      - name: Update or create development release
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const fs = require('fs');
+            const { new_version } = process.env;
+            
+            try {
+              const release = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: 'dev'
+              });
+              
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.data.id,
+                name: `Development build ${new_version}`,
+                body: `This is the latest development build.\n\nVersion: ${new_version}\nCommit: ${context.sha}`,
+                prerelease: true
+              });
+            } catch (error) {
+              if (error.status === 404) {
+                await github.rest.repos.createRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag_name: 'dev',
+                  name: `Development build ${new_version}`,
+                  body: `This is the latest development build.\n\nVersion: ${new_version}\nCommit: ${context.sha}`,
+                  prerelease: true
+                });
+              } else {
+                throw error;
+              }
+            }
+        env:
+          new_version: ${{ steps.update_dev_release.outputs.new_version }}
+
   build:
     name: Build
-    needs: [test]
+    needs: [test, version-bump]
     uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.version-bump.outputs.new_version }}
     secrets: inherit
 
   upload-dev:
     name: Upload to R2
-    needs: [build]
+    needs: [build, version-bump]
     uses: ./.github/workflows/upload-to-r2-dev.yml
+    with:
+      version: ${{ needs.version-bump.outputs.new_version }}
     secrets: inherit
