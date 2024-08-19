@@ -115,7 +115,7 @@ jobs:
           
           IFS='.-' read -ra VER <<< "$version"
           base_version="${VER[0]}.${VER[1]}.${VER[2]}"
-          rc_number="${VER[3]:-0}"
+          rc_number="${VER[3]#rc.}" 
           
           if [[ $bump_type == "major" ]]; then
             new_bump_info=$(echo $current_bump_info | jq -c '.major = true | .minor = true | .patch = true')
@@ -132,7 +132,8 @@ jobs:
           elif [[ $bump_type == "patch" && $(echo $current_bump_info | jq -r '.patch') == "false" ]]; then
             new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
           else
-            new_version="${base_version}-rc.$((rc_number + 1))"
+            new_rc=$((rc_number + 1))
+            new_version="${base_version}-rc.${new_rc}"
           fi
           
           echo "New version: $new_version"
