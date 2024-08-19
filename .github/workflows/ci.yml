@@ -9,6 +9,16 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      bump_rc:
+        description: 'Bump RC version'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+        - 'true'
+        - 'false'
 
 jobs:
   test:
@@ -44,7 +54,7 @@ jobs:
   version-bump:
     name: Update Release Candidate Version
     runs-on: ubuntu-latest
-    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event.inputs.bump_rc == 'true'
     outputs:
       new_version: ${{ steps.update_rc_version.outputs.new_version }}
     steps:
