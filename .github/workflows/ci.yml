@@ -108,12 +108,20 @@ jobs:
           latest_release=$(echo "$latest_release" | sed 's/^"\(.*\)"$/\1/' | sed 's/\\"/"/g')
           version=$(echo $latest_release | jq -r '.version')
           bump_type=${{ steps.version_bump.outputs.bump_type }}
-          new_bump_info='${{ steps.version_bump.outputs.new_bump_info }}'
           current_bump_info=$(echo $latest_release | jq -r '.bumpInfo')
           
           echo "Current version: $version"
           echo "Bump type: $bump_type"
           echo "Current bump info: $current_bump_info"
+          
+          if [[ $bump_type == "major" ]]; then
+            new_bump_info=$(echo $current_bump_info | jq '.major = true')
+          elif [[ $bump_type == "minor" ]]; then
+            new_bump_info=$(echo $current_bump_info | jq '.minor = true')
+          else
+            new_bump_info=$(echo $current_bump_info | jq '.patch = true')
+          fi
+          
           echo "New bump info: $new_bump_info"
           
           if [[ $version == *"-rc."* ]]; then
@@ -124,12 +132,10 @@ jobs:
             new_version="${base_version}-rc.$((rc_number + 1))"
           else
             IFS='.' read -ra VER <<< "$version"
-            if [[ $(echo $current_bump_info | jq -r '.major') == "true" ]]; then
+            if [[ $bump_type == "major" ]]; then
               new_version="$((${VER[0]} + 1)).0.0-rc.1"
-            elif [[ $(echo $current_bump_info | jq -r '.minor') == "true" ]]; then
+            elif [[ $bump_type == "minor" ]]; then
               new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
-            elif [[ $(echo $current_bump_info | jq -r '.patch') == "true" ]]; then
-              new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
             else
               new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
             fi
