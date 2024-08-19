@@ -106,6 +106,7 @@ jobs:
         id: update_version
         run: |
           latest_release='${{ steps.get_latest_release.outputs.result }}'
+          latest_release=$(echo "$latest_release" | sed 's/^"\(.*\)"$/\1/' | sed 's/\\"/"/g')
           version=$(echo $latest_release | jq -r '.version')
           bump_info=$(echo $latest_release | jq -r '.bumpInfo')
           bump_type=${{ steps.version_bump.outputs.bump_type }}
