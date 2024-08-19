@@ -2,7 +2,8 @@ const { execSync } = require('child_process');
 
 function determineVersionBump() {
   // Get the latest release information
-  const latestRelease = JSON.parse(process.env.LATEST_RELEASE);
+  const latestReleaseString = process.env.LATEST_RELEASE;
+  const latestRelease = JSON.parse(latestReleaseString.replace(/^"(.*)"$/, '$1').replace(/\\"/g, '"'));
   const latestVersion = latestRelease.version;
   let bumpInfo = latestRelease.bumpInfo;
 
@@ -41,5 +42,5 @@ function determineVersionBump() {
 
 // Run the function and output results
 const result = determineVersionBump();
-console.log(`::set-output name=bump_type::${result.bumpType}`);
-console.log(`::set-output name=new_bump_info::${JSON.stringify(result.bumpInfo)}`);
+console.log(`bump_type=${result.bumpType}`);
+console.log(`new_bump_info=${JSON.stringify(result.bumpInfo)}`);
