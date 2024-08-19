@@ -62,23 +62,8 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            try {
-              const releases = await github.rest.repos.listReleases({
-                owner: context.repo.owner,
-                repo: context.repo.repo
-              });
-              const latestRelease = releases.data[0];
-              if (!latestRelease) {
-                return JSON.stringify({ version: '0.0.0', bumpInfo: { major: false, minor: false, patch: false } });
-              }
-              const version = latestRelease.tag_name.replace('v', '');
-              const bumpInfoMatch = latestRelease.body.match(/BUMP_INFO: ({[^}]+})/);
-              const bumpInfo = bumpInfoMatch ? JSON.parse(bumpInfoMatch[1]) : { major: false, minor: false, patch: false };
-              return JSON.stringify({ version, bumpInfo });
-            } catch (e) {
-              console.error(e);
-              return JSON.stringify({ version: '0.0.0', bumpInfo: { major: false, minor: false, patch: false } });
-            }
+            const script = require('./.github/scripts/getLatestRelease.js')
+            return await script({github, context})
 
       - name: Determine version bump
         id: version_bump
@@ -163,48 +148,8 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            const { new_version, bump_info } = process.env;
-            
-            try {
-              const releases = await github.rest.repos.listReleases({
-                owner: context.repo.owner,
-                repo: context.repo.repo
-              });
-              
-              const rcRelease = releases.data.find(release => release.tag_name.includes('-rc.'));
-              
-              const releaseBody = `This is the latest release candidate.
-
-              Version: ${new_version}
-              Commit: ${context.sha}
-              BUMP_INFO: ${bump_info}`;
-              
-              if (rcRelease) {
-                console.log(`Updating existing RC release: ${rcRelease.tag_name} to ${new_version}`);
-                await github.rest.repos.updateRelease({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  release_id: rcRelease.id,
-                  tag_name: `v${new_version}`,
-                  name: `Release Candidate ${new_version}`,
-                  body: releaseBody,
-                  prerelease: true
-                });
-              } else {
-                console.log(`Creating new RC release: ${new_version}`);
-                await github.rest.repos.createRelease({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  tag_name: `v${new_version}`,
-                  name: `Release Candidate ${new_version}`,
-                  body: releaseBody,
-                  prerelease: true
-                });
-              }
-            } catch (error) {
-              console.error('Error updating or creating RC release:', error);
-              throw error;
-            }
+            const script = require('./.github/scripts/updateRCRelease.js')
+            await script({github, context, core})
         env:
           new_version: ${{ steps.update_version.outputs.new_version }}
           bump_info: ${{ steps.update_version.outputs.bump_info }}
