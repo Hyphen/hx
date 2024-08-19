@@ -77,12 +77,19 @@ jobs:
           echo "Current bump info: $bump_info"
           
           latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "Latest tag: $latest_tag"
           
           if [ -z "$latest_tag" ]; then
+            echo "No tags found. Analyzing all commits:"
             commits=$(git log --pretty=format:"%s%n%b")
           else
+            echo "Analyzing commits since $latest_tag:"
             commits=$(git log ${latest_tag}..HEAD --pretty=format:"%s%n%b")
           fi
+          
+          echo "Commits to analyze:"
+          echo "$commits"
+          echo "---End of commits---"
           
           if echo "$commits" | grep -qE '(^|\n)BREAKING CHANGE:' || echo "$commits" | grep -qE '^[^:]+!:'; then
             bump_type="major"
@@ -108,18 +115,19 @@ jobs:
           latest_release=$(echo "$latest_release" | sed 's/^"\(.*\)"$/\1/' | sed 's/\\"/"/g')
           version=$(echo $latest_release | jq -r '.version')
           bump_type=${{ steps.version_bump.outputs.bump_type }}
-          current_bump_info=$(echo $latest_release | jq -r '.bumpInfo')
+          current_bump_info=$(echo $latest_release | jq -c '.bumpInfo')
           
           echo "Current version: $version"
           echo "Bump type: $bump_type"
           echo "Current bump info: $current_bump_info"
           
+          # Update bump_info based on bump_type
           if [[ $bump_type == "major" ]]; then
-            new_bump_info=$(echo $current_bump_info | jq '.major = true')
+            new_bump_info=$(echo $current_bump_info | jq -c '.major = true')
           elif [[ $bump_type == "minor" ]]; then
-            new_bump_info=$(echo $current_bump_info | jq '.minor = true')
+            new_bump_info=$(echo $current_bump_info | jq -c '.minor = true')
           else
-            new_bump_info=$(echo $current_bump_info | jq '.patch = true')
+            new_bump_info=$(echo $current_bump_info | jq -c '.patch = true')
           fi
           
           echo "New bump info: $new_bump_info"
