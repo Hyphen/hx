@@ -87,17 +87,23 @@ jobs:
           echo "Latest version: $latest_version"
           echo "Current bump info: $bump_info"
           
-          commits=$(git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"%s")
+          commits=$(git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"%s%n%b")
           
           bump_type="none"
-          if echo "$commits" | grep -qE '^(BREAKING CHANGE:|[^:]+!:)' && $(echo $bump_info | jq -r '.major') == false; then
-            bump_type="major"
+          if echo "$commits" | grep -qE '(^|\n)BREAKING CHANGE:' || echo "$commits" | grep -qE '^[^:]+!:'; then
+            if $(echo $bump_info | jq -r '.major') == false; then
+              bump_type="major"
+            fi
           elif echo "$commits" | grep -qE '^feat(\(.+\))?:' && $(echo $bump_info | jq -r '.minor') == false; then
             bump_type="minor"
           elif echo "$commits" | grep -qE '^(fix|perf|refactor|build|chore|ci|docs|style|test)(\(.+\))?:' && $(echo $bump_info | jq -r '.patch') == false; then
             bump_type="patch"
-          elif [[ $latest_version == *"-rc."* ]]; then
+          fi
+          
+          if [[ $bump_type == "none" && $latest_version == *"-rc."* ]]; then
             bump_type="rc"
+          elif [[ $bump_type == "none" ]]; then
+            bump_type="patch"
           fi
           
           echo "Determined bump type: $bump_type"
@@ -121,37 +127,28 @@ jobs:
             base_version="${ADDR[0]}"
             rc_version="${ADDR[1]}"
             rc_number="${rc_version#rc.}"
-            
-            if [[ $bump_type == "major" && $(echo $bump_info | jq -r '.major') == false ]]; then
-              IFS='.' read -ra VER <<< "$base_version"
-              new_version="$((${VER[0]} + 1)).0.0-rc.1"
-              bump_info=$(echo $bump_info | jq '.major = true | .minor = false | .patch = false')
-            elif [[ $bump_type == "minor" && $(echo $bump_info | jq -r '.minor') == false ]]; then
-              IFS='.' read -ra VER <<< "$base_version"
-              new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
-              bump_info=$(echo $bump_info | jq '.minor = true | .patch = false')
-            elif [[ $bump_type == "patch" && $(echo $bump_info | jq -r '.patch') == false ]]; then
-              IFS='.' read -ra VER <<< "$base_version"
-              new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
-              bump_info=$(echo $bump_info | jq '.patch = true')
-            else
-              new_rc_number=$((rc_number + 1))
-              new_version="${base_version}-rc.${new_rc_number}"
-            fi
           else
-            IFS='.' read -ra VER <<< "$version"
-            if [[ $bump_type == "major" ]]; then
-              new_version="$((${VER[0]} + 1)).0.0-rc.1"
-              bump_info=$(echo $bump_info | jq '.major = true | .minor = false | .patch = false')
-            elif [[ $bump_type == "minor" ]]; then
-              new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
-              bump_info=$(echo $bump_info | jq '.minor = true | .patch = false')
-            elif [[ $bump_type == "patch" ]]; then
-              new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
-              bump_info=$(echo $bump_info | jq '.patch = true')
-            else
-              new_version="${version}-rc.1"
-            fi
+            base_version="$version"
+            rc_number=0
+          fi
+          
+          IFS='.' read -ra VER <<< "$base_version"
+          
+          if [[ $bump_type == "major" ]]; then
+            new_version="$((${VER[0]} + 1)).0.0-rc.1"
+            bump_info=$(echo $bump_info | jq '.major = true | .minor = false | .patch = false')
+          elif [[ $bump_type == "minor" ]]; then
+            new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
+            bump_info=$(echo $bump_info | jq '.minor = true | .patch = false')
+          elif [[ $bump_type == "patch" ]]; then
+            new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
+            bump_info=$(echo $bump_info | jq '.patch = true')
+          elif [[ $bump_type == "rc" ]]; then
+            new_rc_number=$((rc_number + 1))
+            new_version="${base_version}-rc.${new_rc_number}"
+          else
+            echo "Error: Unexpected bump type"
+            exit 1
           fi
           
           echo "New version: $new_version"
