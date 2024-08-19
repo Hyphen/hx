@@ -16,7 +16,7 @@ try {
   console.log("---End of commits---");
 
   let bumpType;
-  if (/(\n|^)BREAKING CHANGE:/.test(commits) || /^[^:]+!:/.test(commits)) {
+  if (/(\n|^)BREAKING CHANGE:/.test(commits) || /^[^:]+!/.test(commits)) {
     bumpType = "major";
   } else if (/^feat(\(.+\))?:/.test(commits)) {
     bumpType = "minor";
