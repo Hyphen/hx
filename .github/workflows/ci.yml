@@ -12,7 +12,6 @@ on:
 
 jobs:
   test:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     name: Test
     runs-on: ubuntu-latest
 
@@ -45,6 +44,7 @@ jobs:
   version-bump:
     name: Update Version Based on Conventional Commits
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
       pull-requests: write
@@ -188,8 +188,8 @@ jobs:
 
   build:
     name: Build
-    needs: [test, version-bump]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, version-bump]
     uses: ./.github/workflows/build.yml
     with:
       version: ${{ needs.version-bump.outputs.new_version }}
