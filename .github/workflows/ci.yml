@@ -44,7 +44,7 @@ jobs:
   version-bump:
     name: Update Development Version
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
       new_version: ${{ steps.update_dev_release.outputs.new_version }}
     steps:
