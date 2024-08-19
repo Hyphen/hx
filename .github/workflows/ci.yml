@@ -44,7 +44,7 @@ jobs:
   version-bump:
     name: Update Release Candidate Version
     runs-on: ubuntu-latest
-    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
       new_version: ${{ steps.update_rc_version.outputs.new_version }}
     steps:
@@ -59,12 +59,14 @@ jobs:
           result-encoding: string
           script: |
             try {
-              const release = await github.rest.repos.getLatestRelease({
+              const releases = await github.rest.repos.listReleases({
                 owner: context.repo.owner,
                 repo: context.repo.repo
               });
-              return release.data.tag_name.replace('v', '');
+              const latestRelease = releases.data[0];
+              return latestRelease ? latestRelease.tag_name.replace('v', '') : '0.0.0';
             } catch (e) {
+              console.error(e);
               return '0.0.0';
             }
 
@@ -72,6 +74,8 @@ jobs:
         id: update_rc_version
         run: |
           version=${{ steps.get_latest_release.outputs.result }}
+          echo "Current version: $version"
+          
           if [[ $version == *"-rc."* ]]; then
             IFS='-' read -ra ADDR <<< "$version"
             base_version="${ADDR[0]}"
@@ -83,6 +87,8 @@ jobs:
             IFS='.' read -ra ADDR <<< "$version"
             new_version="${ADDR[0]}.${ADDR[1]}.$((${ADDR[2]} + 1))-rc.1"
           fi
+          
+          echo "New version: $new_version"
           echo "new_version=${new_version}" >> $GITHUB_OUTPUT
 
       - name: Create or update RC release
@@ -102,6 +108,7 @@ jobs:
               const rcRelease = releases.data.find(release => release.tag_name.includes('-rc.'));
               
               if (rcRelease) {
+                console.log(`Updating existing RC release: ${rcRelease.tag_name} to ${new_version}`);
                 await github.rest.repos.updateRelease({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
@@ -112,6 +119,7 @@ jobs:
                   prerelease: true
                 });
               } else {
+                console.log(`Creating new RC release: ${new_version}`);
                 await github.rest.repos.createRelease({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
