@@ -2,10 +2,12 @@ const core = require('@actions/core');
 const github = require('@actions/github');
 const { execSync } = require('child_process');
 
+// Function to extract and clean up the latest release information
 function extractLatestRelease(latestRelease) {
   return latestRelease.replace(/^"(.*)"$/, '$1').replace(/\\"/g, '"');
 }
 
+// Function to handle major bump
 function handleMajorBump(currentBumpInfo, major) {
   const newBumpInfo = JSON.stringify({ ...currentBumpInfo, major: true, minor: true, patch: true });
   const newVersion = `${parseInt(major) + 1}.0.0-rc.1`;
@@ -13,6 +15,7 @@ function handleMajorBump(currentBumpInfo, major) {
   return { newBumpInfo, newVersion };
 }
 
+// Function to handle minor bump
 function handleMinorBump(currentBumpInfo, major, minor, baseVersion, rcNumber) {
   let newBumpInfo = JSON.stringify({ ...currentBumpInfo, minor: true, patch: true });
   console.log(`New bump info for minor: ${newBumpInfo}`);
@@ -36,6 +39,7 @@ function handleMinorBump(currentBumpInfo, major, minor, baseVersion, rcNumber) {
   return { newBumpInfo, newVersion };
 }
 
+// Function to handle patch bump
 function handlePatchBump(currentBumpInfo, major, minor, patch, baseVersion, rcNumber) {
   let newBumpInfo = JSON.stringify({ ...currentBumpInfo, patch: true });
   console.log(`New bump info for patch: ${newBumpInfo}`);
@@ -61,17 +65,22 @@ function handlePatchBump(currentBumpInfo, major, minor, patch, baseVersion, rcNu
 
 async function run() {
   try {
-    const latestRelease = extractLatestRelease(core.getInput('latest_release'));
+    // Extract the latest release information
+    const latestReleaseRaw = process.env.latest_release;
+    console.log("Raw latest release:", latestReleaseRaw);
+    const latestRelease = extractLatestRelease(latestReleaseRaw);
     const version = JSON.parse(latestRelease).version;
-    const bumpType = core.getInput('bump_type');
+    const bumpType = process.env.BUMP_TYPE;
     const currentBumpInfo = JSON.parse(latestRelease).bumpInfo;
 
+    // Debug information
     console.group('Debug Information');
     console.log(`Current version: ${version}`);
     console.log(`Bump type: ${bumpType}`);
     console.log(`Current bump info: ${JSON.stringify(currentBumpInfo)}`);
     console.groupEnd();
 
+    // Validate version format and extract components
     const versionRegex = /^([0-9]+)\.([0-9]+)\.([0-9]+)(-rc\.([0-9]+))?$/;
     const match = version.match(versionRegex);
 
@@ -85,6 +94,7 @@ async function run() {
     console.log(`Base version: ${baseVersion}`);
     console.log(`RC number: ${rcNumber}`);
 
+    // Determine new version and bump info based on bump type
     let result;
     switch (bumpType) {
       case 'major':
@@ -98,6 +108,7 @@ async function run() {
         break;
     }
 
+    // Output final new version and bump info
     console.log(`Final new version: ${result.newVersion}`);
     console.log(`Final new bump info: ${result.newBumpInfo}`);
     core.setOutput('new_version', result.newVersion);
