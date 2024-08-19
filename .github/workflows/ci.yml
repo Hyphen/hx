@@ -135,11 +135,9 @@ jobs:
             elif [[ $bump_type == "minor" ]]; then
               new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
               bump_info=$(echo $bump_info | jq '.minor = true')
-            elif [[ $bump_type == "patch" ]]; then
+            elif [[ $bump_type == "patch" || $bump_type == "none" ]]; then
               new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
               bump_info=$(echo $bump_info | jq '.patch = true')
-            else
-              new_version="${version}-rc.1"
             fi
           fi
           
