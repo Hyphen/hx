@@ -7,17 +7,15 @@ function determineVersionBump() {
   const latestVersion = latestRelease.version;
   let bumpInfo = latestRelease.bumpInfo;
 
-  console.log(`::debug::Latest version: ${latestVersion}`);
-  console.log(`::debug::Current bump info: ${JSON.stringify(bumpInfo)}`);
+  console.error(`Debug: Latest version: ${latestVersion}`);
+  console.error(`Debug: Current bump info: ${JSON.stringify(bumpInfo)}`);
 
   // Get the last 3 commits
   const commits = execSync('git log -n 3 --pretty=format:"%s%n%b"').toString();
 
-  console.log("::group::Commit Analysis");
-  console.log("Analyzing the last 3 commits:");
-  console.log(commits);
-  console.log("---End of commits---");
-  console.log("::endgroup::");
+  console.error("Debug: Analyzing the last 3 commits:");
+  console.error(commits);
+  console.error("---End of commits---");
 
   let bumpType = 'patch';
 
@@ -36,8 +34,8 @@ function determineVersionBump() {
     bumpInfo = { ...bumpInfo, patch: true };
   }
 
-  console.log(`::debug::Determined bump type: ${bumpType}`);
-  console.log(`::debug::New bump info: ${JSON.stringify(bumpInfo)}`);
+  console.error(`Debug: Determined bump type: ${bumpType}`);
+  console.error(`Debug: New bump info: ${JSON.stringify(bumpInfo)}`);
 
   return { bumpType, bumpInfo };
 }
