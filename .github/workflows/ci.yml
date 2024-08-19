@@ -11,35 +11,6 @@ on:
       - main
 
 jobs:
-  # test:
-  #   name: Test
-  #   runs-on: ubuntu-latest
-  #
-  #   steps:
-  #     - name: Set up Go
-  #       uses: actions/setup-go@v4
-  #       with:
-  #         go-version: '1.22'
-  #
-  #     - name: Check out code
-  #       uses: actions/checkout@v3
-  #
-  #     - name: Cache Go modules
-  #       uses: actions/cache@v3
-  #       with:
-  #         path: ~/go/pkg/mod
-  #         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-  #         restore-keys: |
-  #           ${{ runner.os }}-go-
-  #
-  #     - name: Test with Coverage
-  #       run: go test -coverprofile=coverage.txt -covermode=atomic ./...
-  #
-  #     - name: Upload Coverage to Codecov
-  #       uses: codecov/codecov-action@v3
-  #       with:
-  #         token: ${{ secrets.CODECOV_TOKEN }}
-  #         file: ./coverage.txt
 
   version-bump:
     name: Update Version Based on Conventional Commits
