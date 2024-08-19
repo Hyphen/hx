@@ -109,6 +109,7 @@ jobs:
           bump_type=${{ steps.version_bump.outputs.bump_type }}
           current_bump_info=$(echo $latest_release | jq -c '.bumpInfo')
           
+          echo "::group::Debug Information"
           echo "Current version: $version"
           echo "Bump type: $bump_type"
           echo "Current bump info: $current_bump_info"
@@ -117,35 +118,48 @@ jobs:
           base_version="${VER[0]}.${VER[1]}.${VER[2]}"
           rc_number="${VER[3]#rc.}" 
           
+          echo "Base version: $base_version"
+          echo "RC number: $rc_number"
+          echo "::endgroup::"
+          
           if [[ $bump_type == "major" ]]; then
             new_bump_info=$(echo $current_bump_info | jq -c '.major = true | .minor = true | .patch = true')
             new_version="$((${VER[0]} + 1)).0.0-rc.1"
+            echo "New bump info for major: $new_bump_info"
           elif [[ $bump_type == "minor" ]]; then
             new_bump_info=$(echo $current_bump_info | jq -c '.minor = true | .patch = true')
+            echo "New bump info for minor: $new_bump_info"
             if [[ $(echo $current_bump_info | jq -r '.minor') == "false" ]]; then
               new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
+              echo "New version for minor bump when minor was false: $new_version"
             else
-              if [[ -z "$rc_number" || "$rc_number" == "$base_version" ]]; then
+              if [[ -z "$rc_number" || ! "$rc_number" =~ ^[0-9]+$ ]]; then
+                echo "RC number is empty or invalid, setting to 0"
                 rc_number=0
               fi
               new_rc=$((rc_number + 1))
               new_version="${base_version}-rc.${new_rc}"
+              echo "New version for minor bump when minor was true: $new_version"
             fi
           else
             new_bump_info=$(echo $current_bump_info | jq -c '.patch = true')
+            echo "New bump info for patch: $new_bump_info"
             if [[ $(echo $current_bump_info | jq -r '.patch') == "false" ]]; then
               new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
+              echo "New version for patch bump when patch was false: $new_version"
             else
-              if [[ -z "$rc_number" || "$rc_number" == "$base_version" ]]; then
+              if [[ -z "$rc_number" || ! "$rc_number" =~ ^[0-9]+$ ]]; then
+                echo "RC number is empty or invalid, setting to 0"
                 rc_number=0
               fi
               new_rc=$((rc_number + 1))
               new_version="${base_version}-rc.${new_rc}"
+              echo "New version for patch bump when patch was true: $new_version"
             fi
           fi
           
-          echo "New version: $new_version"
-          echo "New bump info: $new_bump_info"
+          echo "Final new version: $new_version"
+          echo "Final new bump info: $new_bump_info"
           echo "new_version=${new_version}" >> $GITHUB_OUTPUT
           echo "bump_info=${new_bump_info}" >> $GITHUB_OUTPUT
 
