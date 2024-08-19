@@ -42,11 +42,11 @@ jobs:
           file: ./coverage.txt
 
   version-bump:
-    name: Update Development Version
+    name: Update Release Candidate Version
     runs-on: ubuntu-latest
     # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
-      new_version: ${{ steps.update_dev_release.outputs.new_version }}
+      new_version: ${{ steps.update_rc_version.outputs.new_version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -68,15 +68,24 @@ jobs:
               return '0.0.0';
             }
 
-      - name: Update development version
-        id: update_dev_release
+      - name: Update RC version
+        id: update_rc_version
         run: |
           version=${{ steps.get_latest_release.outputs.result }}
-          IFS='.' read -ra ADDR <<< "$version"
-          new_version="${ADDR[0]}.${ADDR[1]}.$((${ADDR[2]} + 1))-dev.$(date +'%Y%m%d%H%M%S')"
+          if [[ $version == *"-rc."* ]]; then
+            IFS='-' read -ra ADDR <<< "$version"
+            base_version="${ADDR[0]}"
+            rc_version="${ADDR[1]}"
+            rc_number="${rc_version#rc.}"
+            new_rc_number=$((rc_number + 1))
+            new_version="${base_version}-rc.${new_rc_number}"
+          else
+            IFS='.' read -ra ADDR <<< "$version"
+            new_version="${ADDR[0]}.${ADDR[1]}.$((${ADDR[2]} + 1))-rc.1"
+          fi
           echo "new_version=${new_version}" >> $GITHUB_OUTPUT
 
-      - name: Update or create development release
+      - name: Create or update RC release
         uses: actions/github-script@v6
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
@@ -85,36 +94,39 @@ jobs:
             const { new_version } = process.env;
             
             try {
-              const release = await github.rest.repos.getReleaseByTag({
+              const releases = await github.rest.repos.listReleases({
                 owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag: 'dev'
+                repo: context.repo.repo
               });
               
-              await github.rest.repos.updateRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: release.data.id,
-                name: `Development build ${new_version}`,
-                body: `This is the latest development build.\n\nVersion: ${new_version}\nCommit: ${context.sha}`,
-                prerelease: true
-              });
-            } catch (error) {
-              if (error.status === 404) {
-                await github.rest.repos.createRelease({
+              const rcRelease = releases.data.find(release => release.tag_name.includes('-rc.'));
+              
+              if (rcRelease) {
+                await github.rest.repos.updateRelease({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  tag_name: 'dev',
-                  name: `Development build ${new_version}`,
-                  body: `This is the latest development build.\n\nVersion: ${new_version}\nCommit: ${context.sha}`,
+                  release_id: rcRelease.id,
+                  tag_name: `v${new_version}`,
+                  name: `Release Candidate ${new_version}`,
+                  body: `This is the latest release candidate.\n\nVersion: ${new_version}\nCommit: ${context.sha}`,
                   prerelease: true
                 });
               } else {
-                throw error;
+                await github.rest.repos.createRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag_name: `v${new_version}`,
+                  name: `Release Candidate ${new_version}`,
+                  body: `This is the latest release candidate.\n\nVersion: ${new_version}\nCommit: ${context.sha}`,
+                  prerelease: true
+                });
               }
+            } catch (error) {
+              console.error('Error updating or creating RC release:', error);
+              throw error;
             }
         env:
-          new_version: ${{ steps.update_dev_release.outputs.new_version }}
+          new_version: ${{ steps.update_rc_version.outputs.new_version }}
 
   build:
     name: Build
