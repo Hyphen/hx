@@ -94,14 +94,16 @@ jobs:
           
           if echo "$commits" | grep -qE '(^|\n)BREAKING CHANGE:' || echo "$commits" | grep -qE '^[^:]+!:'; then
             bump_type="major"
-            new_bump_info=$(echo $bump_info | jq '.major = true | .minor = true | .patch = true')
           elif echo "$commits" | grep -qE '^feat(\(.+\))?:'; then
             bump_type="minor"
-            new_bump_info=$(echo $bump_info | jq '.minor = true | .patch = true')
           else
             bump_type="patch"
-            new_bump_info=$(echo $bump_info | jq '.patch = true')
           fi
+          
+          new_bump_info=$(echo $bump_info | jq --arg type $bump_type \
+            'if $type == "major" then .major = true | .minor = true | .patch = true
+             elif $type == "minor" then .minor = true | .patch = true
+             else .patch = true end')
           
           echo "Determined bump type: $bump_type"
           echo "bump_type=${bump_type}" >> $GITHUB_OUTPUT
@@ -136,15 +138,8 @@ jobs:
             new_version="$((${VER[0]} + 1)).0.0-rc.1"
           elif [[ $bump_type == "minor" ]]; then
             new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
-          elif [[ $bump_type == "patch" ]]; then
-            if [[ $rc_number -eq 0 ]]; then
-              new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
-            else
-              new_version="${base_version}-rc.$((rc_number + 1))"
-            fi
-          else
-            echo "Error: Unexpected bump type"
-            exit 1
+          else  # patch
+            new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
           fi
           
           echo "New version: $new_version"
