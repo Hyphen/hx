@@ -53,6 +53,15 @@ jobs:
         with:
           fetch-depth: 0 
 
+      - name: Read bump status
+        id: read_bump_status
+        run: |
+          if [ -f .bump_status ]; then
+            echo "bump_status=$(cat .bump_status)" >> $GITHUB_OUTPUT
+          else
+            echo "bump_status=not_bumped" >> $GITHUB_OUTPUT
+          fi
+
       - name: Get latest release
         id: get_latest_release
         uses: actions/github-script@v6
@@ -80,8 +89,9 @@ jobs:
           
           commits=$(git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"%s")
           
+          bump_status="${{ steps.read_bump_status.outputs.bump_status }}"
           bump_type="none"
-          if [[ $latest_version != *"-rc."* ]]; then
+          if [[ $latest_version != *"-rc."* && $bump_status == "not_bumped" ]]; then
             if echo "$commits" | grep -qE '^BREAKING CHANGE:' || echo "$commits" | grep -qE '^[^:]+!:'; then
               bump_type="major"
             elif echo "$commits" | grep -qE '^feat(\(.+\))?:'; then
@@ -122,6 +132,16 @@ jobs:
           
           echo "New version: $new_version"
           echo "new_version=${new_version}" >> $GITHUB_OUTPUT
+
+      - name: Update bump status
+        if: steps.version_bump.outputs.bump_type != 'none'
+        run: |
+          echo "bumped" > .bump_status
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add .bump_status
+          git commit -m "chore: update bump status [skip ci]"
+          git push
 
       - name: Create or update RC release
         uses: actions/github-script@v6
