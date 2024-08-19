@@ -9,6 +9,7 @@ env:
   CDN_R2_SECRET_ACCESS_KEY: ${{ secrets.CDN_R2_SECRET_ACCESS_KEY }}
   CDN_R2_PUBLIC_BASE_URL: https://cdn.hyphen.ai
   CDN_STORAGE_BUCKET_NAME: cdn-hyphen-ai
+  PACKAGE-NAME: hyphen-cli-dev
 
 jobs:
   upload:
@@ -76,7 +77,7 @@ jobs:
           if [ -d "$artifact" ]; then
             file=$(find "$artifact" -type f -name "$artifact*" -print -quit)
             if [ -n "$file" ]; then
-              upload_file "$file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/hyphen-cli-dev/$VERSION/$(basename $file)"
+              upload_file "$file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/${{ env.PACKAGE-NAME }}/$VERSION/$(basename $file)"
             else
               echo "Warning: Expected file not found in $artifact directory"
             fi
@@ -89,10 +90,11 @@ jobs:
       run: |
         echo "Verifying uploaded files:"
         expected_files=(
-          "hyphen-cli-dev/$VERSION/hyphen-$VERSION-linux"
-          "hyphen-cli-dev/$VERSION/hyphen-$VERSION-macos"
-          "hyphen-cli-dev/$VERSION/hyphen-$VERSION-macos-arm"
-          "hyphen-cli-dev/$VERSION/hyphen-$VERSION-windows"
+          "${{ env.PACKAGE-NAME }}/$VERSION/hyphen-$VERSION-linux"
+          "${{ env.PACKAGE-NAME }}/$VERSION/hyphen-$VERSION-macos"
+          "${{ env.PACKAGE-NAME }}/$VERSION/hyphen-$VERSION-macos-arm"
+          "${{ env.PACKAGE-NAME }}/$VERSION/hyphen-$VERSION-windows"
+        )
         )
         
         for file in "${expected_files[@]}"; do
