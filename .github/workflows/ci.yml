@@ -76,16 +76,8 @@ jobs:
           echo "Latest version: $latest_version"
           echo "Current bump info: $bump_info"
           
-          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          echo "Latest tag: $latest_tag"
-          
-          if [ -z "$latest_tag" ]; then
-            echo "No tags found. Analyzing all commits:"
-            commits=$(git log --pretty=format:"%s%n%b")
-          else
-            echo "Analyzing commits since $latest_tag:"
-            commits=$(git log ${latest_tag}..HEAD --pretty=format:"%s%n%b")
-          fi
+          echo "Analyzing the last 3 commits:"
+          commits=$(git log -n 3 --pretty=format:"%s%n%b")
           
           echo "Commits to analyze:"
           echo "$commits"
