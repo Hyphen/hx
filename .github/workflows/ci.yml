@@ -44,7 +44,7 @@ jobs:
   version-bump:
     name: Update Release Candidate Version
     runs-on: ubuntu-latest
-    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
       new_version: ${{ steps.update_rc_version.outputs.new_version }}
     steps:
@@ -147,6 +147,7 @@ jobs:
   upload-dev:
     name: Upload to R2
     needs: [build, version-bump]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/upload-to-r2-dev.yml
     with:
       version: ${{ needs.version-bump.outputs.new_version }}
