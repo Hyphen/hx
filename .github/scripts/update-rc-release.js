@@ -38,6 +38,27 @@ module.exports = async ({github, context, core}) => {
         prerelease: true
       });
     }
+
+    try {
+      await github.rest.git.createRef({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        ref: `refs/tags/v${new_version}`,
+        sha: context.sha
+      });
+    } catch (error) {
+      if (error.status === 422) {
+        await github.rest.git.updateRef({
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          ref: `tags/v${new_version}`,
+          sha: context.sha,
+          force: true
+        });
+      } else {
+        throw error;
+      }
+    }
   } catch (error) {
     console.error('Error updating or creating RC release:', error);
     core.setFailed(error.message);
