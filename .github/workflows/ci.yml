@@ -107,7 +107,7 @@ jobs:
           
           echo "Determined bump type: $bump_type"
           echo "bump_type=${bump_type}" >> $GITHUB_OUTPUT
-          echo "new_bump_info=${new_bump_info}" >> $GITHUB_OUTPUT
+          echo "new_bump_info=$(echo $new_bump_info | jq -c)" >> $GITHUB_OUTPUT
 
       - name: Update version
         id: update_version
