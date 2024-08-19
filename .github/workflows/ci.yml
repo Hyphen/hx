@@ -137,6 +137,7 @@ jobs:
                 echo "RC number is empty or invalid, setting to 0"
                 rc_number=0
               fi
+              echo "Current RC number: $rc_number"
               new_rc=$((rc_number + 1))
               new_version="${base_version}-rc.${new_rc}"
               echo "New version for minor bump when minor was true: $new_version"
@@ -152,6 +153,7 @@ jobs:
                 echo "RC number is empty or invalid, setting to 0"
                 rc_number=0
               fi
+              echo "Current RC number: $rc_number"
               new_rc=$((rc_number + 1))
               new_version="${base_version}-rc.${new_rc}"
               echo "New version for patch bump when patch was true: $new_version"
