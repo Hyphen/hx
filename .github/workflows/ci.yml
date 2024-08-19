@@ -135,7 +135,6 @@ jobs:
           elif [[ $bump_type == "patch" && $(echo $current_bump_info | jq -r '.patch') == "false" ]]; then
             new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
           else
-            # If we're here, it means we're just incrementing the RC number
             new_version="${base_version}-rc.$((rc_number + 1))"
           fi
           
