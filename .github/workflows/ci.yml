@@ -91,7 +91,7 @@ jobs:
           echo "Latest version: $latest_version"
           echo "Current bump info: $bump_info"
           
-          commits=$(git log -n 1 --pretty=format:"%s")
+          commits=$(git log -n 2 --pretty=format:"%s")
           
           if echo "$commits" | grep -qE '(^|\n)BREAKING CHANGE:' || echo "$commits" | grep -qE '^[^:]+!:'; then
             bump_type="major"
