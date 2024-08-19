@@ -78,9 +78,37 @@ jobs:
       - name: Determine version bump
         id: version_bump
         run: |
-          node .github/scripts/determine-version-bump.js
-        env:
-          latest_release: ${{ steps.get_latest_release.outputs.result }}
+          latest_release='${{ steps.get_latest_release.outputs.result }}'
+          latest_release=$(echo "$latest_release" | sed 's/^"\(.*\)"$/\1/' | sed 's/\\"/"/g')
+          
+          latest_version=$(echo $latest_release | jq -r '.version')
+          bump_info=$(echo $latest_release | jq -r '.bumpInfo')
+          echo "Latest version: $latest_version"
+          echo "Current bump info: $bump_info"
+          
+          echo "Analyzing the last 3 commits:"
+          commits=$(git log -n 3 --pretty=format:"%s%n%b")
+          
+          echo "Commits to analyze:"
+          echo "$commits"
+          echo "---End of commits---"
+          
+          if echo "$commits" | grep -qE '(^|\n)BREAKING CHANGE:' || echo "$commits" | grep -qE '^[^:]+!:'; then
+            bump_type="major"
+          elif echo "$commits" | grep -qE '^feat(\(.+\))?:'; then
+            bump_type="minor"
+          else
+            bump_type="patch"
+          fi
+          
+          new_bump_info=$(echo $bump_info | jq --arg type $bump_type \
+            'if $type == "major" then .major = true | .minor = true | .patch = true
+             elif $type == "minor" then .minor = true | .patch = true
+             else .patch = true end')
+          
+          echo "Determined bump type: $bump_type"
+          echo "bump_type=${bump_type}" >> $GITHUB_OUTPUT
+          echo "new_bump_info=$(echo $new_bump_info | jq -c)" >> $GITHUB_OUTPUT
 
       - name: Update version
         id: update_version
