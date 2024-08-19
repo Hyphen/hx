@@ -114,9 +114,17 @@ jobs:
           echo "Bump type: $bump_type"
           echo "Current bump info: $current_bump_info"
           
-          IFS='.-' read -ra VER <<< "$version"
-          base_version="${VER[0]}.${VER[1]}.${VER[2]}"
-          rc_number="${VER[3]#rc.}"
+          if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-rc\.([0-9]+))?$ ]]; then
+            major="${BASH_REMATCH[1]}"
+            minor="${BASH_REMATCH[2]}"
+            patch="${BASH_REMATCH[3]}"
+            rc_number="${BASH_REMATCH[5]}"
+          else
+            echo "Version format is invalid."
+            exit 1
+          fi
+          
+          base_version="${major}.${minor}.${patch}"
           
           echo "Base version: $base_version"
           echo "RC number: $rc_number"
@@ -124,13 +132,13 @@ jobs:
           
           if [[ $bump_type == "major" ]]; then
             new_bump_info=$(echo $current_bump_info | jq -c '.major = true | .minor = true | .patch = true')
-            new_version="$((${VER[0]} + 1)).0.0-rc.1"
+            new_version="$((${major} + 1)).0.0-rc.1"
             echo "New bump info for major: $new_bump_info"
           elif [[ $bump_type == "minor" ]]; then
             new_bump_info=$(echo $current_bump_info | jq -c '.minor = true | .patch = true')
             echo "New bump info for minor: $new_bump_info"
             if [[ $(echo $current_bump_info | jq -r '.minor') == "false" ]]; then
-              new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
+              new_version="${major}.$((${minor} + 1)).0-rc.1"
               echo "New version for minor bump when minor was false: $new_version"
             else
               if [[ -z "$rc_number" || ! "$rc_number" =~ ^[0-9]+$ ]]; then
@@ -147,7 +155,7 @@ jobs:
             new_bump_info=$(echo $current_bump_info | jq -c '.patch = true')
             echo "New bump info for patch: $new_bump_info"
             if [[ $(echo $current_bump_info | jq -r '.patch') == "false" ]]; then
-              new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
+              new_version="${major}.${minor}.$((${patch} + 1))-rc.1"
               echo "New version for patch bump when patch was false: $new_version"
             else
               if [[ -z "$rc_number" || ! "$rc_number" =~ ^[0-9]+$ ]]; then
