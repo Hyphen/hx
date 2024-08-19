@@ -56,13 +56,19 @@ jobs:
         with:
           fetch-depth: 0 
 
+      - name: List contents of .github/scripts
+        run: ls -la .github/scripts
+
       - name: Get latest release and bump info
         id: get_latest_release
         uses: actions/github-script@v6
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            const script = require('./.github/scripts/getLatestRelease.js')
+            const fs = require('fs');
+            const path = require('path');
+            const scriptPath = path.join(process.env.GITHUB_WORKSPACE, '.github', 'scripts', 'getLatestRelease.js');
+            const script = require(scriptPath);
             return await script({github, context})
 
       - name: Determine version bump
@@ -148,8 +154,11 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            const script = require('./.github/scripts/updateRCRelease.js')
-            await script({github, context, core})
+            const fs = require('fs');
+            const path = require('path');
+            const scriptPath = path.join(process.env.GITHUB_WORKSPACE, '.github', 'scripts', 'updateRCRelease.js');
+            const script = require(scriptPath);
+            await script({github, context, core});
         env:
           new_version: ${{ steps.update_version.outputs.new_version }}
           bump_info: ${{ steps.update_version.outputs.bump_info }}
