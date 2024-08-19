@@ -126,16 +126,16 @@ jobs:
           
           IFS='.-' read -ra VER <<< "$version"
           base_version="${VER[0]}.${VER[1]}.${VER[2]}"
+          rc_number="${VER[3]:-0}"
           
-          if [[ $bump_type == "major" ]] || [[ $(echo $new_bump_info | jq -r '.major') == "true" && $(echo $current_bump_info | jq -r '.major') == "false" ]]; then
+          if [[ $bump_type == "major" && $(echo $current_bump_info | jq -r '.major') == "false" ]]; then
             new_version="$((${VER[0]} + 1)).0.0-rc.1"
-          elif [[ $bump_type == "minor" ]] || [[ $(echo $new_bump_info | jq -r '.minor') == "true" && $(echo $current_bump_info | jq -r '.minor') == "false" ]]; then
+          elif [[ $bump_type == "minor" && $(echo $current_bump_info | jq -r '.minor') == "false" ]]; then
             new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
-          elif [[ $bump_type == "patch" ]] || [[ $(echo $new_bump_info | jq -r '.patch') == "true" && $(echo $current_bump_info | jq -r '.patch') == "false" ]]; then
+          elif [[ $bump_type == "patch" && $(echo $current_bump_info | jq -r '.patch') == "false" ]]; then
             new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
           else
             # If we're here, it means we're just incrementing the RC number
-            rc_number="${VER[3]:-0}"
             new_version="${base_version}-rc.$((rc_number + 1))"
           fi
           
