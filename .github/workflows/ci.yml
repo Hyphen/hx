@@ -117,9 +117,11 @@ jobs:
           version=$(echo $latest_release | jq -r '.version')
           bump_type=${{ steps.version_bump.outputs.bump_type }}
           new_bump_info='${{ steps.version_bump.outputs.new_bump_info }}'
+          current_bump_info=$(echo $latest_release | jq -r '.bumpInfo')
           
           echo "Current version: $version"
           echo "Bump type: $bump_type"
+          echo "Current bump info: $current_bump_info"
           echo "New bump info: $new_bump_info"
           
           if [[ $version == *"-rc."* ]]; then
@@ -137,9 +139,17 @@ jobs:
           if [[ $bump_type == "major" ]]; then
             new_version="$((${VER[0]} + 1)).0.0-rc.1"
           elif [[ $bump_type == "minor" ]]; then
-            new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
+            if [[ $(echo $current_bump_info | jq -r '.minor') == "true" ]]; then
+              new_version="${VER[0]}.${VER[1]}.$((${VER[2]}))-rc.$((rc_number + 1))"
+            else
+              new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
+            fi
           else  # patch
-            new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
+            if [[ $(echo $current_bump_info | jq -r '.minor') == "true" ]]; then
+              new_version="${VER[0]}.${VER[1]}.$((${VER[2]}))-rc.$((rc_number + 1))"
+            else
+              new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
+            fi
           fi
           
           echo "New version: $new_version"
