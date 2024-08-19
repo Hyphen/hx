@@ -95,7 +95,6 @@ jobs:
           "${{ env.PACKAGE-NAME }}/$VERSION/hyphen-$VERSION-macos-arm"
           "${{ env.PACKAGE-NAME }}/$VERSION/hyphen-$VERSION-windows"
         )
-        )
         
         for file in "${expected_files[@]}"; do
           if aws s3 ls "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/$file" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com; then
