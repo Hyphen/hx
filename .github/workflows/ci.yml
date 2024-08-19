@@ -44,7 +44,7 @@ jobs:
   version-bump:
     name: Update Version Based on Conventional Commits
     runs-on: ubuntu-latest
-    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
       new_version: ${{ steps.update_version.outputs.new_version }}
     steps:
@@ -53,21 +53,11 @@ jobs:
         with:
           fetch-depth: 0 
 
-      - name: Read bump status
-        id: read_bump_status
-        run: |
-          if [ -f .bump_status ]; then
-            echo "bump_status=$(cat .bump_status)" >> $GITHUB_OUTPUT
-          else
-            echo "bump_status=not_bumped" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Get latest release
+      - name: Get latest release and bump status
         id: get_latest_release
         uses: actions/github-script@v6
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
-          result-encoding: string
           script: |
             try {
               const releases = await github.rest.repos.listReleases({
@@ -75,21 +65,27 @@ jobs:
                 repo: context.repo.repo
               });
               const latestRelease = releases.data[0];
-              return latestRelease ? latestRelease.tag_name.replace('v', '') : '0.0.0';
+              if (!latestRelease) {
+                return { version: '0.0.0', bumpStatus: 'not_bumped' };
+              }
+              const version = latestRelease.tag_name.replace('v', '');
+              const bumpStatus = latestRelease.body.includes('BUMP_STATUS: bumped') ? 'bumped' : 'not_bumped';
+              return { version, bumpStatus };
             } catch (e) {
               console.error(e);
-              return '0.0.0';
+              return { version: '0.0.0', bumpStatus: 'not_bumped' };
             }
 
       - name: Determine version bump
         id: version_bump
         run: |
-          latest_version=${{ steps.get_latest_release.outputs.result }}
+          latest_version="${{ fromJson(steps.get_latest_release.outputs.result).version }}"
+          bump_status="${{ fromJson(steps.get_latest_release.outputs.result).bumpStatus }}"
           echo "Latest version: $latest_version"
+          echo "Current bump status: $bump_status"
           
           commits=$(git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"%s")
           
-          bump_status="${{ steps.read_bump_status.outputs.bump_status }}"
           bump_type="none"
           if [[ $latest_version != *"-rc."* && $bump_status == "not_bumped" ]]; then
             if echo "$commits" | grep -qE '^BREAKING CHANGE:' || echo "$commits" | grep -qE '^[^:]+!:'; then
@@ -107,7 +103,7 @@ jobs:
       - name: Update version
         id: update_version
         run: |
-          version=${{ steps.get_latest_release.outputs.result }}
+          version="${{ fromJson(steps.get_latest_release.outputs.result).version }}"
           bump_type=${{ steps.version_bump.outputs.bump_type }}
           
           if [[ $version == *"-rc."* ]]; then
@@ -133,23 +129,13 @@ jobs:
           echo "New version: $new_version"
           echo "new_version=${new_version}" >> $GITHUB_OUTPUT
 
-      - name: Update bump status
-        if: steps.version_bump.outputs.bump_type != 'none'
-        run: |
-          echo "bumped" > .bump_status
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add .bump_status
-          git commit -m "chore: update bump status [skip ci]"
-          git push
-
       - name: Create or update RC release
         uses: actions/github-script@v6
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            const fs = require('fs');
             const { new_version } = process.env;
+            const bumpStatus = '${{ steps.version_bump.outputs.bump_type }}' !== 'none' ? 'bumped' : 'not_bumped';
             
             try {
               const releases = await github.rest.repos.listReleases({
@@ -159,6 +145,11 @@ jobs:
               
               const rcRelease = releases.data.find(release => release.tag_name.includes('-rc.'));
               
+              const releaseBody = `This is the latest release candidate.
+              Version: ${new_version}
+              Commit: ${context.sha}
+              BUMP_STATUS: ${bumpStatus}`;
+                        
               if (rcRelease) {
                 console.log(`Updating existing RC release: ${rcRelease.tag_name} to ${new_version}`);
                 await github.rest.repos.updateRelease({
@@ -167,7 +158,7 @@ jobs:
                   release_id: rcRelease.id,
                   tag_name: `v${new_version}`,
                   name: `Release Candidate ${new_version}`,
-                  body: `This is the latest release candidate.\n\nVersion: ${new_version}\nCommit: ${context.sha}`,
+                  body: releaseBody,
                   prerelease: true
                 });
               } else {
@@ -177,7 +168,7 @@ jobs:
                   repo: context.repo.repo,
                   tag_name: `v${new_version}`,
                   name: `Release Candidate ${new_version}`,
-                  body: `This is the latest release candidate.\n\nVersion: ${new_version}\nCommit: ${context.sha}`,
+                  body: releaseBody,
                   prerelease: true
                 });
               }
