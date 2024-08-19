@@ -125,6 +125,9 @@ jobs:
             if [[ $(echo $current_bump_info | jq -r '.minor') == "false" ]]; then
               new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
             else
+              if [[ -z "$rc_number" || "$rc_number" == "$base_version" ]]; then
+                rc_number=0
+              fi
               new_rc=$((rc_number + 1))
               new_version="${base_version}-rc.${new_rc}"
             fi
@@ -133,6 +136,9 @@ jobs:
             if [[ $(echo $current_bump_info | jq -r '.patch') == "false" ]]; then
               new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
             else
+              if [[ -z "$rc_number" || "$rc_number" == "$base_version" ]]; then
+                rc_number=0
+              fi
               new_rc=$((rc_number + 1))
               new_version="${base_version}-rc.${new_rc}"
             fi
