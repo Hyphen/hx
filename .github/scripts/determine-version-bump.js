@@ -19,18 +19,25 @@ try {
   if (/(\n|^)BREAKING CHANGE:/.test(commits) || /^[^:]+!/.test(commits)) {
     bumpType = "major";
   } else if (/^feat(\(.+\))?:/.test(commits)) {
+    console.log("FEAT")
     bumpType = "minor";
   } else {
     bumpType = "patch";
   }
 
-  const newBumpInfo = {
-    ...bumpInfo,
-    major: bumpType === "major" || bumpInfo.major,
-    minor: bumpType === "major" || bumpType === "minor" || bumpInfo.minor,
-    patch: bumpType !== "patch" ? true : bumpInfo.patch,
-  };
+  const newBumpInfo = JSON.parse(JSON.stringify(bumpInfo)); 
+  if (bumpType === "major") {
+    newBumpInfo.major = true;
+    newBumpInfo.minor = true;
+    newBumpInfo.patch = true;
+  } else if (bumpType === "minor") {
+    newBumpInfo.minor = true;
+    newBumpInfo.patch = true;
+  } else {
+    newBumpInfo.patch = true;
+  }
 
+  // Output the results
   console.log("Determined bump type:", bumpType);
   core.setOutput('bump_type', bumpType);
   core.setOutput('new_bump_info', JSON.stringify(newBumpInfo));
