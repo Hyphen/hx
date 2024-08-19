@@ -94,17 +94,17 @@ jobs:
           
           bump_type="none"
           if echo "$commits" | grep -qE '(^|\n)BREAKING CHANGE:' || echo "$commits" | grep -qE '^[^:]+!:'; then
-            bump_type="major"
+            if $(echo $bump_info | jq -r '.major') == false; then
+              bump_type="major"
+            fi
           elif echo "$commits" | grep -qE '^feat(\(.+\))?:'; then
-            bump_type="minor"
+            if $(echo $bump_info | jq -r '.minor') == false; then
+              bump_type="minor"
+            fi
           elif echo "$commits" | grep -qE '^(fix|perf|refactor|build|chore|ci|docs|style|test)(\(.+\))?:'; then
-            bump_type="patch"
-          fi
-          
-          if [[ $bump_type == "patch" && ($(echo $bump_info | jq -r '.minor') == true || $(echo $bump_info | jq -r '.major') == true) ]]; then
-            bump_type="none"
-          elif [[ $bump_type == "minor" && $(echo $bump_info | jq -r '.major') == true ]]; then
-            bump_type="none"
+            if $(echo $bump_info | jq -r '.patch') == false; then
+              bump_type="patch"
+            fi
           fi
           
           if [[ $bump_type == "none" && $latest_version == *"-rc."* ]]; then
