@@ -76,7 +76,8 @@ jobs:
           echo "Latest version: $latest_version"
           echo "Current bump info: $bump_info"
           
-          commits=$(git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"%s%n%b")
+          commits=$(git log -n 2 --pretty=format:"%s")
+
 
           
           if echo "$commits" | grep -qE '(^|\n)BREAKING CHANGE:' || echo "$commits" | grep -qE '^[^:]+!:'; then
