@@ -76,9 +76,13 @@ jobs:
           echo "Latest version: $latest_version"
           echo "Current bump info: $bump_info"
           
-          commits=$(git log -n 2 --pretty=format:"%s")
-
-
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -z "$latest_tag" ]; then
+            commits=$(git log --pretty=format:"%s%n%b")
+          else
+            commits=$(git log ${latest_tag}..HEAD --pretty=format:"%s%n%b")
+          fi
           
           if echo "$commits" | grep -qE '(^|\n)BREAKING CHANGE:' || echo "$commits" | grep -qE '^[^:]+!:'; then
             bump_type="major"
@@ -127,7 +131,7 @@ jobs:
             elif [[ $(echo $current_bump_info | jq -r '.patch') == "true" ]]; then
               new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
             else
-              new_version="${VER[0]}.${VER[1]}.${VER[2]}-rc.1"
+              new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
             fi
           fi
           
