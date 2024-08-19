@@ -124,21 +124,18 @@ jobs:
           
           echo "New bump info: $new_bump_info"
           
-          if [[ $version == *"-rc."* ]]; then
-            IFS='-' read -ra ADDR <<< "$version"
-            base_version="${ADDR[0]}"
-            rc_version="${ADDR[1]}"
-            rc_number="${rc_version#rc.}"
-            new_version="${base_version}-rc.$((rc_number + 1))"
+          IFS='.-' read -ra VER <<< "$version"
+          base_version="${VER[0]}.${VER[1]}.${VER[2]}"
+          
+          if [[ $bump_type == "major" ]] || [[ $(echo $current_bump_info | jq -r '.major') == "false" ]]; then
+            new_version="$((${VER[0]} + 1)).0.0-rc.1"
+          elif [[ $bump_type == "minor" ]] || [[ $(echo $current_bump_info | jq -r '.minor') == "false" ]]; then
+            new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
+          elif [[ $bump_type == "patch" ]] || [[ $(echo $current_bump_info | jq -r '.patch') == "false" ]]; then
+            new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
           else
-            IFS='.' read -ra VER <<< "$version"
-            if [[ $bump_type == "major" ]]; then
-              new_version="$((${VER[0]} + 1)).0.0-rc.1"
-            elif [[ $bump_type == "minor" ]]; then
-              new_version="${VER[0]}.$((${VER[1]} + 1)).0-rc.1"
-            else
-              new_version="${VER[0]}.${VER[1]}.$((${VER[2]} + 1))-rc.1"
-            fi
+            rc_number="${VER[3]:-0}"
+            new_version="${base_version}-rc.$((rc_number + 1))"
           fi
           
           echo "New version: $new_version"
