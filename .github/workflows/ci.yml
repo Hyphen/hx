@@ -56,6 +56,16 @@ jobs:
         with:
           fetch-depth: 0 
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          cd .github/scripts
+          npm install
+
       - name: Get latest release and bump info
         id: get_latest_release
         uses: actions/github-script@v6
