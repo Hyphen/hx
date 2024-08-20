@@ -74,8 +74,9 @@ jobs:
             RELEASE_VERSION=$(echo $CURRENT_VERSION | sed 's/-rc[0-9]*$//')
           fi
           if [[ $RELEASE_VERSION == $(echo $CURRENT_VERSION | sed 's/-rc[0-9]*//') ]]; then
+            BASE_VERSION=$RELEASE_VERSION
             RC_NUMBER=$(echo $CURRENT_VERSION | sed 's/.*-rc\([0-9]*\)/\1/')
-            NEW_VERSION="${RELEASE_VERSION}-rc$((RC_NUMBER+1))"
+            NEW_VERSION="${BASE_VERSION}-rc$((RC_NUMBER+1))"
           else
             NEW_VERSION="${RELEASE_VERSION}-rc1"
           fi
