@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - '[0-9]+.[0-9]+.[0-9]+*'
   pull_request:
     branches:
       - main
@@ -14,7 +12,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-
     steps:
       - name: Set up Go
         uses: actions/setup-go@v4
@@ -41,70 +38,51 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./coverage.txt
 
-  version-bump:
-    name: Update Version Based on Conventional Commits
+  release:
+    name: Release
+    needs: test
+    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: write
-      pull-requests: write
     outputs:
-      new_version: ${{ steps.update_version.outputs.new_version }}
+      new_release_version: ${{ steps.get_version.outputs.version }}
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0 
+          fetch-depth: 0
 
-      - name: Get latest release and bump info
-        id: get_latest_release
-        uses: actions/github-script@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            const script = require('./.github/scripts/get-latest-release.js')
-            return await script({github, context})
+          node-version: 'lts/*'
 
-      - name: Determine version bump
-        id: version_bump
+      - name: Install semantic-release
         run: |
-          export LATEST_RELEASE='${{ steps.get_latest_release.outputs.result }}'
-          node .github/scripts/determine-version-bump.js >> $GITHUB_OUTPUT
-        shell: /usr/bin/bash -e {0}
+          npm install -g semantic-release @semantic-release/git @semantic-release/changelog @semantic-release/exec
 
-      - name: Update version
-        id: update_version
-        run: |
-          export LATEST_RELEASE='${{ steps.get_latest_release.outputs.result }}'
-          export BUMP_TYPE='${{ steps.version_bump.outputs.bump_type }}'
-          node .github/scripts/update-version.js >> $GITHUB_OUTPUT
-        shell: /usr/bin/bash -e {0}
-
-      - name: Create or update RC release
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            const script = require('./.github/scripts/update-rc-release.js')
-            await script({github, context, core})
+      - name: Release
         env:
-          new_version: ${{ steps.update_version.outputs.new_version }}
-          bump_info: ${{ steps.update_version.outputs.bump_info }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: semantic-release --config .github/workflows/semantic-release-config.json
+
+      - name: Get Version
+        id: get_version
+        run: echo "version=$(cat VERSION)" >> $GITHUB_OUTPUT
 
   build:
     name: Build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [test, version-bump]
+    needs: release
+    if: needs.release.outputs.new_release_version != ''
     uses: ./.github/workflows/build.yml
     with:
-      version: ${{ needs.version-bump.outputs.new_version }}
+      version: ${{ needs.release.outputs.new_release_version }}
     secrets: inherit
 
   upload-dev:
     name: Upload to R2
-    needs: [build, version-bump]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [release, build]
+    if: needs.release.outputs.new_release_version != ''
     uses: ./.github/workflows/upload-to-r2-dev.yml
     with:
-      version: ${{ needs.version-bump.outputs.new_version }}
+      version: ${{ needs.release.outputs.new_release_version }}
     secrets: inherit
