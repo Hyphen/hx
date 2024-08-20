@@ -48,6 +48,8 @@ jobs:
     # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
+    outputs:
+      new_version: ${{ steps.set_output.outputs.new_version }}
 
     steps:
       - name: Check out code
@@ -77,11 +79,19 @@ jobs:
           echo $NEW_VERSION > .version
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
+      - name: Print version
+        run: |
+          echo "New version: $NEW_VERSION"
+
       - name: Commit .version file
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "ci: update version to ${{ env.NEW_VERSION }}"
           file_pattern: .version
+
+      - name: Set output
+        id: set_output
+        run: echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
   build:
     name: Build
