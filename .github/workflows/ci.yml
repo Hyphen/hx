@@ -41,70 +41,62 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./coverage.txt
 
-  version-bump:
-    name: Update Version Based on Conventional Commits
+  versioning:
+    name: Versioning
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
-      pull-requests: write
-    outputs:
-      new_version: ${{ steps.update_version.outputs.new_version }}
+
     steps:
-      - name: Checkout code
+      - name: Check out code
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 
 
-      - name: Get latest release and bump info
-        id: get_latest_release
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            const script = require('./.github/scripts/get-latest-release.js')
-            return await script({github, context})
-
-      - name: Determine version bump
-        id: version_bump
-        run: |
-          export LATEST_RELEASE='${{ steps.get_latest_release.outputs.result }}'
-          node .github/scripts/determine-version-bump.js >> $GITHUB_OUTPUT
-        shell: /usr/bin/bash -e {0}
-
-      - name: Update version
-        id: update_version
-        run: |
-          export LATEST_RELEASE='${{ steps.get_latest_release.outputs.result }}'
-          export BUMP_TYPE='${{ steps.version_bump.outputs.bump_type }}'
-          node .github/scripts/update-version.js >> $GITHUB_OUTPUT
-        shell: /usr/bin/bash -e {0}
-
-      - name: Create or update RC release
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            const script = require('./.github/scripts/update-rc-release.js')
-            await script({github, context, core})
+      - name: Fetch all tags and latest release
         env:
-          new_version: ${{ steps.update_version.outputs.new_version }}
-          bump_info: ${{ steps.update_version.outputs.bump_info }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch --tags
+          LATEST_RELEASE_VERSION=$(gh release view --json tagName -q '.tagName')
+          echo "LATEST_RELEASE_VERSION=$LATEST_RELEASE_VERSION" >> $GITHUB_ENV
+
+      - name: Install semantic-release
+        run: npm install -g semantic-release @semantic-release/changelog @semantic-release/git
+
+      - name: Determine version and update .version file
+        run: |
+          CURRENT_VERSION=$(cat .version || echo "0.0.0-rc0")
+          RELEASE_VERSION=$(semantic-release --dry-run | grep "next version" | awk '{print $3}')
+          if [[ $RELEASE_VERSION == $(echo $CURRENT_VERSION | sed 's/-rc[0-9]*//') ]]; then
+            RC_NUMBER=$(echo $CURRENT_VERSION | sed 's/.*-rc\([0-9]*\)/\1/')
+            NEW_VERSION=$(echo $CURRENT_VERSION | sed "s/-rc[0-9]*/-rc$((RC_NUMBER+1))/")
+          else
+            NEW_VERSION="${RELEASE_VERSION}-rc1"
+          fi
+          echo $NEW_VERSION > .version
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
+      - name: Commit .version file
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "ci: update version to ${{ env.NEW_VERSION }}"
+          file_pattern: .version
 
   build:
     name: Build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [test, version-bump]
+    needs: [test, versioning]
     uses: ./.github/workflows/build.yml
     with:
-      version: ${{ needs.version-bump.outputs.new_version }}
+      version: ${{ needs.versioning.outputs.new_version }}
     secrets: inherit
 
   upload-dev:
     name: Upload to R2
-    needs: [build, version-bump]
+    needs: [build, versioning]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/upload-to-r2-dev.yml
     with:
-      version: ${{ needs.version-bump.outputs.new_version }}
+      version: ${{ needs.versioning.outputs.new_version }}
     secrets: inherit
