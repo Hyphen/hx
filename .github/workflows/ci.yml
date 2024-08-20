@@ -66,6 +66,10 @@ jobs:
       - name: Install semantic-release
         run: npm install -g semantic-release @semantic-release/changelog @semantic-release/git
 
+      - name: Run semantic-release dry-run
+        run: |
+          npx semantic-release --dry-run
+
       - name: Determine version and update .version file
         run: |
           CURRENT_VERSION=$(cat .version || echo "0.0.0-rc0")
