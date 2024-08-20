@@ -106,21 +106,3 @@ jobs:
       - name: Set output
         id: set_output
         run: echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-
-  build:
-    name: Build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [test, versioning]
-    uses: ./.github/workflows/build.yml
-    with:
-      version: ${{ needs.versioning.outputs.new_version }}
-    secrets: inherit
-
-  upload-dev:
-    name: Upload to R2
-    needs: [build, versioning]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/upload-to-r2-dev.yml
-    with:
-      version: ${{ needs.versioning.outputs.new_version }}
-    secrets: inherit

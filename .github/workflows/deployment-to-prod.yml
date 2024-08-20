@@ -1,0 +1,23 @@
+name: Deployment to Prod
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: ci
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.ci.outputs.new_version }}
+
+  upload:
+    needs: build
+    uses: ./.github/workflows/upload-to-r2.yml
+    with:
+      version: ${{ needs.build.outputs.version }}
+      package_name: hyphen-cli
