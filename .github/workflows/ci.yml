@@ -58,16 +58,22 @@ jobs:
 
       - name: Install semantic-release
         run: |
-          npm install -g semantic-release @semantic-release/git @semantic-release/changelog @semantic-release/exec
+          npm install -g semantic-release @semantic-release/git @semantic-release/changelog
 
       - name: Release
+        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: semantic-release --config .github/workflows/semantic-release-config.json
+        run: |
+          VERSION=$(npx semantic-release --dry-run --no-ci | grep -oP 'The next release version is \K[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          if [ -n "$VERSION" ]; then
+            npx semantic-release
+          fi
 
       - name: Get Version
         id: get_version
-        run: echo "version=$(cat VERSION)" >> $GITHUB_OUTPUT
+        run: echo "version=${{ steps.semantic.outputs.version }}" >> $GITHUB_OUTPUT
 
   build:
     name: Build
