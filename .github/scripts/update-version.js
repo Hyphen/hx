@@ -1,5 +1,56 @@
 const { execSync } = require('child_process');
 
+function handleMajorBump(major) {
+  const newBumpInfo = { major: true, minor: true, patch: true };
+  const newVersion = `${major + 1}.0.0-rc.1`;
+  console.error(`New bump info for major: ${JSON.stringify(newBumpInfo)}`);
+  return { newBumpInfo, newVersion };
+}
+
+function handleMinorBump(major, minor, patch, currentBumpInfo, rcNumber) {
+  const newBumpInfo = { ...currentBumpInfo, minor: true, patch: true };
+  console.error(`New bump info for minor: ${JSON.stringify(newBumpInfo)}`);
+  
+  let newVersion;
+  if (!currentBumpInfo.minor) {
+    newVersion = `${major}.${minor + 1}.0-rc.1`;
+    console.error(`New version for minor bump when minor was false: ${newVersion}`);
+  } else {
+    rcNumber = handleRcNumber(rcNumber);
+    newVersion = `${major}.${minor}.${patch}-rc.${rcNumber}`;
+    console.error(`New version for minor bump when minor was true: ${newVersion}`);
+  }
+  
+  return { newBumpInfo, newVersion };
+}
+
+function handlePatchBump(major, minor, patch, currentBumpInfo, rcNumber) {
+  const newBumpInfo = { ...currentBumpInfo, patch: true };
+  console.error(`New bump info for patch: ${JSON.stringify(newBumpInfo)}`);
+  
+  let newVersion;
+  if (!currentBumpInfo.patch) {
+    newVersion = `${major}.${minor}.${patch + 1}-rc.1`;
+    console.error(`New version for patch bump when patch was false: ${newVersion}`);
+  } else {
+    rcNumber = handleRcNumber(rcNumber);
+    newVersion = `${major}.${minor}.${patch}-rc.${rcNumber}`;
+    console.error(`New version for patch bump when patch was true: ${newVersion}`);
+  }
+  
+  return { newBumpInfo, newVersion };
+}
+
+function handleRcNumber(rcNumber) {
+  if (!rcNumber || isNaN(rcNumber)) {
+    console.error("RC number is empty or invalid, setting to 1");
+    return 1;
+  } else {
+    console.error(`Current RC number: ${rcNumber}`);
+    return rcNumber + 1;
+  }
+}
+
 function updateVersion() {
   const latestReleaseString = process.env.LATEST_RELEASE;
   const latestRelease = JSON.parse(latestReleaseString.replace(/^"(.*)"$/, '$1').replace(/\\"/g, '"'));
@@ -31,52 +82,20 @@ function updateVersion() {
   console.error(`Base version: ${baseVersion}`);
   console.error(`RC number: ${rcNumber}`);
 
-  let newBumpInfo, newVersion;
+  let result;
 
   if (bumpType === "major") {
-    newBumpInfo = { major: true, minor: true, patch: true };
-    newVersion = `${major + 1}.0.0-rc.1`;
-    console.error(`New bump info for major: ${JSON.stringify(newBumpInfo)}`);
+    result = handleMajorBump(major);
   } else if (bumpType === "minor") {
-    newBumpInfo = { ...currentBumpInfo, minor: true, patch: true };
-    console.error(`New bump info for minor: ${JSON.stringify(newBumpInfo)}`);
-    if (!currentBumpInfo.minor) {
-      newVersion = `${major}.${minor + 1}.0-rc.1`;
-      console.error(`New version for minor bump when minor was false: ${newVersion}`);
-    } else {
-      if (!rcNumber || isNaN(rcNumber)) {
-        console.error("RC number is empty or invalid, setting to 1");
-        rcNumber = 1;
-      } else {
-        console.error(`Current RC number: ${rcNumber}`);
-        rcNumber++;
-      }
-      newVersion = `${baseVersion}-rc.${rcNumber}`;
-      console.error(`New version for minor bump when minor was true: ${newVersion}`);
-    }
+    result = handleMinorBump(major, minor, patch, currentBumpInfo, rcNumber);
   } else {
-    newBumpInfo = { ...currentBumpInfo, patch: true };
-    console.error(`New bump info for patch: ${JSON.stringify(newBumpInfo)}`);
-    if (!currentBumpInfo.patch) {
-      newVersion = `${major}.${minor}.${patch + 1}-rc.1`;
-      console.error(`New version for patch bump when patch was false: ${newVersion}`);
-    } else {
-      if (!rcNumber || isNaN(rcNumber)) {
-        console.error("RC number is empty or invalid, setting to 1");
-        rcNumber = 1;
-      } else {
-        console.error(`Current RC number: ${rcNumber}`);
-        rcNumber++;
-      }
-      newVersion = `${baseVersion}-rc.${rcNumber}`;
-      console.error(`New version for patch bump when patch was true: ${newVersion}`);
-    }
+    result = handlePatchBump(major, minor, patch, currentBumpInfo, rcNumber);
   }
 
-  console.error(`Final new version: ${newVersion}`);
-  console.error(`Final new bump info: ${JSON.stringify(newBumpInfo)}`);
+  console.error(`Final new version: ${result.newVersion}`);
+  console.error(`Final new bump info: ${JSON.stringify(result.newBumpInfo)}`);
 
-  return { newVersion, newBumpInfo };
+  return result;
 }
 
 const result = updateVersion();
