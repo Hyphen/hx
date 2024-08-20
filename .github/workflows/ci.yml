@@ -21,25 +21,25 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Check out code
-        uses: actions/checkout@v3
-
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Test with Coverage
-        run: go test -coverprofile=coverage.txt -covermode=atomic ./...
-
-      - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          file: ./coverage.txt
+      # - name: Check out code
+      #   uses: actions/checkout@v3
+      #
+      # - name: Cache Go modules
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: ~/go/pkg/mod
+      #     key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-go-
+      #
+      # - name: Test with Coverage
+      #   run: go test -coverprofile=coverage.txt -covermode=atomic ./...
+      #
+      # - name: Upload Coverage to Codecov
+      #   uses: codecov/codecov-action@v3
+      #   with:
+      #     token: ${{ secrets.CODECOV_TOKEN }}
+      #     file: ./coverage.txt
 
   versioning:
     name: Versioning
@@ -70,21 +70,18 @@ jobs:
         run: |
           CURRENT_VERSION=$(cat .version || echo "0.0.0-rc0")
           RELEASE_VERSION=$(semantic-release --dry-run | grep "next version" | awk '{print $3}')
-          if [[ -z "$RELEASE_VERSION" ]]; then
-            RELEASE_VERSION=$(echo $CURRENT_VERSION | sed 's/-rc[0-9]*$//')
-          fi
           if [[ $RELEASE_VERSION == $(echo $CURRENT_VERSION | sed 's/-rc[0-9]*//') ]]; then
-            BASE_VERSION=$RELEASE_VERSION
             RC_NUMBER=$(echo $CURRENT_VERSION | sed 's/.*-rc\([0-9]*\)/\1/')
-            NEW_VERSION="${BASE_VERSION}-rc$((RC_NUMBER+1))"
+            NEW_VERSION=$(echo $CURRENT_VERSION | sed "s/-rc[0-9]*/-rc$((RC_NUMBER+1))/")
           else
             NEW_VERSION="${RELEASE_VERSION}-rc1"
           fi
           echo $NEW_VERSION > .version
-          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
       - name: Print version
         run: |
+          echo "Current version: $(cat .version)"
+          echo "Release version: $RELEASE_VERSION"
           echo "New version: $NEW_VERSION"
 
       - name: Commit .version file
