@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+*'
   pull_request:
     branches:
       - main
@@ -12,89 +14,97 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+
     steps:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.22'
 
-      # - name: Check out code
-      #   uses: actions/checkout@v3
-      #
-      # - name: Cache Go modules
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: ~/go/pkg/mod
-      #     key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-go-
+      - name: Check out code
+        uses: actions/checkout@v3
 
-      # - name: Test with Coverage
-      #   run: go test -coverprofile=coverage.txt -covermode=atomic ./...
-      #
-      # - name: Upload Coverage to Codecov
-      #   uses: codecov/codecov-action@v3
-      #   with:
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-      #     file: ./coverage.txt
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
-  release:
-    name: Release
-    needs: test
-    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Test with Coverage
+        run: go test -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.txt
+
+  version-bump:
+    name: Update Version Based on Conventional Commits
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      pull-requests: write
     outputs:
-      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+      new_version: ${{ steps.update_version.outputs.new_version }}
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0
+          fetch-depth: 0 
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: Get latest release and bump info
+        id: get_latest_release
+        uses: actions/github-script@v6
         with:
-          node-version: 'lts/*'
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const script = require('./.github/scripts/get-latest-release.js')
+            return await script({github, context})
 
-      - name: Install semantic-release
+      - name: Determine version bump
+        id: version_bump
         run: |
-          npm install -g semantic-release @semantic-release/git @semantic-release/changelog
+          export LATEST_RELEASE='${{ steps.get_latest_release.outputs.result }}'
+          node .github/scripts/determine-version-bump.js >> $GITHUB_OUTPUT
+        shell: /usr/bin/bash -e {0}
 
-      - name: Release
-        id: semantic
+      - name: Update version
+        id: update_version
+        run: |
+          export LATEST_RELEASE='${{ steps.get_latest_release.outputs.result }}'
+          export BUMP_TYPE='${{ steps.version_bump.outputs.bump_type }}'
+          node .github/scripts/update-version.js >> $GITHUB_OUTPUT
+        shell: /usr/bin/bash -e {0}
+
+      - name: Create or update RC release
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const script = require('./.github/scripts/update-rc-release.js')
+            await script({github, context, core})
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          OUTPUT=$(npx semantic-release --dry-run --no-ci)
-          if echo "$OUTPUT" | grep -q "There are no relevant changes, so no new version is released."; then
-            echo "No new release"
-            echo "new_release_version=" >> $GITHUB_OUTPUT
-          else
-            VERSION=$(echo "$OUTPUT" | grep -oP 'The next release version is \K[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?')
-            if [ -n "$VERSION" ]; then
-              echo "New version: $VERSION"
-              echo "new_release_version=$VERSION" >> $GITHUB_OUTPUT
-              npx semantic-release
-            else
-              echo "Could not determine version"
-              echo "new_release_version=" >> $GITHUB_OUTPUT
-            fi
-          fi
+          new_version: ${{ steps.update_version.outputs.new_version }}
+          bump_info: ${{ steps.update_version.outputs.bump_info }}
 
   build:
     name: Build
-    needs: release
-    if: needs.release.outputs.new_release_version != ''
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, version-bump]
     uses: ./.github/workflows/build.yml
     with:
-      version: ${{ needs.release.outputs.new_release_version }}
+      version: ${{ needs.version-bump.outputs.new_version }}
     secrets: inherit
 
   upload-dev:
     name: Upload to R2
-    needs: [release, build]
-    if: needs.release.outputs.new_release_version != ''
+    needs: [build, version-bump]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/upload-to-r2-dev.yml
     with:
-      version: ${{ needs.release.outputs.new_release_version }}
+      version: ${{ needs.version-bump.outputs.new_version }}
     secrets: inherit
