@@ -1,9 +1,6 @@
 name: Go CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
@@ -38,71 +35,3 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./coverage.txt
-
-  versioning:
-    name: Versioning
-    runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: write
-    outputs:
-      new_version: ${{ steps.set_output.outputs.new_version }}
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'  
-
-      - name: Fetch all tags and latest release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git fetch --tags
-          LATEST_RELEASE_VERSION=$(gh release view --json tagName -q '.tagName')
-          echo "LATEST_RELEASE_VERSION=$LATEST_RELEASE_VERSION" >> $GITHUB_ENV
-
-      - name: Install semantic-release
-        run: npm install -g semantic-release @semantic-release/changelog @semantic-release/git
-
-      - name: Run semantic-release dry-run
-        run: |
-          OUTPUT=$(npx semantic-release --dry-run 2>&1) || true
-          echo "$OUTPUT"
-          if echo "$OUTPUT" | grep -q "ERROR"; then
-            echo "Error occurred during semantic-release dry-run:"
-            echo "$OUTPUT" | grep "ERROR" -A 5
-            exit 1
-          fi
-
-      - name: Determine version and update .version file
-        run: |
-          CURRENT_VERSION=$(cat .version || echo "0.0.0-rc0")
-          RELEASE_VERSION=$(semantic-release --dry-run 2>/dev/null | grep "The next release version is" | awk '{print $NF}')
-          if [[ $RELEASE_VERSION == $(echo $CURRENT_VERSION | sed 's/-rc[0-9]*//') ]]; then
-            RC_NUMBER=$(echo $CURRENT_VERSION | sed 's/.*-rc\([0-9]*\)/\1/')
-            NEW_VERSION=$(echo $CURRENT_VERSION | sed "s/-rc[0-9]*/-rc$((RC_NUMBER+1))/")
-          else
-            NEW_VERSION="${RELEASE_VERSION}-rc1"
-          fi
-          echo $NEW_VERSION > .version
-
-      - name: Print version
-        run: |
-          echo "Current version: $(cat .version)"
-          echo "Release version: $RELEASE_VERSION"
-          echo "New version: $NEW_VERSION"
-
-      - name: Commit .version file
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "ci: update version to ${{ env.NEW_VERSION }}"
-          file_pattern: .version
-
-      - name: Set output
-        id: set_output
-        run: echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT

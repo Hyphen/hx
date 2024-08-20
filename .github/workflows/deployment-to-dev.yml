@@ -1,23 +1,85 @@
 name: Deployment to Dev
 
 on:
-  push:
+  pull_request:
     branches:
       - main
 
 jobs:
-  ci:
-    uses: ./.github/workflows/ci.yml
+  versioning:
+    name: Versioning
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      new_version: ${{ steps.set_output.outputs.new_version }}
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'  
+
+      - name: Fetch all tags and latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch --tags
+          LATEST_RELEASE_VERSION=$(gh release view --json tagName -q '.tagName')
+          echo "LATEST_RELEASE_VERSION=$LATEST_RELEASE_VERSION" >> $GITHUB_ENV
+
+      - name: Install semantic-release
+        run: npm install -g semantic-release @semantic-release/changelog @semantic-release/git
+
+      - name: Run semantic-release dry-run
+        run: |
+          OUTPUT=$(npx semantic-release --dry-run 2>&1) || true
+          echo "$OUTPUT"
+          if echo "$OUTPUT" | grep -q "ERROR"; then
+            echo "Error occurred during semantic-release dry-run:"
+            echo "$OUTPUT" | grep "ERROR" -A 5
+            exit 1
+
+      - name: Determine version and update .version file
+        run: |
+          CURRENT_VERSION=$(cat .version || echo "0.0.0-rc0")
+          RELEASE_VERSION=$(semantic-release --dry-run 2>/dev/null | grep "The next release version is" | awk '{print $NF}')
+          if [[ $RELEASE_VERSION == $(echo $CURRENT_VERSION | sed 's/-rc[0-9]*//') ]]; then
+            RC_NUMBER=$(echo $CURRENT_VERSION | sed 's/.*-rc\([0-9]*\)/\1/')
+            NEW_VERSION=$(echo $CURRENT_VERSION | sed "s/-rc[0-9]*/-rc$((RC_NUMBER+1))/")
+          else
+            NEW_VERSION="${RELEASE_VERSION}-rc1"
+          fi
+          echo $NEW_VERSION > .version
+
+      - name: Print version
+        run: |
+          echo "Current version: $(cat .version)"
+          echo "Release version: $RELEASE_VERSION"
+          echo "New version: $NEW_VERSION"
+
+      - name: Commit .version file
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "ci: update version to ${{ env.NEW_VERSION }}"
+          file_pattern: .version
+
+      - name: Set output
+        id: set_output
+        run: echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
   build:
-    needs: ci
+    needs: versioning
     uses: ./.github/workflows/build.yml
     with:
-      version: ${{ needs.ci.outputs.new_version }}
+      version: ${{ needs.versioning.outputs.new_version }}
 
   upload:
     needs: build
     uses: ./.github/workflows/upload-to-r2.yml
     with:
-      version: ${{ needs.build.outputs.version }}
+      version: ${{ needs.versioning.outputs.new_version }}
       package_name: hyphen-cli-dev
