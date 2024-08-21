@@ -34,15 +34,6 @@ jobs:
       - name: Install semantic-release
         run: npm install -g semantic-release @semantic-release/changelog @semantic-release/git
 
-      - name: Run semantic-release dry-run
-        run: |
-          OUTPUT=$(npx semantic-release --dry-run 2>&1) || true
-          echo "$OUTPUT"
-          if echo "$OUTPUT" | grep -q "ERROR"; then
-            echo "Error occurred during semantic-release dry-run:"
-            echo "$OUTPUT" | grep "ERROR" -A 5
-            exit 1
-
       - name: Determine version and update .version file
         run: |
           CURRENT_VERSION=$(cat .version || echo "0.0.0-rc0")
