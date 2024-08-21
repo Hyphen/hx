@@ -74,3 +74,4 @@ jobs:
     with:
       version: ${{ needs.versioning.outputs.new_version }}
       package_name: hyphen-cli-dev
+    secrets: inherit
