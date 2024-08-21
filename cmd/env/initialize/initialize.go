@@ -55,7 +55,11 @@ func PromptForAppName(reader io.Reader) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error reading input: %w", err)
 	}
-	return strings.TrimSpace(appName), nil
+	appName = strings.TrimSpace(appName)
+	if appName == "" {
+		return "", fmt.Errorf("App name cannot be empty")
+	}
+	return appName, nil
 }
 
 func PromptForAppId(reader io.Reader, defaultAppId string) (string, error) {
@@ -87,10 +91,8 @@ func PromptForAppId(reader io.Reader, defaultAppId string) (string, error) {
 			return suggestedAppId, nil
 		} else if response == "n" || response == "no" {
 			fmt.Println("Please enter a new App ID (lowercase with hyphens).")
-			continue
 		} else {
 			fmt.Println("Invalid response. Please enter 'y' or 'n'.")
-			continue
 		}
 	}
 }
@@ -111,6 +113,7 @@ func PromptForOverwrite(reader io.Reader) bool {
 		case "n", "no", "":
 			return false
 		default:
+			fmt.Println("Invalid response. Please enter 'y' or 'n'.")
 		}
 	}
 }
