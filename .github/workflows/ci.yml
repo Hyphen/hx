@@ -35,3 +35,9 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./coverage.txt
+
+  build:
+    needs: test
+    uses: ./.github/workflows/build.yml
+    with:
+      version: testBuild
