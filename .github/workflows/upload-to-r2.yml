@@ -1,0 +1,103 @@
+name: Upload to R2
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      package_name:
+        required: true
+        type: string
+
+env:
+  CDN_R2_ACCOUNT_ID: e5146df3269d748421cee3ff9d6fa02a
+  CDN_R2_ACCESS_KEY_ID: ${{ secrets.CDN_R2_ACCESS_KEY_ID }}
+  CDN_R2_SECRET_ACCESS_KEY: ${{ secrets.CDN_R2_SECRET_ACCESS_KEY }}
+  CDN_R2_PUBLIC_BASE_URL: https://cdn.hyphen.ai
+  CDN_STORAGE_BUCKET_NAME: cdn-hyphen-ai
+
+jobs:
+  upload:
+    name: Upload artifacts to R2
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set environment variables
+        run: |
+          echo "VERSION=${{ inputs.version }}" >> $GITHUB_ENV
+          echo "PACKAGE_NAME=${{ inputs.package_name }}" >> $GITHUB_ENV
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Display structure of downloaded files
+        run: |
+          echo "Current directory contents:"
+          ls -R
+          echo "File details:"
+          find . -type f -exec file {} \;
+
+      - name: Configure AWS CLI
+        run: |
+          aws configure set aws_access_key_id ${{ env.CDN_R2_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ env.CDN_R2_SECRET_ACCESS_KEY }}
+          aws configure set region us-east-1
+
+      - name: Upload artifacts to R2
+        run: |
+          upload_file() {
+            local source="$1"
+            local destination="$2"
+            if aws s3 cp "$source" "$destination" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com; then
+              echo "Successfully uploaded: $source to $destination"
+            else
+              echo "Error: Failed to upload $source to $destination"
+              return 1
+            fi
+          }
+
+          artifacts=(
+            "hyphen-$VERSION-linux"
+            "hyphen-$VERSION-macos"
+            "hyphen-$VERSION-macos-arm"
+            "hyphen-$VERSION-windows"
+          )
+
+          for artifact in "${artifacts[@]}"; do
+            if [ -d "$artifact" ]; then
+              file=$(find "$artifact" -type f -name "$artifact*" -print -quit)
+              if [ -n "$file" ]; then
+                upload_file "$file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/${{ env.PACKAGE_NAME }}/$VERSION/$(basename $file)"
+              else
+                echo "Warning: Expected file not found in $artifact directory"
+              fi
+            else
+              echo "Warning: Directory $artifact not found"
+            fi
+          done
+
+      - name: Verify upload
+        run: |
+          echo "Verifying uploaded files:"
+          expected_files=(
+            "${{ env.PACKAGE_NAME }}/$VERSION/hyphen-$VERSION-linux"
+            "${{ env.PACKAGE_NAME }}/$VERSION/hyphen-$VERSION-macos"
+            "${{ env.PACKAGE_NAME }}/$VERSION/hyphen-$VERSION-macos-arm"
+            "${{ env.PACKAGE_NAME }}/$VERSION/hyphen-$VERSION-windows"
+          )
+          
+          for file in "${expected_files[@]}"; do
+            if aws s3 ls "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/$file" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com; then
+              echo "Verified: $file"
+            else
+              echo "Warning: File not found in R2: $file"
+            fi
+          done
+          
+          echo "Verification complete."

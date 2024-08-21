@@ -2,6 +2,10 @@ name: Build
 
 on:
   workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
 
 jobs:
   build:
@@ -37,13 +41,11 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # important for git tags fetching
+          fetch-depth: 0 
 
-      - name: Setup Environment Variables and Git Tag Versioning
+      - name: Setup Environment Variables
         run: |
-          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
-          GIT_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
-          echo "GIT_TAG=$GIT_TAG" >> $GITHUB_ENV
+          echo "VERSION=${{ inputs.version }}" >> $GITHUB_ENV
           echo "GOOS=${{ matrix.goos }}" >> $GITHUB_ENV
           echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
         shell: bash
@@ -53,27 +55,27 @@ jobs:
 
       - name: Build for Unix-like systems
         if: runner.os != 'Windows'
-        run: go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.Version=${{ env.GIT_TAG }}" -o hyphen-${{ env.GIT_TAG }}-${{ matrix.arch }}
+        run: go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.Version=${{ env.VERSION }}" -o hyphen-${{ env.VERSION }}-${{ matrix.arch }}
         shell: bash
 
       - name: Build for Windows
         if: runner.os == 'Windows'
-        run: pwsh -Command 'go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.Version=${{ env.GIT_TAG }}" -o hyphen-${{ env.GIT_TAG }}-${{ matrix.arch }}.exe'
+        run: pwsh -Command 'go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.Version=${{ env.VERSION }}" -o hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe'
 
       - name: Set execution permissions
         if: runner.os != 'Windows'
-        run: chmod +x hyphen-${{ env.GIT_TAG }}-${{ matrix.arch }}
+        run: chmod +x hyphen-${{ env.VERSION }}-${{ matrix.arch }}
 
       - name: Upload binaries for Unix-like systems
         if: runner.os != 'Windows'
         uses: actions/upload-artifact@v3
         with:
-          name: hyphen-${{ env.GIT_TAG }}-${{ matrix.arch }}
-          path: hyphen-${{ env.GIT_TAG }}-${{ matrix.arch }}
+          name: hyphen-${{ env.VERSION }}-${{ matrix.arch }}
+          path: hyphen-${{ env.VERSION }}-${{ matrix.arch }}
 
       - name: Upload binaries for Windows
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v3
         with:
-          name: hyphen-${{ env.GIT_TAG }}-${{ matrix.arch }}
-          path: hyphen-${{ env.GIT_TAG }}-${{ matrix.arch }}.exe
+          name: hyphen-${{ env.VERSION }}-${{ matrix.arch }}
+          path: hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe

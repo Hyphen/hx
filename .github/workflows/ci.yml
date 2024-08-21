@@ -1,9 +1,6 @@
 name: Go CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
@@ -40,7 +37,7 @@ jobs:
           file: ./coverage.txt
 
   build:
-    name: Build
-    uses: ./.github/workflows/build.yml
-    secrets: inherit
     needs: test
+    uses: ./.github/workflows/build.yml
+    with:
+      version: testBuild
