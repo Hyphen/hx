@@ -17,3 +17,5 @@ jobs:
     with:
       version: ${{ github.ref_name }}
       package_name: hyphen-cli
+    secrets: inherit
+
