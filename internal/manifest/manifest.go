@@ -63,6 +63,10 @@ func RestoreFromFile(file string) (Manifest, error) {
 	return m, nil
 }
 
+func Restore() (Manifest, error) {
+	return RestoreFromFile(ManifestConfigFile)
+}
+
 func Exists() bool {
 	_, err := os.Stat(ManifestConfigFile)
 	return !os.IsNotExist(err)

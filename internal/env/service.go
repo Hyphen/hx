@@ -5,13 +5,6 @@ import (
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
-// GET /organization/{id}/projects/{id}/envs
-// PUT /organization/{id}/projects/{id}/environments/{id}/env
-// GET /organization/{id}/projects/{id}/environments/{id}/env
-// GET /organization/{id}/projects/{id}/environments/{id}/env/versions
-// GET /organization/{id}/projects/{id}/environments/{id}/env/versions/{id}
-// DELETE /organization/{id}/projects/{id}/environments/{id}/env
-
 type EnvServicer interface {
 	UploadEnvVariable(organizationID, env, projectID string, envData EnvironmentVarsData) error
 	GetEncryptedVariables(env, appID string) (EnvironmentVarsData, error)
@@ -29,4 +22,19 @@ func (es *EnvService) UploadEnvVariable(organizationID, env, appID string, envDa
 		return errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
 	}
 	return nil
+}
+
+func (es *EnvService) GetEnv(organizationID, projectID, env string) (EnvironmentVarsData, error) {
+	env, err := GetEnvName(env)
+	if err != nil {
+		return EnvironmentVarsData{}, err
+	}
+
+	_, err = es.oauthService.GetValidToken()
+	if err != nil {
+		return EnvironmentVarsData{}, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
+	}
+
+	//TODO llamar a la api
+	return EnvironmentVarsData{}, nil
 }
