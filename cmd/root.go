@@ -9,6 +9,7 @@ import (
 	"github.com/Hyphen/cli/cmd/initialize"
 	"github.com/Hyphen/cli/cmd/update"
 	"github.com/Hyphen/cli/cmd/version"
+	"github.com/Hyphen/cli/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -24,6 +25,9 @@ func init() {
 	// rootCmd.AddCommand(env.EnvCmd)
 	rootCmd.AddCommand(initialize.InitCmd)
 	rootCmd.AddCommand(auth.AuthCmd)
+
+	rootCmd.PersistentFlags().StringVar(&utils.OrgFlag, "org", "", "Organization ID (default is used if not provided)")
+	rootCmd.PersistentFlags().BoolVarP(&utils.YesFlag, "yes", "y", false, "Automatically answer yes for prompts")
 }
 
 func Execute() {

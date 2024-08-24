@@ -7,10 +7,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Hyphen/cli/config"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/project"
 	"github.com/Hyphen/cli/pkg/errors"
+	"github.com/Hyphen/cli/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -19,8 +19,14 @@ var InitCmd = &cobra.Command{
 	Short: "init a project",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
+		projectService := project.NewService()
+		orgID, err := utils.GetOrganizationID()
+		if err != nil {
+			cmd.PrintErrf("Error: %s\n", err)
+		}
+
 		if manifest.Exists() {
-			if !promptForOverwrite(os.Stdin) {
+			if !utils.YesFlag && !promptForOverwrite(os.Stdin) {
 				cmd.Println("Operation cancelled.")
 				return
 			}
@@ -32,25 +38,31 @@ var InitCmd = &cobra.Command{
 			return
 		}
 
-		defaultProjectId := generateDefaultProjectId(projectName)
-		projectId, err := promptForProjectId(os.Stdin, defaultProjectId)
-		if err != nil {
-			cmd.PrintErrf("%s\n", err)
-			return
+		defaultProjectAlternateId := generateDefaultProjectId(projectName)
+		var projectAlternateId string
+		if utils.YesFlag {
+			projectAlternateId = defaultProjectAlternateId
+		} else {
+			projectAlternateId, err = promptForProjectId(os.Stdin, defaultProjectAlternateId)
+			if err != nil {
+				cmd.PrintErrf("%s\n", err)
+				return
+			}
 		}
 
-		credentials, err := config.LoadCredentials()
+		newProject, err := projectService.CreateProject(orgID, projectAlternateId, projectName)
 		if err != nil {
 			cmd.PrintErrf("%s\n", err)
-			return
+			os.Exit(1)
 		}
 
-		_, err = manifest.Initialize(credentials.Default.OrganizationId, projectName, projectId)
+		_, err = manifest.Initialize(orgID, newProject.Name, newProject.ID, newProject.AlternateId)
 		if err != nil {
 			cmd.PrintErrf("%s\n", err)
 			os.Exit(1)
 		}
 		cmd.Println("Project initialized")
+
 		if err := ensureGitignore(manifest.ManifestConfigFile); err != nil {
 			cmd.PrintErrf("Error checking/updating .gitignore: %s\n", err)
 			os.Exit(1)
@@ -130,51 +142,4 @@ func promptForProjectId(reader io.Reader, defaultAppId string) (string, error) {
 
 func generateDefaultProjectId(appName string) string {
 	return strings.ToLower(strings.ReplaceAll(appName, " ", "-"))
-}
-
-func ensureGitignore(manifestFileName string) error {
-	const gitDirPath = ".git"
-	const gitignorePath = ".gitignore"
-
-	if _, err := os.Stat(gitDirPath); os.IsNotExist(err) {
-		return nil
-	}
-
-	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
-		file, err := os.Create(gitignorePath)
-		if err != nil {
-			return errors.Wrap(err, "Error creating .gitignore")
-		}
-		defer file.Close()
-
-		_, err = file.WriteString(manifestFileName + "\n")
-		if err != nil {
-			return errors.Wrap(err, "Error writing to .gitignore")
-		}
-		return nil
-	}
-
-	file, err := os.OpenFile(gitignorePath, os.O_RDWR|os.O_APPEND, 0644)
-	if err != nil {
-		return errors.Wrap(err, "Error opening .gitignore")
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		if strings.TrimSpace(scanner.Text()) == manifestFileName {
-			return nil
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return errors.Wrap(err, "Error reading .gitignore")
-	}
-
-	_, err = file.WriteString(manifestFileName + "\n")
-	if err != nil {
-		return errors.Wrap(err, "Error writing to .gitignore")
-	}
-
-	return nil
 }

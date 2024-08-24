@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	"github.com/Hyphen/cli/internal/project"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/errors"
 )
@@ -22,21 +21,16 @@ func (m *Manifest) GetSecretKey() *secretkey.SecretKey {
 	return secretkey.FromBase64(m.SecretKey)
 }
 
-func Initialize(organizationId, projectName, projectID string) (Manifest, error) {
+func Initialize(organizationId, projectName, projectID, projectAlternateId string) (Manifest, error) {
 	sk, err := secretkey.New()
 	if err != nil {
 		return Manifest{}, errors.Wrap(err, "Failed to create new secret key")
 	}
-	projectService := project.NewService()
-	project, err := projectService.CreateProject(organizationId, projectID, projectName)
-	if err != nil {
-		return Manifest{}, err
-	}
 
 	m := Manifest{
 		ProjectName:        projectName,
-		ProjectId:          project.ID,
-		ProjectAlternateId: project.AlternateId,
+		ProjectId:          projectID,
+		ProjectAlternateId: projectAlternateId,
 		SecretKey:          sk.Base64(),
 	}
 
