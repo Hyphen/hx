@@ -7,6 +7,7 @@ import (
 	"runtime"
 
 	"github.com/BurntSushi/toml"
+	"github.com/Hyphen/cli/pkg/errors"
 )
 
 type CredentialsConfig struct {
@@ -16,6 +17,7 @@ type CredentialsConfig struct {
 type Credentials struct {
 	HyphenAccessToken  string `toml:"hyphen_access_token"`
 	HyphenRefreshToken string `toml:"hyphen_refresh_token"`
+	OrganizationId     string `toml:"organization_id"`
 	HypenIDToken       string `toml:"hyphen_id_token"`
 	ExpiryTime         int64  `toml:"expiry_time"`
 }
@@ -76,20 +78,20 @@ func (se *systemEnvironment) ReadFile(path string) ([]byte, error) {
 var Env Environment = &systemEnvironment{}
 
 // SaveCredentials stores credentials in a system-dependent location
-func SaveCredentials(accessToken, refreshToken, IDToken string, expiryTime int64) error {
+func SaveCredentials(organizationID, accessToken, refreshToken, IDToken string, expiryTime int64) error {
 	configDir := Env.GetConfigDirectory()
 	if err := Env.EnsureDir(configDir); err != nil {
-		return err
+		return errors.Wrap(err, "Failed to create configuration directory")
 	}
 
 	credentialFilePath := filepath.Join(configDir, CredentialFile)
 	credentialsContent := fmt.Sprintf(
-		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\nhyphen_id_token=\"%s\"\nexpiry_time=%d",
-		accessToken, refreshToken, IDToken, expiryTime)
+		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\norganization_id=\"%s\"\nhyphen_id_token=\"%s\"\nexpiry_time=%d",
+		accessToken, refreshToken, organizationID, IDToken, expiryTime)
 
 	// Write the credentials to the file
 	if err := Env.WriteFile(credentialFilePath, []byte(credentialsContent), 0644); err != nil {
-		return fmt.Errorf("Error writing credentials to file: %w", err)
+		return errors.Wrap(err, "Failed to save credentials")
 	}
 
 	return nil
@@ -103,12 +105,12 @@ func LoadCredentials() (CredentialsConfig, error) {
 	// Read file using Environment's ReadFile method
 	data, err := Env.ReadFile(credentialFilePath)
 	if err != nil {
-		return CredentialsConfig{}, fmt.Errorf("failed to read file: %w", err)
+		return CredentialsConfig{}, errors.Wrap(err, "Failed to read credentials file")
 	}
 
 	var config CredentialsConfig
 	if err := toml.Unmarshal(data, &config); err != nil {
-		return CredentialsConfig{}, fmt.Errorf("failed to decode credentials: %w", err)
+		return CredentialsConfig{}, errors.Wrap(err, "Failed to parse credentials file")
 	}
 
 	return config, nil

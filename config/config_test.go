@@ -107,14 +107,14 @@ func TestSaveCredentialsSuccess(t *testing.T) {
 	configDir := "/mocked/path"
 	credentialFile := filepath.Join(configDir, CredentialFile)
 	credentialsContent := fmt.Sprintf(
-		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\nhyphen_id_token=\"%s\"\nexpiry_time=%d",
-		"user_access_token", "user_refresh_token", "user_id_token", 12)
+		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\norganization_id=\"%s\"\nhyphen_id_token=\"%s\"\nexpiry_time=%d",
+		"user_access_token", "user_refresh_token", "org_id", "user_id_token", 12)
 
 	mockEnv.On("GetConfigDirectory").Return(configDir)
 	mockEnv.On("EnsureDir", configDir).Return(nil)
 	mockEnv.On("WriteFile", credentialFile, []byte(credentialsContent), os.FileMode(0644)).Return(nil)
 
-	err := SaveCredentials("user_access_token", "user_refresh_token", "user_id_token", 12)
+	err := SaveCredentials("org_id", "user_access_token", "user_refresh_token", "user_id_token", 12)
 	assert.Nil(t, err, "SaveCredentials should not return an error")
 
 	mockEnv.AssertExpectations(t) // verify that all mocked methods were called as expected
@@ -128,8 +128,8 @@ func TestSaveCredentialsFailures(t *testing.T) {
 	configDir := "/mocked/path"
 	credentialFile := filepath.Join(configDir, CredentialFile)
 	credentialsContent := fmt.Sprintf(
-		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\nhyphen_id_token=\"%s\"\nexpiry_time=%d",
-		"user_access_token", "user_refresh_token", "user_id_token", 12)
+		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\norganization_id=\"%s\"\nhyphen_id_token=\"%s\"\nexpiry_time=%d",
+		"user_access_token", "user_refresh_token", "org_id", "user_id_token", 12)
 
 	tests := []struct {
 		name       string
@@ -157,7 +157,7 @@ func TestSaveCredentialsFailures(t *testing.T) {
 			mockEnv.ExpectedCalls = nil // reset expectations
 			mockEnv.Calls = nil         // clean the call stack
 			tc.setupMocks()             // setup test-specific mocks
-			err := SaveCredentials("user_access_token", "user_refresh_token", "user_id_token", 12)
+			err := SaveCredentials("org_id", "user_access_token", "user_refresh_token", "user_id_token", 12)
 			assert.NotNil(t, err, "SaveCredentials should return an error")
 			mockEnv.AssertExpectations(t)
 		})
@@ -174,6 +174,7 @@ func TestGetCredentialsSuccess(t *testing.T) {
 	credentialsToml := `[default]
 hyphen_access_token="user_access_token"
 hyphen_refresh_token="user_refresh_token"
+organization_id="org_id"
 hyphen_id_token="user_id_token"
 expiry_time=12`
 
@@ -210,16 +211,15 @@ func TestGetCredentialsFailures(t *testing.T) {
 			setupMocks: func() {
 				mockEnv.On("ReadFile", credentialFile).Return([]byte(nil), errors.New("failed to read file")).Once()
 			},
-			expectedErr: "failed to read file: failed to read file",
+			expectedErr: "Failed to read credentials file",
 		},
-
 		{
 			name: "failure decoding credentials",
 			setupMocks: func() {
 				// Return some bytes to simulate bad TOML data
 				mockEnv.On("ReadFile", credentialFile).Return([]byte("invalid toml data"), nil).Once()
 			},
-			expectedErr: "failed to decode credentials: toml: line 1: expected '.' or '=', but got 't' instead",
+			expectedErr: "Failed to parse credentials file",
 		},
 	}
 

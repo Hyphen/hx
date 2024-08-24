@@ -8,7 +8,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"os"
+
+	"github.com/Hyphen/cli/pkg/errors"
 )
 
 type SecretKey struct {
@@ -28,12 +29,10 @@ func FromBase64(secretBase64 string) *SecretKey {
 	}
 }
 
-func New() *SecretKey {
-
+func New() (*SecretKey, error) {
 	secret := make([]byte, 256)
 	if _, err := rand.Read(secret); err != nil {
-		fmt.Println("Error generating secret key:", err)
-		os.Exit(1)
+		return nil, errors.Wrap(err, "Failed to generate secret key")
 	}
 
 	secretBase64 := base64.StdEncoding.EncodeToString(secret)
@@ -43,29 +42,32 @@ func New() *SecretKey {
 
 	return &SecretKey{
 		secretBase64: secretBase64,
-	}
+	}, nil
 }
 
 func (s SecretKey) Base64() string {
 	return s.secretBase64
 }
 
-func (s SecretKey) HashSHA() string {
+func (s SecretKey) HashSHA() (string, error) {
 	hasher := sha256.New()
 	if _, err := hasher.Write([]byte(s.secretBase64)); err != nil {
-		fmt.Println("Error hashing secret key:", err)
-		os.Exit(1)
+		return "", errors.Wrap(err, "Failed to hash secret key")
 	}
 
-	return fmt.Sprintf("%x", hasher.Sum(nil))
+	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
 }
 
 func (s SecretKey) Encrypt(message string) (string, error) {
-	key := []byte(s.HashSHA())[:32] // AES requires a key of 16, 24, or 32 bytes
+	hashSHA, err := s.HashSHA()
+	if err != nil {
+		return "", err
+	}
+	key := []byte(hashSHA)[:32] // AES requires a key of 16, 24, or 32 bytes
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "Failed to create cipher block")
 	}
 
 	plaintext := []byte(message)
@@ -73,7 +75,7 @@ func (s SecretKey) Encrypt(message string) (string, error) {
 	iv := ciphertext[:aes.BlockSize]
 
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		return "", err
+		return "", errors.Wrap(err, "Failed to generate initialization vector")
 	}
 
 	stream := cipher.NewCFBEncrypter(block, iv)
@@ -83,20 +85,24 @@ func (s SecretKey) Encrypt(message string) (string, error) {
 }
 
 func (s SecretKey) Decrypt(encryptedMessage string) (string, error) {
-	key := []byte(s.HashSHA())[:32] // AES requires a key of 16, 24, or 32 bytes
+	hashSHA, err := s.HashSHA()
+	if err != nil {
+		return "", err
+	}
+	key := []byte(hashSHA)[:32] // AES requires a key of 16, 24, or 32 bytes
 
 	ciphertext, err := base64.URLEncoding.DecodeString(encryptedMessage)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "Failed to decode encrypted message")
 	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "Failed to create cipher block")
 	}
 
 	if len(ciphertext) < aes.BlockSize {
-		return "", fmt.Errorf("ciphertext too short")
+		return "", errors.New("Ciphertext is too short")
 	}
 
 	iv := ciphertext[:aes.BlockSize]
