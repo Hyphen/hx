@@ -11,16 +11,16 @@ import (
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
-// EnvironmentVarsData represents environment variables data.
-type EnvironmentVarsData struct {
+// EnvInformation represents environment variables data.
+type EnvInformation struct {
 	Size           string `json:"size"`
 	CountVariables int    `json:"countVariables"`
 	Data           string `json:"data"`
 }
 
 // New processes the environment variables from the given file.
-func New(fileName string) (EnvironmentVarsData, error) {
-	var data EnvironmentVarsData
+func New(fileName string) (EnvInformation, error) {
+	var data EnvInformation
 
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -52,7 +52,7 @@ func New(fileName string) (EnvironmentVarsData, error) {
 	return data, nil
 }
 
-func (e *EnvironmentVarsData) EncryptData(key secretkey.SecretKeyer) (string, error) {
+func (e *EnvInformation) EncryptData(key secretkey.SecretKeyer) (string, error) {
 	encryptData, err := key.Encrypt(e.Data)
 	if err != nil {
 		return "", errors.Wrap(err, "Failed to encrypt environment data")
@@ -60,7 +60,7 @@ func (e *EnvironmentVarsData) EncryptData(key secretkey.SecretKeyer) (string, er
 	return encryptData, nil
 }
 
-func (e *EnvironmentVarsData) DecryptData(key secretkey.SecretKeyer) (string, error) {
+func (e *EnvInformation) DecryptData(key secretkey.SecretKeyer) (string, error) {
 	decryptedData, err := key.Decrypt(e.Data)
 	if err != nil {
 		return "", errors.Wrap(err, "Failed to decrypt environment data")
@@ -68,7 +68,7 @@ func (e *EnvironmentVarsData) DecryptData(key secretkey.SecretKeyer) (string, er
 	return decryptedData, nil
 }
 
-func (e *EnvironmentVarsData) ListDecryptedVars(key secretkey.SecretKeyer) ([]string, error) {
+func (e *EnvInformation) ListDecryptedVars(key secretkey.SecretKeyer) ([]string, error) {
 	decryptedData, err := key.Decrypt(e.Data)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to decrypt environment variables")
@@ -76,7 +76,7 @@ func (e *EnvironmentVarsData) ListDecryptedVars(key secretkey.SecretKeyer) ([]st
 	return strings.Split(decryptedData, "\n"), nil
 }
 
-func (e *EnvironmentVarsData) DecryptVarsAndSaveIntoFile(fileName string, key secretkey.SecretKeyer) (string, error) {
+func (e *EnvInformation) DecryptVarsAndSaveIntoFile(fileName string, key secretkey.SecretKeyer) (string, error) {
 	file, err := os.Create(fileName)
 	if err != nil {
 		return "", errors.Wrap(err, "Failed to create or open file for saving decrypted variables")
@@ -98,20 +98,12 @@ func (e *EnvironmentVarsData) DecryptVarsAndSaveIntoFile(fileName string, key se
 	return fileName, nil
 }
 
-type EnvironmentInformation struct {
+type Environment struct {
+	Name           string `json:"name"`
+	Color          string `json:"color"`
 	Size           string `json:"size"`
-	CountVariables int    `json:"countVariables"`
+	CountVariables string `json:"countVariables"`
 	Data           string `json:"data"`
-	AppId          string `json:"appId"`
-	EnvId          string `json:"envId"`
-}
-
-func (e *EnvironmentInformation) ToEnvironmentVarsData() EnvironmentVarsData {
-	return EnvironmentVarsData{
-		Size:           e.Size,
-		CountVariables: e.CountVariables,
-		Data:           e.Data,
-	}
 }
 
 func GetEnvName(env string) (string, error) {

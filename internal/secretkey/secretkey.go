@@ -18,7 +18,7 @@ type SecretKey struct {
 
 type SecretKeyer interface {
 	Base64() string
-	HashSHA() string
+	HashSHA() (string, error)
 	Encrypt(message string) (string, error)
 	Decrypt(encryptedMessage string) (string, error)
 }
