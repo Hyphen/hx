@@ -8,6 +8,7 @@ import (
 	"github.com/Hyphen/cli/cmd/auth"
 	"github.com/Hyphen/cli/cmd/config"
 	"github.com/Hyphen/cli/cmd/initialize"
+	"github.com/Hyphen/cli/cmd/members"
 	"github.com/Hyphen/cli/cmd/organization"
 	"github.com/Hyphen/cli/cmd/project"
 	"github.com/Hyphen/cli/cmd/update"
@@ -31,6 +32,7 @@ func init() {
 	rootCmd.AddCommand(project.ProjectCmd)
 	rootCmd.AddCommand(config.ConfigCmd)
 	rootCmd.AddCommand(organization.OrganizationCmd)
+	rootCmd.AddCommand(members.MembersCmd)
 
 	rootCmd.PersistentFlags().StringVar(&utils.OrgFlag, "org", "", "Organization ID (default is used if not provided)")
 	rootCmd.PersistentFlags().BoolVarP(&utils.YesFlag, "yes", "y", false, "Automatically answer yes for prompts")
