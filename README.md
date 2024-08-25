@@ -1,11 +1,11 @@
 # Hyphen CLI Command Reference
 
-## Main Commands
 
 ## Env variables
 - `HYPHEN_CUSTOM_AUTH`: this should be the dev base url, example: `https://dev-auth.hyphen.ai`
 - `HYPHEN_CUSTOM_APIX`: this should be the dev base url, example: `https://dev-api.hyphen.ai`
 
+## Main Commands
 
 ### `hyphen`
 
@@ -16,152 +16,157 @@ Usage:
 hyphen [command]
 ```
 
-Available Commands:
-- `version`: Display the version of the Hyphen CLI
-- `update`: Update the Hyphen CLI
-- `env`: Environment-related commands
-- `init`: Initialize the Hyphen CLI
-
-## Environment Commands
-
-### `hyphen env`
-
-Manage environments and environment variables.
-
-Usage:
-```bash
-hyphen env [command]
-```
-
+Global Flags:
+  - --org: Organization ID (default is used if not provided)
+  - --yes, -y: Automatically answer yes for prompts
 
 Available Commands:
-- `init`: Initialize the environment
-- `create`: Create a new environment file
-- `decrypt`: Decrypt environment variables
-- `encrypt`: Encrypt environment variables
-- `merge`: Merge environment variables
-- `pull`: Pull environment variables
-- `push`: Push environment variables
-- `run`: Run a command with environment variables
+  - `auth`: Authenticate with Hyphen
+  - `config`: Manage Hyphen CLI configuration
+  - `init`: Initialize a project
+  - `members`: Manage organization members
+  - `organization`: Manage organizations
+  - `project`: Manage projects
+  - `update`: Update the Hyphen CLI
+  - `version`: Display the version of the Hyphen CLI
 
-### `hyphen env init`
+## Authentication Command
+`hyphen auth`
+Authenticate with Hyphen.
+Usage:
 
-Initialize the environment with necessary configurations.
+```bash
+hyphen auth
+```
+This command starts the OAuth flow and saves the credentials.
+Configuration Commands
 
+
+## Configuration Commands
+`hyphen config`
+Manage Hyphen CLI configuration.
 Usage:
 ```bash
-hyphen env init
+hyphen config [command]
 ```
+Available Subcommands:
+  - `set`: Set configuration values
 
-
-### `hyphen env create [ENVIRONMENT]`
-
-Create a new environment file for the specified environment.
-
+`hyphen config set organization-id <id>`
+Set the organization ID for the Hyphen CLI.
 Usage:
 ```bash
-hyphen env create [ENVIRONMENT]
-```
-Example:
-```bash
-hyphen env create production
-```
-or 
-```bash
-#This will create de deafult env: is like typing hyphen env default 
-hyphen env create 
+hyphen config set organization-id <id>
 ```
 
-### `hyphen env decrypt`
-
-Decrypt environment variables.
-
-Usage:
-```bash
-hyphen env decrypt -s [STRING]
-hyphen env decrypt -f [FILE]
-```
-Flags:
-- `-s, --string`: String to decrypt
-- `-f, --file`: File to decrypt
-
-### `hyphen env encrypt [FILE]`
-
-Encrypt a file containing environment variables.
-
-Usage:
-```bash
-hyphen env encrypt [FILE]
-```
-
-
-### `hyphen env merge [ENVIRONMENT] [FILE]`
-
-Merge environment variables into a file.
-
-Usage:
-```bash
-hyphen env merge [ENVIRONMENT] [FILE]
-```
-
-Flags:
-- `-f, --file`: Specify the output file name
-
-### `hyphen env push [ENVIRONMENT]`
-
-Push an existing environmental variable file to Hyphen.
-
-Usage:
-```bash
-hyphen env push [ENVIRONMENT]
-```
-Flags:
-- `-f, --file`: Specify the file to push
-
-### `hyphen env run [ENVIRONMENT] [COMMAND] [ARGS...]`
-
-Run a command using environment variables from a specified environment.
-
-Usage:
-```bash
-hyphen env run [ENVIRONMENT] [COMMAND] [ARGS...]
-```
-Flags:
-- `-f, --file`: Specific environment file to use
-- `-s, --stream`: Stream environment variables
-
-
-### hyphen env list
-List all environments and their information in a table format.
-
-Usage:
-```bash
-hyphen env list [flags]
-```
-
- Flags:
-  - --pageSize, -s: Number of environments per page (default is 10)
-  - --pageNum, -n: Page number to display (default is 1)
 
 ## Initialization Command
-
-### `hyphen init`
-
-Initialize the Hyphen CLI.
-
+`hyphen init`
+Initialize a project.
 Usage:
 ```bash
 hyphen init
 ```
+This command creates a new project and initializes the manifest file.
 
-This command sets up environment variables and aliases for the CLI tool.
+## Member Management Commands
+`hyphen members`
+Manage organization members.
+Usage:
+```bash
+hyphen members [command]
+```
+
+Available Subcommands:
+  - `create`: Create a new member
+  - `delete`: Delete a member
+  - `list`: List all members
+
+
+`hyphen members create`
+
+Create a new member in the organization.
+Usage:
+```bash
+hyphen members create --firstName <firstName> --lastName <lastName> --email <email>
+```
+Flags:
+  - `--firstName, -f`: First name of the new member (required)
+  - `--lastName, -l`: Last name of the new member (required)
+	- `--email, -e`: Email of the new member (required)
+
+`hyphen members delete <member-id>`
+
+Delete a member from the organization.
+Usage:
+```bash
+hyphen members delete <member-id>
+```
+Aliases: `del`
+
+
+`hyphen members list`
+List all members of an organization.
+Usage:
+```bash
+hyphen members list [flags]
+```
+Aliases: `ls`
+Flags:
+  - `--pageNum, -n`: Page number (default 1)
+  - `--pageSize, -s`: Page size (default 10)
+
+
+## Organization Management Commands
+`hyphen organization`
+Manage organizations.
+Usage:
+```bash
+hyphen organization [command]
+```
+Available Subcommands:
+  - `list`: List all organizations
+
+`hyphen organization list`
+List all organizations.
+Usage:
+```bash
+hyphen organization list
+```
+Aliases: `ls`
+
+
+## Project Management Commands
+`hyphen project`
+Manage projects.
+Usage:
+```bash
+hyphen project [command]
+```
+Available Subcommands:
+  - `list`: List all projects
+
+`hyphen project list`
+List all projects.
+Usage:
+```bash
+hyphen project list [flags]
+```
+Aliases: `ls`
+Flags:
+  - `--pageNum`, -n: Page number (default 1)
+  - `--pageSize`, -s: Page size (default 10)
 
 ## Other Commands
 
-### `hyphen version`
-
+`hyphen update`
+Update the Hyphen CLI.
+Usage:
+```bash
+hyphen update
+```
+`hyphen version`
 Display the version of the Hyphen CLI.
-
 Usage:
 ```bash
 hyphen version
