@@ -2,13 +2,14 @@ package user
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/pkg/errors"
+	"github.com/Hyphen/cli/pkg/httputil"
 )
 
 type UserServicer interface {
@@ -18,6 +19,7 @@ type UserServicer interface {
 type UserService struct {
 	baseUrl      string
 	oauthService oauth.OAuthServicer
+	client       httputil.Client
 }
 
 func NewService() UserServicer {
@@ -26,8 +28,11 @@ func NewService() UserServicer {
 		baseUrl = customAPI
 	}
 	return &UserService{
-		baseUrl,
-		oauth.DefaultOAuthService(),
+		baseUrl:      baseUrl,
+		oauthService: oauth.DefaultOAuthService(),
+		client: &http.Client{
+			Timeout: time.Second * 30,
+		},
 	}
 }
 
@@ -37,8 +42,6 @@ func (us *UserService) GetUserInformation() (UserInfo, error) {
 		return UserInfo{}, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
 	}
 
-	client := &http.Client{}
-
 	req, err := http.NewRequest("GET", us.baseUrl+"/api/me/", nil)
 	if err != nil {
 		return UserInfo{}, errors.Wrap(err, "Failed to prepare the request. Please try again later.")
@@ -47,14 +50,14 @@ func (us *UserService) GetUserInformation() (UserInfo, error) {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := client.Do(req)
+	resp, err := us.client.Do(req)
 	if err != nil {
 		return UserInfo{}, errors.Wrap(err, "Failed to connect to the server. Please check your internet connection and try again.")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return UserInfo{}, errors.New(fmt.Sprintf("Server returned an error (status code %d). Please try again later.", resp.StatusCode))
+		return UserInfo{}, errors.HandleHTTPError(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
