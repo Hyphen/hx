@@ -63,17 +63,27 @@ jobs:
           }
 
           artifacts=(
+            "hyphen-$VERSION-linux"
+            "hyphen-$VERSION-macos"
+            "hyphen-$VERSION-macos-arm"
+            "hyphen-$VERSION-windows"
+          )
+
+          new_names=(
             "$PACKAGE_NAME-$VERSION-linux"
             "$PACKAGE_NAME-$VERSION-macos"
             "$PACKAGE_NAME-$VERSION-macos-arm"
             "$PACKAGE_NAME-$VERSION-windows"
           )
 
-          for artifact in "${artifacts[@]}"; do
+          for i in "${!artifacts[@]}"; do
+            artifact="${artifacts[$i]}"
+            new_name="${new_names[$i]}"
             if [ -d "$artifact" ]; then
               file=$(find "$artifact" -type f -name "$artifact*" -print -quit)
               if [ -n "$file" ]; then
-                upload_file "$file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/${{ env.PACKAGE_NAME }}/$VERSION/$(basename $file)"
+                extension="${file##*.}"
+                upload_file "$file" "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/${{ env.PACKAGE_NAME }}/$VERSION/$new_name.$extension"
               else
                 echo "Warning: Expected file not found in $artifact directory"
               fi
