@@ -6,16 +6,25 @@ on:
       - published
 
 jobs:
+  extract-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Extract version without 'v' prefix
+        id: get_version
+        run: echo "version=$(echo ${{ github.ref_name }} | sed 's/^v//')" >> $GITHUB_OUTPUT
+
   build:
+    needs: extract-version
     uses: ./.github/workflows/build.yml
     with:
-      version: ${{ github.ref_name }}
+      version: ${{ needs.extract-version.outputs.version }}
 
   upload:
-    needs: build
+    needs: [extract-version, build]
     uses: ./.github/workflows/upload-to-r2.yml
     with:
-      version: ${{ github.ref_name }}
+      version: ${{ needs.extract-version.outputs.version }}
       package_name: hyphen-cli
     secrets: inherit
-

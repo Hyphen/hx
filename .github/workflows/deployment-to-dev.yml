@@ -62,16 +62,26 @@ jobs:
         id: set_output
         run: echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
-  build:
+  extract-version:
     needs: versioning
+    runs-on: ubuntu-latest
+    outputs:
+      version_without_v: ${{ steps.strip_v.outputs.version_without_v }}
+    steps:
+      - name: Strip 'v' prefix from version
+        id: strip_v
+        run: echo "version_without_v=$(echo ${{ needs.versioning.outputs.new_version }} | sed 's/^v//')" >> $GITHUB_OUTPUT
+
+  build:
+    needs: [versioning, extract-version]
     uses: ./.github/workflows/build.yml
     with:
-      version: ${{ needs.versioning.outputs.new_version }}
+      version: ${{ needs.extract-version.outputs.version_without_v }}
 
   upload:
-    needs: build
+    needs: [build, extract-version]
     uses: ./.github/workflows/upload-to-r2.yml
     with:
-      version: ${{ needs.versioning.outputs.new_version }}
+      version: ${{ needs.extract-version.outputs.version_without_v }}
       package_name: hyphen-cli-dev
     secrets: inherit
