@@ -156,7 +156,7 @@ func (ms *MemberService) DeleteMember(orgID, memberID string) error {
 		return errors.New("Received nil response")
 	}
 
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		return errors.HandleHTTPError(resp)
 	}
 
