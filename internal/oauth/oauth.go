@@ -55,14 +55,14 @@ func (rtp *RealTimeProvider) Now() time.Time {
 
 type BrowserOpener func(string) error
 
-type OAuthServiceInterface interface {
+type OAuthServicer interface {
 	IsTokenExpired(expiryTime int64) bool
 	RefreshToken(refreshToken string) (*TokenResponse, error)
 	GetValidToken() (string, error)
 }
 
 // Ensure OAuthService implements OAuthServiceInterface
-var _ OAuthServiceInterface = (*OAuthService)(nil)
+var _ OAuthServicer = (*OAuthService)(nil)
 
 type OAuthService struct {
 	baseUrl       string

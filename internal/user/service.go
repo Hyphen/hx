@@ -17,7 +17,7 @@ type UserServicer interface {
 
 type UserService struct {
 	baseUrl      string
-	oauthService oauth.OAuthServiceInterface
+	oauthService oauth.OAuthServicer
 }
 
 func NewService() UserServicer {

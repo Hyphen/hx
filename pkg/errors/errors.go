@@ -3,6 +3,8 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 )
 
 // Error wraps the original error and adds a user-friendly message
@@ -56,4 +58,26 @@ func (e *Error) Is(target error) bool {
 	}
 
 	return e.UserMessage == err.UserMessage
+}
+
+func HandleHTTPError(resp *http.Response) *Error {
+	body, _ := io.ReadAll(resp.Body)
+	switch resp.StatusCode {
+	case http.StatusBadRequest:
+		return Wrapf(New("BadRequest"), "bad request: %s", string(body))
+	case http.StatusUnauthorized:
+		return New("unauthorized: please check your credentials")
+	case http.StatusForbidden:
+		return New("forbidden: you don't have permission to perform this action")
+	case http.StatusNotFound:
+		return New("not found: the requested resource does not exist")
+	case http.StatusConflict:
+		return Wrapf(New("Conflict"), "conflict: %s", string(body))
+	case http.StatusTooManyRequests:
+		return New("rate limit exceeded: please try again later")
+	case http.StatusInternalServerError:
+		return New("internal server error: please try again later")
+	default:
+		return Wrapf(New("UnexpectedError"), "unexpected error (status code %d): %s", resp.StatusCode, string(body))
+	}
 }

@@ -7,9 +7,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/pkg/errors"
+	"github.com/Hyphen/cli/pkg/httputil"
 )
 
 type ProjectServicer interface {
@@ -21,7 +23,8 @@ type ProjectServicer interface {
 
 type ProjectService struct {
 	baseUrl      string
-	oauthService oauth.OAuthServiceInterface
+	oauthService oauth.OAuthServicer
+	httpClient   httputil.Client
 }
 
 func NewService() *ProjectService {
@@ -32,6 +35,9 @@ func NewService() *ProjectService {
 	return &ProjectService{
 		baseUrl:      baseUrl,
 		oauthService: oauth.DefaultOAuthService(),
+		httpClient: &http.Client{
+			Timeout: time.Second * 30,
+		},
 	}
 }
 
@@ -52,15 +58,14 @@ func (ps *ProjectService) GetListProjects(organizationID string, pageSize, pageN
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := ps.httpClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to send request")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed with status code: %d", resp.StatusCode)
+		return nil, errors.HandleHTTPError(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -113,15 +118,14 @@ func (ps *ProjectService) CreateProject(organizationID, alternateID, name string
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := ps.httpClient.Do(req)
 	if err != nil {
 		return Project{}, errors.Wrap(err, "Failed to send request")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return Project{}, fmt.Errorf("API request failed with status code: %d", resp.StatusCode)
+		return Project{}, errors.HandleHTTPError(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -154,15 +158,14 @@ func (ps *ProjectService) GetProject(organizationID, projectID string) (Project,
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := ps.httpClient.Do(req)
 	if err != nil {
 		return Project{}, errors.Wrap(err, "Failed to send request")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return Project{}, fmt.Errorf("API request failed with status code: %d", resp.StatusCode)
+		return Project{}, errors.HandleHTTPError(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -194,15 +197,14 @@ func (ps *ProjectService) DeleteProject(organizationID, projectID string) error 
 
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := ps.httpClient.Do(req)
 	if err != nil {
 		return errors.Wrap(err, "Failed to send request")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("API request failed with status code: %d", resp.StatusCode)
+		return errors.HandleHTTPError(resp)
 	}
 
 	return nil
