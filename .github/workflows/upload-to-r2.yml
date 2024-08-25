@@ -63,10 +63,10 @@ jobs:
           }
 
           artifacts=(
-            "hyphen-$VERSION-linux"
-            "hyphen-$VERSION-macos"
-            "hyphen-$VERSION-macos-arm"
-            "hyphen-$VERSION-windows"
+            "$PACKAGE_NAME-$VERSION-linux"
+            "$PACKAGE_NAME-$VERSION-macos"
+            "$PACKAGE_NAME-$VERSION-macos-arm"
+            "$PACKAGE_NAME-$VERSION-windows"
           )
 
           for artifact in "${artifacts[@]}"; do
@@ -86,10 +86,10 @@ jobs:
         run: |
           echo "Verifying uploaded files:"
           expected_files=(
-            "${{ env.PACKAGE_NAME }}/$VERSION/hyphen-$VERSION-linux"
-            "${{ env.PACKAGE_NAME }}/$VERSION/hyphen-$VERSION-macos"
-            "${{ env.PACKAGE_NAME }}/$VERSION/hyphen-$VERSION-macos-arm"
-            "${{ env.PACKAGE_NAME }}/$VERSION/hyphen-$VERSION-windows"
+            "${{ env.PACKAGE_NAME }}/$VERSION/${{ env.PACKAGE_NAME }}-$VERSION-linux"
+            "${{ env.PACKAGE_NAME }}/$VERSION/${{ env.PACKAGE_NAME }}-$VERSION-macos"
+            "${{ env.PACKAGE_NAME }}/$VERSION/${{ env.PACKAGE_NAME }}-$VERSION-macos-arm"
+            "${{ env.PACKAGE_NAME }}/$VERSION/${{ env.PACKAGE_NAME }}-$VERSION-windows"
           )
           
           for file in "${expected_files[@]}"; do

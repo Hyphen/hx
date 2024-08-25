@@ -14,6 +14,9 @@ import (
 	"os/exec"
 	"runtime"
 	"time"
+
+	"github.com/Hyphen/cli/config"
+	"github.com/Hyphen/cli/pkg/errors"
 )
 
 var (
@@ -55,6 +58,7 @@ type BrowserOpener func(string) error
 type OAuthServiceInterface interface {
 	IsTokenExpired(expiryTime int64) bool
 	RefreshToken(refreshToken string) (*TokenResponse, error)
+	GetValidToken() (string, error)
 }
 
 // Ensure OAuthService implements OAuthServiceInterface
@@ -89,7 +93,7 @@ func (s *OAuthService) generatePKCE() (string, string, error) {
 	codeVerifier := make([]byte, 32)
 	_, err := rand.Read(codeVerifier)
 	if err != nil {
-		return "", "", err
+		return "", "", errors.Wrap(err, "Failed to generate PKCE code verifier")
 	}
 
 	codeVerifierStr := base64.RawURLEncoding.EncodeToString(codeVerifier)
@@ -114,25 +118,25 @@ func (s *OAuthService) exchangeCodeForToken(code, codeVerifier string) (*TokenRe
 
 	req, err := http.NewRequest("POST", tokenURL, bytes.NewBufferString(data.Encode()))
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to create token exchange request")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to send token exchange request")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		bodyString := string(bodyBytes)
-		return nil, fmt.Errorf("failed to exchange code for token: %s", bodyString)
+		return nil, errors.New(fmt.Sprintf("Failed to exchange code for token: %s", bodyString))
 	}
 
 	var tokenResponse TokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to decode token response")
 	}
 
 	tokenResponse.ExpiryTime = s.timeProvider.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second).Unix()
@@ -153,7 +157,7 @@ func openBrowser(url string) error {
 	case "darwin":
 		cmd = "open"
 	default:
-		return fmt.Errorf("unsupported platform")
+		return errors.New("Unsupported platform for opening browser")
 	}
 
 	args = append(args, url)
@@ -170,7 +174,7 @@ func (s *OAuthService) StartOAuthServer() (*TokenResponse, error) {
 
 	authURL, err := url.Parse(authServerURL)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to parse authentication server URL")
 	}
 
 	query := authURL.Query()
@@ -198,7 +202,7 @@ func (s *OAuthService) StartOAuthServer() (*TokenResponse, error) {
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			http.Error(w, errorMessages[http.StatusBadRequest], http.StatusBadRequest)
-			errorChan <- fmt.Errorf("authorization code not found")
+			errorChan <- errors.New("Authorization code not found")
 			return
 		}
 
@@ -284,7 +288,7 @@ func (s *OAuthService) StartOAuthServer() (*TokenResponse, error) {
 	server := &http.Server{Addr: ":5001"}
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errorChan <- err
+			errorChan <- errors.Wrap(err, "Failed to start local server for OAuth flow")
 		}
 	}()
 
@@ -313,28 +317,48 @@ func (s *OAuthService) RefreshToken(refreshToken string) (*TokenResponse, error)
 
 	req, err := http.NewRequest("POST", tokenURL, bytes.NewBufferString(data.Encode()))
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to create refresh token request")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to send refresh token request")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		bodyString := string(bodyBytes)
-		return nil, fmt.Errorf("failed to refresh token: %s", bodyString)
+		return nil, errors.New(fmt.Sprintf("Failed to refresh token: %s", bodyString))
 	}
 
 	var tokenResponse TokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to decode refresh token response")
 	}
 
 	tokenResponse.ExpiryTime = s.timeProvider.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second).Unix()
 
 	return &tokenResponse, nil
+}
+
+func (s *OAuthService) GetValidToken() (string, error) {
+	credentials, err := config.LoadCredentials()
+	if err != nil {
+		return "", errors.Wrap(err, "Failed to load credentials")
+	}
+
+	if s.IsTokenExpired(credentials.Default.ExpiryTime) {
+		tokenResponse, err := s.RefreshToken(credentials.Default.HyphenRefreshToken)
+		if err != nil {
+			return "", errors.Wrap(err, "Failed to refresh token")
+		}
+		err = config.SaveCredentials(credentials.Default.OrganizationId, tokenResponse.AccessToken, tokenResponse.RefreshToken, tokenResponse.IDToken, tokenResponse.ExpiryTime)
+		if err != nil {
+			return "", errors.Wrap(err, "Failed to save refreshed credentials")
+		}
+		return tokenResponse.AccessToken, nil
+	}
+	return credentials.Default.HyphenAccessToken, nil
 }
