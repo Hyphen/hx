@@ -115,3 +115,29 @@ func LoadCredentials() (CredentialsConfig, error) {
 
 	return config, nil
 }
+
+// UpdateOrganizationID updates the organization ID in the credentials file
+func UpdateOrganizationID(organizationID string) error {
+	credentials, err := LoadCredentials()
+	if err != nil {
+		return errors.Wrap(err, "Failed to load existing credentials")
+	}
+
+	credentials.Default.OrganizationId = organizationID
+
+	configDir := Env.GetConfigDirectory()
+	credentialFilePath := filepath.Join(configDir, CredentialFile)
+
+	file, err := os.Create(credentialFilePath)
+	if err != nil {
+		return errors.Wrap(err, "Failed to open credentials file for writing")
+	}
+	defer file.Close()
+
+	encoder := toml.NewEncoder(file)
+	if err := encoder.Encode(credentials); err != nil {
+		return errors.Wrap(err, "Failed to write updated credentials")
+	}
+
+	return nil
+}
