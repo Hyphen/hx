@@ -29,16 +29,20 @@ func login() error {
 	if err != nil {
 		return fmt.Errorf("failed to start OAuth server: %w", err)
 	}
+	var organizationID string
+
+	if err := config.SaveCredentials(organizationID, token.AccessToken, token.RefreshToken, token.IDToken, token.ExpiryTime); err != nil {
+		return fmt.Errorf("failed to save credentials: %w", err)
+	}
+
 	user, error := user.NewService().GetUserInformation()
 	if error != nil {
 		return fmt.Errorf("failed to get user information: %w", error)
 	}
+	organizationID = user.Memberships[0].Organization.ID
 
-	//Use this as default org
-	organizationID := user.Memberships[0].Organization.ID
-
-	if err := config.SaveCredentials(organizationID, token.AccessToken, token.RefreshToken, token.IDToken, token.ExpiryTime); err != nil {
-		return fmt.Errorf("failed to save credentials: %w", err)
+	if err := config.UpdateOrganizationID(organizationID); err != nil {
+		return fmt.Errorf("failed to update organization ID: %w", err)
 	}
 
 	fmt.Println("Login successful!")
