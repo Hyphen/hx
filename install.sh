@@ -30,6 +30,41 @@ get_latest_version() {
     echo "$version"
 }
 
+# Function to create alias
+create_alias() {
+    local alias_added=false
+    local alias_command="alias hx='hyphen'"
+
+    # Function to add alias to a specific file
+    add_alias_to_file() {
+        local file="$1"
+        if [ -f "$file" ]; then
+            echo "Adding alias 'hx' for hyphen to $file"
+            echo "$alias_command" >> "$file"
+            alias_added=true
+        fi
+    }
+
+    # Add to .zshrc if it exists
+    add_alias_to_file "$HOME/.zshrc"
+
+    # Add to .bashrc if it exists
+    add_alias_to_file "$HOME/.bashrc"
+
+    # If neither .zshrc nor .bashrc exist, try .bash_profile
+    if [ "$alias_added" = false ]; then
+        add_alias_to_file "$HOME/.bash_profile"
+    fi
+
+    if [ "$alias_added" = true ]; then
+        echo "Alias added. Please restart your terminal or source the relevant configuration file(s) to apply changes."
+    else
+        echo "Could not find .zshrc, .bashrc, or .bash_profile in your home directory."
+        echo "Please add the following alias manually to your shell configuration file:"
+        echo "  $alias_command"
+    fi
+}
+
 # Main installation function
 install_cli() {
     local package_name="hyphen-cli"
@@ -66,6 +101,9 @@ install_cli() {
 
     echo "${binary_name} has been successfully installed!"
     echo "You can now run '${binary_name}' from anywhere in your terminal."
+
+    # Add the alias
+    create_alias
 }
 
 # Run the installation
