@@ -110,7 +110,7 @@ func (ms *MemberService) CreateMemberForOrg(orgID string, member Member) (Member
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusCreated {
 		return Member{}, errors.HandleHTTPError(resp)
 	}
 
@@ -156,7 +156,7 @@ func (ms *MemberService) DeleteMember(orgID, memberID string) error {
 		return errors.New("Received nil response")
 	}
 
-	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusNoContent {
 		return errors.HandleHTTPError(resp)
 	}
 

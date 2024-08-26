@@ -124,7 +124,7 @@ func (ps *ProjectService) CreateProject(organizationID, alternateID, name string
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusCreated {
 		return Project{}, errors.HandleHTTPError(resp)
 	}
 
