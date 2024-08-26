@@ -21,7 +21,7 @@ detect_os() {
 # Function to get latest version
 get_latest_version() {
     local package_name="$1"
-    local api_url="https://dev-api.hyphen.ai/api/downloads/${package_name}/versions?latest=true"
+    local api_url="https://api.hyphen.ai/api/downloads/${package_name}/versions?latest=true"
     local version=$(curl -sSf "$api_url" | grep -o '"version":"[^"]*' | cut -d'"' -f4)
     if [ -z "$version" ]; then
         echo "Failed to get latest version" >&2
@@ -40,7 +40,7 @@ install_cli() {
     fi
 
     local version=$(get_latest_version "$package_name")
-    local download_url="https://dev-api.hyphen.ai/api/downloads/${package_name}/${version}?os=${os}"
+    local download_url="https://api.hyphen.ai/api/downloads/${package_name}/${version}?os=${os}"
     local temp_dir=$(mktemp -d)
     local binary_name="hyphen"
 
