@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>hyphen</id>
+    <version>$version$</version>
+    <title>Hyphen CLI</title>
+    <authors>hyphen</authors>
+    <projectUrl>https://your-project-url.com</projectUrl>
+    <licenseUrl>https://your-license-url.com</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Description of your Hyphen CLI tool</description>
+    <tags>cli hyphen</tags>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>
+

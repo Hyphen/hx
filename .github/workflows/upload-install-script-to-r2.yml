@@ -1,0 +1,58 @@
+name: Upload Install Script to R2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'install.sh'
+  workflow_dispatch:
+    inputs:
+      file_path:
+        description: 'Path to the file to upload (default: install.sh)'
+        required: false
+        default: 'install.sh'
+      destination_path:
+        description: 'Destination path in R2 (default: hyphen-cli/install/latest/unix/install.sh)'
+        required: false
+        default: 'hyphen-cli/install/latest/unix/install.sh'
+
+env:
+  CDN_R2_ACCOUNT_ID: e5146df3269d748421cee3ff9d6fa02a
+  CDN_R2_ACCESS_KEY_ID: ${{ secrets.CDN_R2_ACCESS_KEY_ID }}
+  CDN_R2_SECRET_ACCESS_KEY: ${{ secrets.CDN_R2_SECRET_ACCESS_KEY }}
+  CDN_STORAGE_BUCKET_NAME: cdn-hyphen-ai
+
+jobs:
+  upload-install-script:
+    name: Upload Install Script
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS CLI
+        run: |
+          aws configure set aws_access_key_id ${{ env.CDN_R2_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ env.CDN_R2_SECRET_ACCESS_KEY }}
+          aws configure set region us-east-1
+
+      - name: Upload file to R2
+        run: |
+          FILE_PATH="${{ github.event.inputs.file_path || 'install.sh' }}"
+          DEST_PATH="${{ github.event.inputs.destination_path || 'hyphen-cli/install/latest/unix/install.sh' }}"
+          aws s3 cp $FILE_PATH s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/$DEST_PATH \
+            --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+
+      - name: Verify upload
+        run: |
+          DEST_PATH="${{ github.event.inputs.destination_path || 'hyphen-cli/install/latest/unix/install.sh' }}"
+          echo "Verifying uploaded file:"
+          if aws s3 ls "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/$DEST_PATH" \
+            --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com; then
+            echo "Verified: $DEST_PATH"
+          else
+            echo "Error: File not found in R2: $DEST_PATH"
+            exit 1
+          fi
