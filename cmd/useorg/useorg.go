@@ -1,4 +1,4 @@
-package set
+package useorg
 
 import (
 	"fmt"
@@ -7,8 +7,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var organizationIDCmd = &cobra.Command{
-	Use:   "organization-id <id>",
+var UseOrgCmd = &cobra.Command{
+	Use:   "use-org <id>",
 	Short: "Set the organization ID",
 	Long:  `Set the organization ID for the Hyphen CLI.`,
 	Args:  cobra.ExactArgs(1),

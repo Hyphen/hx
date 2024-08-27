@@ -6,12 +6,9 @@ import (
 
 	// "github.com/Hyphen/cli/cmd/env"
 	"github.com/Hyphen/cli/cmd/auth"
-	"github.com/Hyphen/cli/cmd/config"
 	"github.com/Hyphen/cli/cmd/initialize"
-	"github.com/Hyphen/cli/cmd/members"
-	"github.com/Hyphen/cli/cmd/organization"
-	"github.com/Hyphen/cli/cmd/project"
 	"github.com/Hyphen/cli/cmd/update"
+	"github.com/Hyphen/cli/cmd/useorg"
 	"github.com/Hyphen/cli/cmd/version"
 	"github.com/Hyphen/cli/pkg/utils"
 	"github.com/spf13/cobra"
@@ -29,12 +26,11 @@ func init() {
 	// rootCmd.AddCommand(env.EnvCmd)
 	rootCmd.AddCommand(initialize.InitCmd)
 	rootCmd.AddCommand(auth.AuthCmd)
-	rootCmd.AddCommand(project.ProjectCmd)
-	rootCmd.AddCommand(config.ConfigCmd)
-	rootCmd.AddCommand(organization.OrganizationCmd)
-	rootCmd.AddCommand(members.MembersCmd)
+	rootCmd.AddCommand(useorg.UseOrgCmd)
 
-	rootCmd.PersistentFlags().StringVar(&utils.OrgFlag, "org", "", "Organization ID (default is used if not provided)")
+	rootCmd.PersistentFlags().StringVar(&utils.OrgFlag, "org", "", "Organization ID (e.g., org_123)")
+	rootCmd.PersistentFlags().StringVar(&utils.ProjFlag, "proj", "", "Project ID (e.g., proj_123)")
+	rootCmd.PersistentFlags().StringVar(&utils.EnvFlag, "env", "", "Environment ID (e.g., env_12345)")
 	rootCmd.PersistentFlags().BoolVarP(&utils.YesFlag, "yes", "y", false, "Automatically answer yes for prompts")
 }
 
