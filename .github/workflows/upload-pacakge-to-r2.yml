@@ -1,4 +1,4 @@
-name: Upload to R2
+name: Upload Package to R2
 
 on:
   workflow_call:
