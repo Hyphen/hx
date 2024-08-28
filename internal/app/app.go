@@ -19,7 +19,7 @@ type Organization struct {
 	Name string `json:"name"`
 }
 
-func CheckProjectId(appId string) error {
+func CheckAppId(appId string) error {
 	validRegex := regexp.MustCompile("^[a-z0-9-_]+$")
 	if !validRegex.MatchString(appId) {
 		suggested := strings.ToLower(appId)
@@ -30,7 +30,7 @@ func CheckProjectId(appId string) error {
 
 		return errors.Wrapf(
 			errors.New("invalid project ID"),
-			"You are using unpermitted characters. A valid app ID can only contain lowercase letters, numbers, hyphens, and underscores. Suggested valid ID: %s",
+			"You are using unpermitted characters. A valid App ID can only contain lowercase letters, numbers, hyphens, and underscores. Suggested valid ID: %s",
 			suggested,
 		)
 	}

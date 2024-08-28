@@ -13,46 +13,58 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var projectIDFlag string
+var appIDFlag string
 
 var InitCmd = &cobra.Command{
-	Use:   "init <project name>",
-	Short: "init a project",
-	Long:  ``,
-	Args:  cobra.ExactArgs(1),
+	Use:   "init <app name>",
+	Short: "Initialize a new app",
+	Long: `The 'hyphen init' command initializes a new app within your organization.
+
+You need to provide an app name as a positional argument. Optionally, you can specify a custom app ID using the '--id' flag. If no app ID is provided, a default ID will be generated based on the app name.
+
+If a manifest file already exists, you will be prompted to confirm if you want to overwrite it, unless the '--yes' flag is provided, in which case the manifest file will be overwritten automatically.
+
+Example usages:
+  hyphen init MyApp
+  hyphen init MyApp --id custom-app-id --yes
+
+Flags:
+  --id, -i   Specify a custom app ID (optional)
+  --yes, -y  Automatically confirm prompts and overwrite files if necessary`,
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		projectService := app.NewService()
+		appService := app.NewService()
 		orgID, err := utils.GetOrganizationID()
 		if err != nil {
 			cmd.PrintErrf("Error: %s\n", err)
 			return
 		}
 
-		projectName := args[0]
-		if projectName == "" {
-			cmd.PrintErrf("Project name is required.\n")
+		appName := args[0]
+		if appName == "" {
+			cmd.PrintErrf("App name is required.\n")
 			return
 		}
 
-		defaultProjectAlternateId := generateDefaultProjectId(projectName)
-		projectAlternateId := projectIDFlag
-		if projectAlternateId == "" {
-			projectAlternateId = defaultProjectAlternateId
+		defaultAppAlternateId := generateDefaultAppId(appName)
+		appAlternateId := appIDFlag
+		if appAlternateId == "" {
+			appAlternateId = defaultAppAlternateId
 		}
 
-		err = app.CheckProjectId(projectAlternateId)
+		err = app.CheckAppId(appAlternateId)
 		if err != nil {
 			suggestedID := strings.TrimSpace(strings.Split(err.Error(), ":")[1])
 			yesFlag, _ := cmd.Flags().GetBool("yes")
 			if yesFlag {
-				projectAlternateId = suggestedID
-				cmd.Printf("Using suggested project ID: %s\n", suggestedID)
+				appAlternateId = suggestedID
+				cmd.Printf("Using suggested app ID: %s\n", suggestedID)
 			} else {
 				if !promptForSuggestedID(os.Stdin, suggestedID) {
 					cmd.Println("Operation cancelled.")
 					return
 				}
-				projectAlternateId = suggestedID
+				appAlternateId = suggestedID
 			}
 		}
 
@@ -66,18 +78,18 @@ var InitCmd = &cobra.Command{
 			}
 		}
 
-		newProject, err := projectService.CreateApp(orgID, projectAlternateId, projectName)
+		newApp, err := appService.CreateApp(orgID, appAlternateId, appName)
 		if err != nil {
 			cmd.PrintErrf("%s\n", err)
 			os.Exit(1)
 		}
 
-		_, err = manifest.Initialize(orgID, newProject.Name, newProject.ID, newProject.AlternateId)
+		_, err = manifest.Initialize(orgID, newApp.Name, newApp.ID, newApp.AlternateId)
 		if err != nil {
 			cmd.PrintErrf("%s\n", err)
 			os.Exit(1)
 		}
-		cmd.Println("Project initialized")
+		cmd.Println("App initialized")
 
 		if err := ensureGitignore(manifest.ManifestConfigFile); err != nil {
 			cmd.PrintErrf("Error checking/updating .gitignore: %s\n", err)
@@ -87,10 +99,10 @@ var InitCmd = &cobra.Command{
 }
 
 func init() {
-	InitCmd.Flags().StringVarP(&projectIDFlag, "id", "i", "", "Project ID (optional)")
+	InitCmd.Flags().StringVarP(&appIDFlag, "id", "i", "", "App ID (optional)")
 }
 
-func generateDefaultProjectId(appName string) string {
+func generateDefaultAppId(appName string) string {
 	return strings.ToLower(strings.ReplaceAll(appName, " ", "-"))
 }
 
@@ -118,7 +130,7 @@ func promptForOverwrite(reader io.Reader) bool {
 func promptForSuggestedID(reader io.Reader, suggestedID string) bool {
 	r := bufio.NewReader(reader)
 	for {
-		fmt.Printf("Invalid project ID. Do you want to use the suggested ID [%s]? (Y/n): ", suggestedID)
+		fmt.Printf("Invalid app ID. Do you want to use the suggested ID [%s]? (Y/n): ", suggestedID)
 		response, err := r.ReadString('\n')
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error reading input: %s\n", err)
