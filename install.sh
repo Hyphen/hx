@@ -68,13 +68,17 @@ create_alias() {
 # Main installation function
 install_cli() {
     local package_name="hyphen-cli"
+    local version="$1"
     local os=$(detect_os)
     if [ "$os" = "unsupported" ]; then
         echo "Unsupported operating system"
         exit 1
     fi
 
-    local version=$(get_latest_version "$package_name")
+    if [ -z "$version" ]; then
+        version=$(get_latest_version "$package_name")
+    fi
+
     local download_url="https://api.hyphen.ai/api/downloads/${package_name}/${version}?os=${os}"
     local temp_dir=$(mktemp -d)
     local binary_name="hyphen"
@@ -106,5 +110,5 @@ install_cli() {
     create_alias
 }
 
-# Run the installation
-install_cli
+# Run the installation with an optional version parameter
+install_cli "$1"
