@@ -13,9 +13,9 @@ on:
         required: false
         default: 'install.sh'
       destination_path:
-        description: 'Destination path in R2 (default: hyphen-cli/install/latest/unix/install.sh)'
+        description: 'Destination path in R2 (default: install/latest/unix/install.sh)'
         required: false
-        default: 'hyphen-cli/install/latest/unix/install.sh'
+        default: 'install/latest/unix/install.sh'
 
 env:
   CDN_R2_ACCOUNT_ID: e5146df3269d748421cee3ff9d6fa02a
@@ -41,13 +41,13 @@ jobs:
       - name: Upload file to R2
         run: |
           FILE_PATH="${{ github.event.inputs.file_path || 'install.sh' }}"
-          DEST_PATH="${{ github.event.inputs.destination_path || 'hyphen-cli/install/latest/unix/install.sh' }}"
+          DEST_PATH="${{ github.event.inputs.destination_path || 'install/latest/unix/install.sh' }}"
           aws s3 cp $FILE_PATH s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/$DEST_PATH \
             --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
 
       - name: Verify upload
         run: |
-          DEST_PATH="${{ github.event.inputs.destination_path || 'hyphen-cli/install/latest/unix/install.sh' }}"
+          DEST_PATH="${{ github.event.inputs.destination_path || 'install/latest/unix/install.sh' }}"
           echo "Verifying uploaded file:"
           if aws s3 ls "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/$DEST_PATH" \
             --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com; then

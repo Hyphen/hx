@@ -24,44 +24,69 @@ get_latest_version() {
     local api_url="https://api.hyphen.ai/api/downloads/${package_name}/versions?latest=true"
     local version=$(curl -sSf "$api_url" | grep -o '"version":"[^"]*' | cut -d'"' -f4)
     if [ -z "$version" ]; then
-        echo "Failed to get latest version" >&2
+        printf "Failed to get latest version\n" >&2
         exit 1
     fi
     echo "$version"
 }
 
+# Function to check which shell is being used
+detect_shell() {
+    case "$SHELL" in
+        */zsh) echo "zsh";;
+        */bash) echo "bash";;
+        */ksh) echo "ksh";;
+        */fish) echo "fish";;
+        */csh) echo "csh";;
+        */tcsh) echo "tcsh";;
+        *) echo "unsupported";;
+    esac
+}
+
 # Function to create alias
 create_alias() {
-    local alias_added=false
     local alias_command="alias hx='hyphen'"
+    local shell=$(detect_shell)
+    local config_file
+    local alias_added=false
 
-    # Function to add alias to a specific file
-    add_alias_to_file() {
-        local file="$1"
-        if [ -f "$file" ]; then
-            echo "Adding alias 'hx' for hyphen to $file"
-            echo "$alias_command" >> "$file"
+    case "$shell" in
+        zsh) config_file="$HOME/.zshrc";;
+        bash) 
+            if [ -f "$HOME/.bashrc" ]; then
+                config_file="$HOME/.bashrc"
+            else
+                config_file="$HOME/.bash_profile"
+            fi
+            ;;
+        ksh) config_file="$HOME/.kshrc";;
+        fish) config_file="$HOME/.config/fish/config.fish";;
+        csh|tcsh) config_file="$HOME/.cshrc";;
+        *) 
+            printf "\nUnsupported shell. Please add the following alias manually to your shell configuration file:\n"
+            printf "  $alias_command\n\n"
+            exit 1
+            ;;
+    esac
+
+    if [ -f "$config_file" ]; then
+        if ! grep -q "$alias_command" "$config_file"; then
+            printf "\nAdding alias 'hx' for hyphen to $config_file\n"
+            echo "$alias_command" >> "$config_file"
             alias_added=true
+        else
+            printf "\nAlias 'hx' already exists in $config_file\n\n"
+            return
         fi
-    }
-
-    # Add to .zshrc if it exists
-    add_alias_to_file "$HOME/.zshrc"
-
-    # Add to .bashrc if it exists
-    add_alias_to_file "$HOME/.bashrc"
-
-    # If neither .zshrc nor .bashrc exist, try .bash_profile
-    if [ "$alias_added" = false ]; then
-        add_alias_to_file "$HOME/.bash_profile"
     fi
 
     if [ "$alias_added" = true ]; then
-        echo "Alias added. Please restart your terminal or source the relevant configuration file(s) to apply changes."
+        printf "\nAlias added. Please source the configuration file to apply changes:\n"
+        printf "  source $config_file\n\n"
     else
-        echo "Could not find .zshrc, .bashrc, or .bash_profile in your home directory."
-        echo "Please add the following alias manually to your shell configuration file:"
-        echo "  $alias_command"
+        printf "\nCould not find a suitable configuration file in your home directory.\n"
+        printf "Please add the following alias manually to your shell configuration file:\n"
+        printf "  $alias_command\n\n"
     fi
 }
 
@@ -71,7 +96,7 @@ install_cli() {
     local version="$1"
     local os=$(detect_os)
     if [ "$os" = "unsupported" ]; then
-        echo "Unsupported operating system"
+        printf "\nUnsupported operating system\n\n"
         exit 1
     fi
 
@@ -83,7 +108,7 @@ install_cli() {
     local temp_dir=$(mktemp -d)
     local binary_name="hyphen"
 
-    echo "Downloading ${package_name} version ${version} for ${os}..."
+    printf "\nDownloading ${package_name} version ${version} for ${os}...\n"
     curl -sSfL -L "$download_url" -o "${temp_dir}/${binary_name}"
     
     chmod +x "${temp_dir}/${binary_name}"
@@ -95,16 +120,16 @@ install_cli() {
             install_dir="/usr/local/bin"
             ;;
         windows)
-            echo "Windows installation is not supported by this script."
+            printf "\nWindows installation is not supported by this script.\n\n"
             exit 1
             ;;
     esac
 
-    echo "Installing ${binary_name} to ${install_dir}..."
+    printf "\nInstalling ${binary_name} to ${install_dir}...\n"
     sudo mv "${temp_dir}/${binary_name}" "${install_dir}/"
 
-    echo "${binary_name} has been successfully installed!"
-    echo "You can now run '${binary_name}' from anywhere in your terminal."
+    printf "\n${binary_name} has been successfully installed!\n"
+    printf "You can now run '${binary_name}' from anywhere in your terminal.\n\n"
 
     # Add the alias
     create_alias
