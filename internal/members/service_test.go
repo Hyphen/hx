@@ -205,12 +205,18 @@ func TestMemberService_ReadBodyError(t *testing.T) {
 	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
 	errorReader := &ErrorReader{Err: errors.New("read error")}
-	mockResponse := &http.Response{
+	mockResponseGet := &http.Response{
 		StatusCode: http.StatusOK,
 		Body:       io.NopCloser(errorReader),
 	}
 
-	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
+	mockResponseCreate := &http.Response{
+		StatusCode: http.StatusCreated,
+		Body:       io.NopCloser(errorReader),
+	}
+
+	mockHTTPClient.On("Do", mock.Anything).Return(mockResponseGet, nil).Once()
+	mockHTTPClient.On("Do", mock.Anything).Return(mockResponseCreate, nil).Once()
 
 	_, err := service.ListMembers("org1")
 	assert.Error(t, err)

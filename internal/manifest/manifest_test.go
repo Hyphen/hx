@@ -19,11 +19,11 @@ func TestInitialize(t *testing.T) {
 	}()
 
 	t.Run("Successful initialization", func(t *testing.T) {
-		m, err := Initialize("org1", "TestProject", "proj1", "test-proj")
+		m, err := Initialize("org1", "TestApp", "app1", "test-app")
 		assert.NoError(t, err)
-		assert.Equal(t, "TestProject", m.ProjectName)
-		assert.Equal(t, "proj1", m.ProjectId)
-		assert.Equal(t, "test-proj", m.ProjectAlternateId)
+		assert.Equal(t, "TestApp", m.AppName)
+		assert.Equal(t, "app1", m.AppId)
+		assert.Equal(t, "test-app", m.AppAlternateId)
 		assert.NotEmpty(t, m.SecretKey)
 
 		// Check if file was created
@@ -36,7 +36,7 @@ func TestInitialize(t *testing.T) {
 		ManifestConfigFile = "/root/.test-manifest-key"
 		defer func() { ManifestConfigFile = ".test-manifest-key" }()
 
-		_, err := Initialize("org1", "TestProject", "proj1", "test-proj")
+		_, err := Initialize("org1", "TestApp", "app1", "test-app")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "Error creating file")
 	})
@@ -49,9 +49,9 @@ func TestRestoreFromFile(t *testing.T) {
 		defer os.Remove(tempFile.Name())
 
 		content := `
-project_name = "TestProject"
-project_id = "proj1"
-project_alternate_id = "test-proj"
+app_name = "TestApp"
+app_id = "app1"
+app_alternate_id = "test-app"
 secret_key = "dGVzdC1zZWNyZXQta2V5"
 `
 		_, err = tempFile.WriteString(content)
@@ -60,9 +60,9 @@ secret_key = "dGVzdC1zZWNyZXQta2V5"
 
 		m, err := RestoreFromFile(tempFile.Name())
 		assert.NoError(t, err)
-		assert.Equal(t, "TestProject", m.ProjectName)
-		assert.Equal(t, "proj1", m.ProjectId)
-		assert.Equal(t, "test-proj", m.ProjectAlternateId)
+		assert.Equal(t, "TestApp", m.AppName)
+		assert.Equal(t, "app1", m.AppId)
+		assert.Equal(t, "test-app", m.AppAlternateId)
 		assert.Equal(t, "dGVzdC1zZWNyZXQta2V5", m.SecretKey)
 	})
 
@@ -100,9 +100,9 @@ func TestRestore(t *testing.T) {
 
 	t.Run("Successful restore", func(t *testing.T) {
 		content := `
-project_name = "TestProject"
-project_id = "proj1"
-project_alternate_id = "test-proj"
+app_name = "TestApp"
+app_id = "app1"
+app_alternate_id = "test-app"
 secret_key = "dGVzdC1zZWNyZXQta2V5"
 `
 		err := os.WriteFile(ManifestConfigFile, []byte(content), 0644)
@@ -110,9 +110,9 @@ secret_key = "dGVzdC1zZWNyZXQta2V5"
 
 		m, err := Restore()
 		assert.NoError(t, err)
-		assert.Equal(t, "TestProject", m.ProjectName)
-		assert.Equal(t, "proj1", m.ProjectId)
-		assert.Equal(t, "test-proj", m.ProjectAlternateId)
+		assert.Equal(t, "TestApp", m.AppName)
+		assert.Equal(t, "app1", m.AppId)
+		assert.Equal(t, "test-app", m.AppAlternateId)
 		assert.Equal(t, "dGVzdC1zZWNyZXQta2V5", m.SecretKey)
 	})
 

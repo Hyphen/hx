@@ -7,50 +7,66 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Hyphen/cli/internal/app"
 	"github.com/Hyphen/cli/internal/manifest"
-	"github.com/Hyphen/cli/internal/project"
-	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
+var projectIDFlag string
+
 var InitCmd = &cobra.Command{
-	Use:   "init",
+	Use:   "init <project name>",
 	Short: "init a project",
 	Long:  ``,
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		projectService := project.NewService()
+		projectService := app.NewService()
 		orgID, err := utils.GetOrganizationID()
 		if err != nil {
 			cmd.PrintErrf("Error: %s\n", err)
+			return
 		}
 
-		if manifest.Exists() {
-			if !utils.YesFlag && !promptForOverwrite(os.Stdin) {
-				cmd.Println("Operation cancelled.")
-				return
-			}
-		}
-
-		projectName, err := promptForProjectName(os.Stdin)
-		if err != nil {
-			cmd.PrintErrf("%s\n", err)
+		projectName := args[0]
+		if projectName == "" {
+			cmd.PrintErrf("Project name is required.\n")
 			return
 		}
 
 		defaultProjectAlternateId := generateDefaultProjectId(projectName)
-		var projectAlternateId string
-		if utils.YesFlag {
+		projectAlternateId := projectIDFlag
+		if projectAlternateId == "" {
 			projectAlternateId = defaultProjectAlternateId
-		} else {
-			projectAlternateId, err = promptForProjectId(os.Stdin, defaultProjectAlternateId)
-			if err != nil {
-				cmd.PrintErrf("%s\n", err)
-				return
+		}
+
+		err = app.CheckProjectId(projectAlternateId)
+		if err != nil {
+			suggestedID := strings.TrimSpace(strings.Split(err.Error(), ":")[1])
+			yesFlag, _ := cmd.Flags().GetBool("yes")
+			if yesFlag {
+				projectAlternateId = suggestedID
+				cmd.Printf("Using suggested project ID: %s\n", suggestedID)
+			} else {
+				if !promptForSuggestedID(os.Stdin, suggestedID) {
+					cmd.Println("Operation cancelled.")
+					return
+				}
+				projectAlternateId = suggestedID
 			}
 		}
 
-		newProject, err := projectService.CreateProject(orgID, projectAlternateId, projectName)
+		if manifest.Exists() {
+			yesFlag, _ := cmd.Flags().GetBool("yes")
+			if !yesFlag {
+				if !promptForOverwrite(os.Stdin) {
+					cmd.Println("Operation cancelled.")
+					return
+				}
+			}
+		}
+
+		newProject, err := projectService.CreateApp(orgID, projectAlternateId, projectName)
 		if err != nil {
 			cmd.PrintErrf("%s\n", err)
 			os.Exit(1)
@@ -70,24 +86,18 @@ var InitCmd = &cobra.Command{
 	},
 }
 
-func promptForProjectName(reader io.Reader) (string, error) {
-	r := bufio.NewReader(reader)
-	fmt.Print("Name of Project: ")
-	projectName, err := r.ReadString('\n')
-	if err != nil {
-		return "", errors.Wrap(err, "Error reading input")
-	}
-	projectName = strings.TrimSpace(projectName)
-	if projectName == "" {
-		return "", errors.New("Project name cannot be empty")
-	}
-	return projectName, nil
+func init() {
+	InitCmd.Flags().StringVarP(&projectIDFlag, "id", "i", "", "Project ID (optional)")
+}
+
+func generateDefaultProjectId(appName string) string {
+	return strings.ToLower(strings.ReplaceAll(appName, " ", "-"))
 }
 
 func promptForOverwrite(reader io.Reader) bool {
 	r := bufio.NewReader(reader)
 	for {
-		fmt.Print("Are you sure you want to overwrite the ManifestConfigFile? (y/N): ")
+		fmt.Print("Manifest file exists. Do you want to overwrite it? (y/N): ")
 		response, err := r.ReadString('\n')
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error reading input: %s\n", err)
@@ -105,41 +115,23 @@ func promptForOverwrite(reader io.Reader) bool {
 	}
 }
 
-func promptForProjectId(reader io.Reader, defaultAppId string) (string, error) {
+func promptForSuggestedID(reader io.Reader, suggestedID string) bool {
 	r := bufio.NewReader(reader)
 	for {
-		fmt.Printf("Project ID [%s]: ", defaultAppId)
-		appId, err := r.ReadString('\n')
-		if err != nil {
-			return "", errors.Wrap(err, "Error reading input")
-		}
-		appId = strings.TrimSpace(appId)
-		if appId == "" {
-			appId = defaultAppId
-		}
-
-		if err := project.CheckProjectId(appId); err == nil {
-			return appId, nil
-		}
-
-		suggestedAppId := strings.ToLower(strings.ReplaceAll(appId, " ", "-"))
-		fmt.Printf("Do you want to use [%s]? (Y/n): ", suggestedAppId)
+		fmt.Printf("Invalid project ID. Do you want to use the suggested ID [%s]? (Y/n): ", suggestedID)
 		response, err := r.ReadString('\n')
 		if err != nil {
-			return "", errors.Wrap(err, "Error reading input")
+			fmt.Fprintf(os.Stderr, "Error reading input: %s\n", err)
+			os.Exit(1)
 		}
-		response = strings.TrimSpace(strings.ToLower(response))
-
-		if response == "y" || response == "yes" || response == "" {
-			return suggestedAppId, nil
-		} else if response == "n" || response == "no" {
-			fmt.Println("Please enter a new Project ID (lowercase with hyphens).")
-		} else {
+		response = strings.TrimSpace(response)
+		switch strings.ToLower(response) {
+		case "y", "yes", "":
+			return true
+		case "n", "no":
+			return false
+		default:
 			fmt.Println("Invalid response. Please enter 'y' or 'n'.")
 		}
 	}
-}
-
-func generateDefaultProjectId(appName string) string {
-	return strings.ToLower(strings.ReplaceAll(appName, " ", "-"))
 }
