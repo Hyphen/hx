@@ -23,7 +23,6 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(version.VersionCmd)
 	rootCmd.AddCommand(update.UpdateCmd)
-	// rootCmd.AddCommand(env.EnvCmd)
 	rootCmd.AddCommand(initialize.InitCmd)
 	rootCmd.AddCommand(auth.AuthCmd)
 	rootCmd.AddCommand(useorg.UseOrgCmd)
