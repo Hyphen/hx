@@ -38,9 +38,13 @@ jobs:
         run: |
           CURRENT_VERSION=$(cat .version || echo "0.0.0-rc0")
           RELEASE_VERSION=$(semantic-release --dry-run --no-ci 2>&1 | grep 'Release note for version' | awk '{print $NF}' | tr -d ':')
-          if [[ $RELEASE_VERSION == $(echo $CURRENT_VERSION | sed 's/-rc[0-9]*//') ]]; then
+          if [[ -z "$RELEASE_VERSION" ]]; then
+            BASE_VERSION=$(echo $CURRENT_VERSION | sed 's/-rc[0-9]*$//')
             RC_NUMBER=$(echo $CURRENT_VERSION | sed 's/.*-rc\([0-9]*\)/\1/')
-            NEW_VERSION=$(echo $CURRENT_VERSION | sed "s/-rc[0-9]*/-rc$((RC_NUMBER+1))/")
+            NEW_VERSION="${BASE_VERSION}-rc$((RC_NUMBER+1))"
+          elif [[ $RELEASE_VERSION == $(echo $CURRENT_VERSION | sed 's/-rc[0-9]*//') ]]; then
+            RC_NUMBER=$(echo $CURRENT_VERSION | sed 's/.*-rc\([0-9]*\)/\1/')
+            NEW_VERSION="${RELEASE_VERSION}-rc$((RC_NUMBER+1))"
           else
             NEW_VERSION="${RELEASE_VERSION}-rc1"
           fi
