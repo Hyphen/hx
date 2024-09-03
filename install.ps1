@@ -65,16 +65,17 @@ function Install-CLI {
         exit 1
     }
 
-    Write-Output "Installing ${binaryName} to C:\Program Files..."
-    $installDir = "C:\Program Files"
-    Move-Item -Path $tempFilePath -Destination "$installDir\$binaryName" -Force
+    Write-Output "Installing ${binaryName} to C:\Windows\System32..."
+    $installDir = "C:\Windows\System32"
+    $installPath = "$installDir\hyphen.exe"
+    Move-Item -Path $tempFilePath -Destination $installPath -Force
 
-    Write-Output "${binaryName} has been successfully installed!"
-    Write-Output "You can now run '${binaryName}' from anywhere in your terminal."
+    Write-Output "${binaryName} has been successfully installed as hyphen.exe!"
+    Write-Output "You can now run 'hyphen' from anywhere in your terminal."
 
     # Add the alias
-    $aliasCommand = "Set-Alias -Name hx -Value `"$installDir\$binaryName`""
-    Create-Alias -aliasCommand $aliasCommand
+    $aliasCommandHx = "Set-Alias -Name hx -Value `"$installPath`""
+    Create-Alias -aliasCommand $aliasCommandHx
 }
 
 # Run the installation
