@@ -24,7 +24,7 @@ func TestNewService(t *testing.T) {
 	assert.NotNil(t, service.httpClient)
 }
 
-func TestGetListProjects(t *testing.T) {
+func TestGetListApps(t *testing.T) {
 	mockHTTPClient := new(httputil.MockHTTPClient)
 	mockOAuthService := new(oauth.MockOAuthService)
 
@@ -41,8 +41,8 @@ func TestGetListProjects(t *testing.T) {
 		"pageNum": 1,
 		"pageSize": 10,
 		"data": [
-			{"id": "project1", "alternateId": "alt1", "name": "Project 1", "organization": {"id": "org1", "name": "Org 1"}},
-			{"id": "project2", "alternateId": "alt2", "name": "Project 2", "organization": {"id": "org1", "name": "Org 1"}}
+			{"id": "app1", "alternateId": "alt1", "name": "app 1", "organization": {"id": "org1", "name": "Org 1"}},
+			{"id": "app2", "alternateId": "alt2", "name": "app 2", "organization": {"id": "org1", "name": "Org 1"}}
 		]
 	}`
 
@@ -53,18 +53,18 @@ func TestGetListProjects(t *testing.T) {
 
 	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
 
-	projects, err := service.GetListApps("org1", 10, 1)
+	apps, err := service.GetListApps("org1", 10, 1)
 
 	assert.NoError(t, err)
-	assert.Len(t, projects, 2)
-	assert.Equal(t, "project1", projects[0].ID)
-	assert.Equal(t, "project2", projects[1].ID)
+	assert.Len(t, apps, 2)
+	assert.Equal(t, "app1", apps[0].ID)
+	assert.Equal(t, "app2", apps[1].ID)
 
 	mockOAuthService.AssertExpectations(t)
 	mockHTTPClient.AssertExpectations(t)
 }
 
-func TestCreateProject(t *testing.T) {
+func TestCreateApp(t *testing.T) {
 	mockHTTPClient := new(httputil.MockHTTPClient)
 	mockOAuthService := new(oauth.MockOAuthService)
 
@@ -76,7 +76,7 @@ func TestCreateProject(t *testing.T) {
 
 	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
-	responseBody := `{"id": "new_project", "alternateId": "alt_new", "name": "New Project", "organization": {"id": "org1", "name": "Org 1"}}`
+	responseBody := `{"id": "new_app", "alternateId": "alt_new", "name": "New app", "organization": {"id": "org1", "name": "Org 1"}}`
 
 	mockResponse := &http.Response{
 		StatusCode: http.StatusCreated,
@@ -85,18 +85,18 @@ func TestCreateProject(t *testing.T) {
 
 	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
 
-	project, err := service.CreateApp("org1", "alt_new", "New Project")
+	app, err := service.CreateApp("org1", "alt_new", "New app")
 
 	assert.NoError(t, err)
-	assert.Equal(t, "new_project", project.ID)
-	assert.Equal(t, "alt_new", project.AlternateId)
-	assert.Equal(t, "New Project", project.Name)
+	assert.Equal(t, "new_app", app.ID)
+	assert.Equal(t, "alt_new", app.AlternateId)
+	assert.Equal(t, "New app", app.Name)
 
 	mockOAuthService.AssertExpectations(t)
 	mockHTTPClient.AssertExpectations(t)
 }
 
-func TestGetProject(t *testing.T) {
+func TestGetApp(t *testing.T) {
 	mockHTTPClient := new(httputil.MockHTTPClient)
 	mockOAuthService := new(oauth.MockOAuthService)
 
@@ -108,7 +108,7 @@ func TestGetProject(t *testing.T) {
 
 	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
-	responseBody := `{"id": "project1", "alternateId": "alt1", "name": "Project 1", "organization": {"id": "org1", "name": "Org 1"}}`
+	responseBody := `{"id": "app1", "alternateId": "alt1", "name": "app 1", "organization": {"id": "org1", "name": "Org 1"}}`
 
 	mockResponse := &http.Response{
 		StatusCode: http.StatusOK,
@@ -117,18 +117,18 @@ func TestGetProject(t *testing.T) {
 
 	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
 
-	project, err := service.GetApp("org1", "project1")
+	app, err := service.GetApp("org1", "app1")
 
 	assert.NoError(t, err)
-	assert.Equal(t, "project1", project.ID)
-	assert.Equal(t, "alt1", project.AlternateId)
-	assert.Equal(t, "Project 1", project.Name)
+	assert.Equal(t, "app1", app.ID)
+	assert.Equal(t, "alt1", app.AlternateId)
+	assert.Equal(t, "app 1", app.Name)
 
 	mockOAuthService.AssertExpectations(t)
 	mockHTTPClient.AssertExpectations(t)
 }
 
-func TestDeleteProject(t *testing.T) {
+func TestDeleteApp(t *testing.T) {
 	mockHTTPClient := new(httputil.MockHTTPClient)
 	mockOAuthService := new(oauth.MockOAuthService)
 
@@ -147,7 +147,7 @@ func TestDeleteProject(t *testing.T) {
 
 	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
 
-	err := service.DeleteApp("org1", "project1")
+	err := service.DeleteApp("org1", "app1")
 
 	assert.NoError(t, err)
 
@@ -222,7 +222,7 @@ func TestErrorHandling(t *testing.T) {
 	})
 }
 
-func TestProjectService_HTTPClientError(t *testing.T) {
+func TestAppService_HTTPClientError(t *testing.T) {
 	mockHTTPClient := new(httputil.MockHTTPClient)
 	mockOAuthService := new(oauth.MockOAuthService)
 
@@ -242,20 +242,20 @@ func TestProjectService_HTTPClientError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to send request")
 
-	_, err = service.CreateApp("org1", "alt1", "Test Project")
+	_, err = service.CreateApp("org1", "alt1", "Test app")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to send request")
 
-	_, err = service.GetApp("org1", "project1")
+	_, err = service.GetApp("org1", "app1")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to send request")
 
-	err = service.DeleteApp("org1", "project1")
+	err = service.DeleteApp("org1", "app1")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to send request")
 }
 
-func TestProjectService_ReadBodyError(t *testing.T) {
+func TestAppService_ReadBodyError(t *testing.T) {
 	mockHTTPClient := new(httputil.MockHTTPClient)
 	mockOAuthService := new(oauth.MockOAuthService)
 
@@ -286,11 +286,11 @@ func TestProjectService_ReadBodyError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to read response body")
 
-	_, err = service.CreateApp("org1", "alt1", "Test Project")
+	_, err = service.CreateApp("org1", "alt1", "Test app")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to read response body")
 
-	_, err = service.GetApp("org1", "project1")
+	_, err = service.GetApp("org1", "app1")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to read response body")
 }
@@ -304,7 +304,7 @@ func (er *ErrorReader) Read(p []byte) (n int, err error) {
 	return 0, er.Err
 }
 
-func TestProjectService_NewRequestError(t *testing.T) {
+func TestAppService_NewRequestError(t *testing.T) {
 	service := &AppService{
 		baseUrl: "://invalid-url",
 	}
@@ -317,15 +317,15 @@ func TestProjectService_NewRequestError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to create request")
 
-	_, err = service.CreateApp("org1", "alt1", "Test Project")
+	_, err = service.CreateApp("org1", "alt1", "Test app")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to create request")
 
-	_, err = service.GetApp("org1", "project1")
+	_, err = service.GetApp("org1", "app1")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to create request")
 
-	err = service.DeleteApp("org1", "project1")
+	err = service.DeleteApp("org1", "app1")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to create request")
 }

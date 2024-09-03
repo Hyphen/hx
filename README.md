@@ -23,7 +23,7 @@ Global Flags:
 
 Available Commands:
   - `auth`: Authenticate with Hyphen
-  - `init`: Initialize a project
+  - `init`: Initialize an app
   - `update`: Update the Hyphen CLI
   - `use-org`: Set the organization ID
   - `version`: Display the version of the Hyphen CLI
@@ -45,7 +45,7 @@ Usage:
 ```bash
 hyphen init <app name> 
 ```
-This command creates a new project and initializes the manifest file.
+This command creates a new app and initializes the manifest file.
 
 
 ## Update Command
