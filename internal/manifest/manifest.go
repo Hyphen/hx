@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	"github.com/Hyphen/cli/internal/project"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/errors"
 )
@@ -12,32 +11,27 @@ import (
 var ManifestConfigFile = ".hyphen-manifest-key"
 
 type Manifest struct {
-	ProjectName        string `toml:"project_name"`
-	ProjectId          string `toml:"project_id"`
-	ProjectAlternateId string `toml:"project_alternate_id"`
-	SecretKey          string `toml:"secret_key"`
+	AppName        string `toml:"app_name"`
+	AppId          string `toml:"app_id"`
+	AppAlternateId string `toml:"app_alternate_id"`
+	SecretKey      string `toml:"secret_key"`
 }
 
 func (m *Manifest) GetSecretKey() *secretkey.SecretKey {
 	return secretkey.FromBase64(m.SecretKey)
 }
 
-func Initialize(organizationId, projectName, projectID string) (Manifest, error) {
+func Initialize(organizationId, appName, appID, appAlternateId string) (Manifest, error) {
 	sk, err := secretkey.New()
 	if err != nil {
 		return Manifest{}, errors.Wrap(err, "Failed to create new secret key")
 	}
-	projectService := project.NewService()
-	project, err := projectService.CreateProject(organizationId, projectID, projectName)
-	if err != nil {
-		return Manifest{}, err
-	}
 
 	m := Manifest{
-		ProjectName:        projectName,
-		ProjectId:          project.ID,
-		ProjectAlternateId: project.AlternateId,
-		SecretKey:          sk.Base64(),
+		AppName:        appName,
+		AppId:          appID,
+		AppAlternateId: appAlternateId,
+		SecretKey:      sk.Base64(),
 	}
 
 	file, err := os.Create(ManifestConfigFile)
@@ -67,6 +61,10 @@ func RestoreFromFile(file string) (Manifest, error) {
 	}
 
 	return m, nil
+}
+
+func Restore() (Manifest, error) {
+	return RestoreFromFile(ManifestConfigFile)
 }
 
 func Exists() bool {

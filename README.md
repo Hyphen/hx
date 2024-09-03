@@ -1,11 +1,10 @@
 # Hyphen CLI Command Reference
 
-## Main Commands
-
 ## Env variables
-- `HYPHEN_CUSTOM_AUTH`: this should be the dev base url, example: `https://dev-auth.hyphen.ai`
-- `HYPHEN_CUSTOM_APIX`: this should be the dev base url, example: `https://dev-api.hyphen.ai`
+-   `HYPHEN_CUSTOM_AUTH`: this should be the dev base URL, example: `https://dev-auth.hyphen.ai`
+-   `HYPHEN_CUSTOM_APIX`: this should be the dev base URL, example: `https://dev-api.hyphen.ai`
 
+## Main Commands
 
 ### `hyphen`
 
@@ -16,152 +15,58 @@ Usage:
 hyphen [command]
 ```
 
-Available Commands:
-- `version`: Display the version of the Hyphen CLI
-- `update`: Update the Hyphen CLI
-- `env`: Environment-related commands
-- `init`: Initialize the Hyphen CLI
-
-## Environment Commands
-
-### `hyphen env`
-
-Manage environments and environment variables.
-
-Usage:
-```bash
-hyphen env [command]
-```
-
+Global Flags:
+  - `--org`: Organization ID (e.g., org_123)
+  - `--proj`: Project ID (e.g., proj_123)
+  - `--env`: Environment ID (e.g., env_12345)
+  - `--yes, -y`: Automatically answer yes for prompts
 
 Available Commands:
-- `init`: Initialize the environment
-- `create`: Create a new environment file
-- `decrypt`: Decrypt environment variables
-- `encrypt`: Encrypt environment variables
-- `merge`: Merge environment variables
-- `pull`: Pull environment variables
-- `push`: Push environment variables
-- `run`: Run a command with environment variables
+  - `auth`: Authenticate with Hyphen
+  - `init`: Initialize an app
+  - `update`: Update the Hyphen CLI
+  - `use-org`: Set the organization ID
+  - `version`: Display the version of the Hyphen CLI
 
-### `hyphen env init`
-
-Initialize the environment with necessary configurations.
-
+## Authentication Command
+`hyphen auth`
+Authenticate with Hyphen.
 Usage:
+
 ```bash
-hyphen env init
+hyphen auth
 ```
-
-
-### `hyphen env create [ENVIRONMENT]`
-
-Create a new environment file for the specified environment.
-
-Usage:
-```bash
-hyphen env create [ENVIRONMENT]
-```
-Example:
-```bash
-hyphen env create production
-```
-or 
-```bash
-#This will create de deafult env: is like typing hyphen env default 
-hyphen env create 
-```
-
-### `hyphen env decrypt`
-
-Decrypt environment variables.
-
-Usage:
-```bash
-hyphen env decrypt -s [STRING]
-hyphen env decrypt -f [FILE]
-```
-Flags:
-- `-s, --string`: String to decrypt
-- `-f, --file`: File to decrypt
-
-### `hyphen env encrypt [FILE]`
-
-Encrypt a file containing environment variables.
-
-Usage:
-```bash
-hyphen env encrypt [FILE]
-```
-
-
-### `hyphen env merge [ENVIRONMENT] [FILE]`
-
-Merge environment variables into a file.
-
-Usage:
-```bash
-hyphen env merge [ENVIRONMENT] [FILE]
-```
-
-Flags:
-- `-f, --file`: Specify the output file name
-
-### `hyphen env push [ENVIRONMENT]`
-
-Push an existing environmental variable file to Hyphen.
-
-Usage:
-```bash
-hyphen env push [ENVIRONMENT]
-```
-Flags:
-- `-f, --file`: Specify the file to push
-
-### `hyphen env run [ENVIRONMENT] [COMMAND] [ARGS...]`
-
-Run a command using environment variables from a specified environment.
-
-Usage:
-```bash
-hyphen env run [ENVIRONMENT] [COMMAND] [ARGS...]
-```
-Flags:
-- `-f, --file`: Specific environment file to use
-- `-s, --stream`: Stream environment variables
-
-
-### hyphen env list
-List all environments and their information in a table format.
-
-Usage:
-```bash
-hyphen env list [flags]
-```
-
- Flags:
-  - --pageSize, -s: Number of environments per page (default is 10)
-  - --pageNum, -n: Page number to display (default is 1)
+This command starts the OAuth flow and saves the credentials.
 
 ## Initialization Command
-
-### `hyphen init`
-
-Initialize the Hyphen CLI.
-
+`hyphen init`
+Initialize an app.
 Usage:
 ```bash
-hyphen init
+hyphen init <app name> 
+```
+This command creates a new app and initializes the manifest file.
+
+
+## Update Command
+`hyphen update`
+Update the Hyphen CLI.
+Usage:
+```bash
+hyphen update
 ```
 
-This command sets up environment variables and aliases for the CLI tool.
+## Use Organization Command
+`hyphen use-org`
+Set the organization ID.
+Usage:
+```bash
+hyphen use-org <id>
+```
 
-## Other Commands
-
-### `hyphen version`
-
+## Version Command
+`hyphen version`
 Display the version of the Hyphen CLI.
-
 Usage:
 ```bash
 hyphen version

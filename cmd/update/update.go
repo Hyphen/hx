@@ -83,7 +83,7 @@ var UpdateCmd = &cobra.Command{
 }
 
 func NewDefaultUpdater(version string) *Updater {
-	baseURL := os.Getenv("HYPHEN_ENGINE_BASE_URL")
+	baseURL := os.Getenv("HYPHEN_CUSTOM_APIX")
 	if baseURL == "" {
 		baseURL = "https://api.hyphen.ai"
 	}
