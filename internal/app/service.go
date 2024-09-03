@@ -47,8 +47,7 @@ func (ps *AppService) GetListApps(organizationID string, pageSize, pageNum int) 
 		return nil, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
 	}
 
-	url := fmt.Sprintf("%s/api/organizations/%s/apps/?pageNum=%d&pageSize=%d",
-		ps.baseUrl, organizationID, pageNum, pageSize)
+	url := fmt.Sprintf("%s/api/organizations/%s/projects/?pageNum=%d&pageSize=%d", ps.baseUrl, organizationID, pageNum, pageSize)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -94,7 +93,7 @@ func (ps *AppService) CreateApp(organizationID, alternateID, name string) (App, 
 		return App{}, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
 	}
 
-	url := fmt.Sprintf("%s/api/organizations/%s/apps/", ps.baseUrl, organizationID)
+	url := fmt.Sprintf("%s/api/organizations/%s/projects/", ps.baseUrl, organizationID)
 
 	payload := struct {
 		AlternateID string `json:"alternateId"`
@@ -148,7 +147,7 @@ func (ps *AppService) GetApp(organizationID, appID string) (App, error) {
 		return App{}, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
 	}
 
-	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/", ps.baseUrl, organizationID, appID)
+	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/", ps.baseUrl, organizationID, appID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -188,7 +187,7 @@ func (ps *AppService) DeleteApp(organizationID, appID string) error {
 		return errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
 	}
 
-	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/", ps.baseUrl, organizationID, appID)
+	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/", ps.baseUrl, organizationID, appID)
 
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
