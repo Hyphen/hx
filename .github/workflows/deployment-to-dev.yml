@@ -80,7 +80,7 @@ jobs:
 
   upload:
     needs: [build, extract-version]
-    uses: ./.github/workflows/upload-to-r2.yml
+    uses: ./.github/workflows/upload-package-to-r2.yml
     with:
       version: ${{ needs.extract-version.outputs.version_without_v }}
       package_name: hyphen-cli-dev

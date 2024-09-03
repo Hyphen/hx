@@ -1,0 +1,72 @@
+name: Upload Install Scripts to R2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'install.sh'
+      - 'install.ps1'
+  workflow_dispatch:
+    inputs:
+      file_path:
+        description: 'Path to the file to upload (default: install.sh)'
+        required: false
+        default: 'install.sh'
+      destination_path:
+        description: 'Destination path in R2 (default: install/install.sh or install/install.ps1 based on file extension)'
+        required: false
+        default: ''
+        
+env:
+  CDN_R2_ACCOUNT_ID: e5146df3269d748421cee3ff9d6fa02a
+  CDN_R2_ACCESS_KEY_ID: ${{ secrets.CDN_R2_ACCESS_KEY_ID }}
+  CDN_R2_SECRET_ACCESS_KEY: ${{ secrets.CDN_R2_SECRET_ACCESS_KEY }}
+  CDN_STORAGE_BUCKET_NAME: cdn-hyphen-ai
+
+jobs:
+  upload-install-script:
+    name: Upload Install Script
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS CLI
+        run: |
+          aws configure set aws_access_key_id ${{ env.CDN_R2_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ env.CDN_R2_SECRET_ACCESS_KEY }}
+          aws configure set region us-east-1
+
+      - name: Determine File and Destination Paths
+        id: determine-paths
+        run: |
+          FILE_PATH="${{ github.event.inputs.file_path || 'install.sh' }}"
+          if [[ "$FILE_PATH" == *.ps1 ]]; then
+            DEFAULT_DEST_PATH="install/install.ps1"
+          else
+            DEFAULT_DEST_PATH="install/install.sh"
+          fi
+          DEST_PATH="${{ github.event.inputs.destination_path || '' }}"
+          if [[ -z "$DEST_PATH" ]]; then
+            DEST_PATH="$DEFAULT_DEST_PATH"
+          fi
+          echo "FILE_PATH=$FILE_PATH" >> $GITHUB_ENV
+          echo "DEST_PATH=$DEST_PATH" >> $GITHUB_ENV
+
+      - name: Upload file to R2
+        run: |
+          aws s3 cp ${{ env.FILE_PATH }} s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/${{ env.DEST_PATH }} \
+            --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+
+      - name: Verify upload
+        run: |
+          echo "Verifying uploaded file:"
+          if aws s3 ls "s3://${{ env.CDN_STORAGE_BUCKET_NAME }}/${{ env.DEST_PATH }}" \
+            --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com; then
+            echo "Verified: ${{ env.DEST_PATH }}"
+          else
+            echo "Error: File not found in R2: ${{ env.DEST_PATH }}"
+            exit 1
+          fi
