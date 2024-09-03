@@ -99,11 +99,9 @@ func (e *EnvInformation) DecryptVarsAndSaveIntoFile(fileName string, key secretk
 }
 
 type Environment struct {
-	Name           string `json:"name"`
-	Color          string `json:"color"`
-	Size           string `json:"size"`
-	CountVariables string `json:"countVariables"`
-	Data           string `json:"data"`
+	AlternateId string `json:"alternateId"`
+	Name        string `json:"name"`
+	Color       string `json:"color"`
 }
 
 func GetEnvName(env string) (string, error) {
