@@ -15,10 +15,10 @@ import (
 )
 
 type AppServicer interface {
-	GetListProjects(organizationID string, pageSize, pageNum int) ([]App, error)
-	CreateProject(organizationID, alternateID, name string) (App, error)
-	GetProject(organizationID, projectID string) (App, error)
-	DeleteProject(organizationID, projectID string) error
+	GetListApps(organizationID string, pageSize, pageNum int) ([]App, error)
+	CreateApp(organizationID, alternateID, name string) (App, error)
+	GetApp(organizationID, projectID string) (App, error)
+	DeleteApp(organizationID, projectID string) error
 }
 
 type AppService struct {
