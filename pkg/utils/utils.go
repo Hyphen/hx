@@ -1,8 +1,8 @@
 package utils
 
 var (
-	OrgFlag  string
-	YesFlag  bool
-	ProjFlag string
-	EnvFlag  string
+	OrgFlag         string
+	YesFlag         bool
+	ProjFlag        string
+	EnvironmentFlag string
 )

@@ -1,0 +1,214 @@
+package env
+
+import (
+	"os"
+	"testing"
+
+	"github.com/Hyphen/cli/internal/secretkey"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestNew(t *testing.T) {
+	// Create a temporary .env file
+	content := "KEY1=VALUE1\nKEY2=VALUE2\n"
+	tmpfile, err := os.CreateTemp("", "test.env")
+	assert.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+
+	_, err = tmpfile.WriteString(content)
+	assert.NoError(t, err)
+	tmpfile.Close()
+
+	// Test New function
+	env, err := New(tmpfile.Name())
+	assert.NoError(t, err)
+	assert.Equal(t, "24 bytes", env.Size)
+	assert.Equal(t, 2, env.CountVariables)
+	assert.Equal(t, content, env.Data)
+	assert.Nil(t, env.Version)
+}
+
+func TestEncryptData(t *testing.T) {
+	env := Env{Data: "KEY=VALUE"}
+	mockKey := new(secretkey.MockSecretKey)
+	mockKey.On("Encrypt", "KEY=VALUE").Return("ENCRYPTED_DATA", nil)
+
+	encryptedData, err := env.EncryptData(mockKey)
+	assert.NoError(t, err)
+	assert.Equal(t, "ENCRYPTED_DATA", encryptedData)
+	mockKey.AssertExpectations(t)
+}
+
+func TestDecryptData(t *testing.T) {
+	env := Env{Data: "ENCRYPTED_DATA"}
+	mockKey := new(secretkey.MockSecretKey)
+	mockKey.On("Decrypt", "ENCRYPTED_DATA").Return("KEY=VALUE", nil)
+
+	decryptedData, err := env.DecryptData(mockKey)
+	assert.NoError(t, err)
+	assert.Equal(t, "KEY=VALUE", decryptedData)
+	mockKey.AssertExpectations(t)
+}
+
+func TestListDecryptedVars(t *testing.T) {
+	env := Env{Data: "ENCRYPTED_DATA"}
+	mockKey := new(secretkey.MockSecretKey)
+	mockKey.On("Decrypt", "ENCRYPTED_DATA").Return("KEY1=VALUE1\nKEY2=VALUE2", nil)
+
+	vars, err := env.ListDecryptedVars(mockKey)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"KEY1=VALUE1", "KEY2=VALUE2"}, vars)
+	mockKey.AssertExpectations(t)
+}
+
+func TestDecryptVarsAndSaveIntoFile(t *testing.T) {
+	env := Env{Data: "ENCRYPTED_DATA"}
+	mockKey := new(secretkey.MockSecretKey)
+	mockKey.On("Decrypt", "ENCRYPTED_DATA").Return("KEY1=VALUE1\nKEY2=VALUE2", nil)
+
+	tmpfile, err := os.CreateTemp("", "test_decrypted.env")
+	assert.NoError(t, err)
+	tmpfile.Close()
+	defer os.Remove(tmpfile.Name())
+
+	fileName, err := env.DecryptVarsAndSaveIntoFile(tmpfile.Name(), mockKey)
+	assert.NoError(t, err)
+	assert.Equal(t, tmpfile.Name(), fileName)
+
+	content, err := os.ReadFile(tmpfile.Name())
+	assert.NoError(t, err)
+	assert.Equal(t, "KEY1=VALUE1\nKEY2=VALUE2\n", string(content))
+
+	mockKey.AssertExpectations(t)
+}
+
+func TestGetEnvName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+		hasError bool
+	}{
+		{"", "default", false},
+		{"production", "production", false},
+		{"STAGING", "staging", false},
+		{"dev-env", "dev-env", false},
+		{"test_env", "test_env", false},
+		{"Invalid Env", "", true},
+		{"123-abc_DEF", "123-abc_def", false},
+	}
+
+	for _, test := range tests {
+		result, err := GetEnvName(test.input)
+		if test.hasError {
+			assert.Error(t, err)
+		} else {
+			assert.NoError(t, err)
+			assert.Equal(t, test.expected, result)
+		}
+	}
+}
+
+func TestGetFileName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+		hasError bool
+	}{
+		{"", ".env", false},
+		{"production", ".production.env", false},
+		{"STAGING", ".staging.env", false},
+		{"dev-env", ".dev-env.env", false},
+		{"test_env", ".test_env.env", false},
+		{"Invalid Env", "", true},
+	}
+
+	for _, test := range tests {
+		result, err := GetFileName(test.input)
+		if test.hasError {
+			assert.Error(t, err)
+		} else {
+			assert.NoError(t, err)
+			assert.Equal(t, test.expected, result)
+		}
+	}
+}
+
+func TestEnvService_GetEnvironment(t *testing.T) {
+	mockService := new(MockEnvService)
+	expectedEnv := Environment{ID: "123", Name: "TestEnv"}
+	mockService.On("GetEnvironment", "org1", "app1", "env1").Return(expectedEnv, true, nil)
+
+	env, found, err := mockService.GetEnvironment("org1", "app1", "env1")
+	assert.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, expectedEnv, env)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestEnvService_PutEnv(t *testing.T) {
+	mockService := new(MockEnvService)
+	mockService.On("PutEnv", "org1", "app1", "env1").Return(nil)
+
+	err := mockService.PutEnv("org1", "app1", "env1")
+	assert.NoError(t, err)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestEnvService_GetEnv(t *testing.T) {
+	mockService := new(MockEnvService)
+	expectedEnv := Env{Size: "100 bytes", CountVariables: 5}
+	mockService.On("GetEnv", "org1", "app1", "env1").Return(expectedEnv, nil)
+
+	env, err := mockService.GetEnv("org1", "app1", "env1")
+	assert.NoError(t, err)
+	assert.Equal(t, expectedEnv, env)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestEnvService_ListEnvs(t *testing.T) {
+	mockService := new(MockEnvService)
+	expectedEnvs := []Env{
+		{Size: "100 bytes", CountVariables: 5},
+		{Size: "200 bytes", CountVariables: 10},
+	}
+	mockService.On("ListEnvs", "org1", "app1", 10, 1).Return(expectedEnvs, nil)
+
+	envs, err := mockService.ListEnvs("org1", "app1", 10, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedEnvs, envs)
+	assert.Len(t, envs, 2)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestGetEnvsInDirectory(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "env_test")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Change to the temporary directory
+	originalDir, err := os.Getwd()
+	assert.NoError(t, err)
+	err = os.Chdir(tempDir)
+	assert.NoError(t, err)
+	defer os.Chdir(originalDir)
+
+	// Create some test files
+	testFiles := []string{".env", ".local.env", "config.txt", ".production.env"}
+	for _, file := range testFiles {
+		_, err := os.Create(file)
+		assert.NoError(t, err)
+	}
+
+	// Run the function
+	envFiles, err := GetEnvsInDirectory()
+	assert.NoError(t, err)
+
+	// Check the results
+	expectedFiles := []string{".env", ".local.env", ".production.env"}
+	assert.ElementsMatch(t, expectedFiles, envFiles)
+}
