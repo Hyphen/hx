@@ -85,7 +85,7 @@ func (es *EnvService) PutEnv(organizationId, appId, environmentId string, env En
 		return errors.Wrap(err, "Failed to get environment name")
 	}
 
-	url := fmt.Sprintf("http://localhost:3001/organizations/%s/apps/%s/environments/%s/env", organizationId, appId, envName)
+	url := fmt.Sprintf("%s/env/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, appId, envName)
 
 	envJSON, err := json.Marshal(env)
 	if err != nil {
@@ -118,7 +118,7 @@ func (es *EnvService) GetEnv(organizationId, appId, envName string) (Env, error)
 	if err != nil {
 		return Env{}, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
 	}
-	url := fmt.Sprintf("http://localhost:3001/organizations/%s/apps/%s/environments/%s/env", organizationId, appId, envName)
+	url := fmt.Sprintf("%s/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, appId, envName)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -153,8 +153,8 @@ func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]
 		return []Env{}, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
 	}
 
-	url := fmt.Sprintf("http://localhost:3001/organizations/%s/apps/%s/envs?pageSize=%d&pageNum=%d",
-		organizationId, appId, size, page)
+	url := fmt.Sprintf("%s/env/organizations/%s/apps/%s/envs?pageSize=%d&pageNum=%d",
+		es.baseUrl, organizationId, appId, size, page)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
