@@ -178,7 +178,6 @@ func (s *service) getLocalEnvsNames() ([]string, error) {
 		}
 		envs = append(envs, envName)
 	}
-	fmt.Println("getLocalEnvsNames", envs)
 	return envs, nil
 }
 

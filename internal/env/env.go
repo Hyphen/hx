@@ -199,10 +199,15 @@ func GetEnvNameFromFile(fileName string) (string, error) {
 	if fileName == ".env" {
 		return "default", nil
 	}
-	// Check for unpermitted characters
-	validRegex := regexp.MustCompile("^[a-z0-9-_]+.env$")
+
+	validRegex := regexp.MustCompile(`^\.?[a-z0-9-_]+\.env$`)
 	if !validRegex.MatchString(fileName) {
 		return "", errors.Wrapf(nil, "Invalid environment file name. A valid env file name can only contain lowercase letters, numbers, hyphens, and underscores")
 	}
-	return strings.TrimSuffix(fileName, ".env"), nil
+
+	trimmedName := strings.TrimPrefix(fileName, ".")
+
+	envName := strings.TrimSuffix(trimmedName, ".env")
+
+	return envName, nil
 }
