@@ -3,7 +3,6 @@ package update
 import (
 	"encoding/json"
 	"fmt"
-	cliVersion "github.com/Hyphen/cli/cmd/version"
 	"io"
 	"net/http"
 	"os"
@@ -11,6 +10,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	cliVersion "github.com/Hyphen/cli/cmd/version"
+	"github.com/Hyphen/cli/pkg/errors"
+	"github.com/fatih/color"
 
 	"github.com/spf13/cobra"
 )
@@ -108,18 +111,18 @@ func NewDefaultUpdater(version string) *Updater {
 func (u *Updater) Run(cmd *cobra.Command, args []string) {
 	osType := u.DetectPlatform()
 	if !isValidOs(osType) {
-		fmt.Printf("Unsupported operating system: %s\n", osType)
+		errors.PrintError(cmd, fmt.Errorf("Unsupported operating system: %s", osType))
 		return
 	}
 
 	latestVersion, err := u.fetchLatestVersion()
 	if err != nil {
-		fmt.Printf("Failed to fetch the latest version: %v\n", err)
+		errors.PrintError(cmd, fmt.Errorf("Failed to fetch the latest version: %v\n", err))
 		return
 	}
 
 	if latestVersion == cliVersion.GetVersion() {
-		fmt.Println("You are already using the latest version of Hyphen CLI.")
+		printIsLatestVersion(latestVersion)
 		return
 	}
 
@@ -127,10 +130,10 @@ func (u *Updater) Run(cmd *cobra.Command, args []string) {
 	updateUrl := fmt.Sprintf(u.URLTemplate, targetVersion, osType)
 	err = u.DownloadAndUpdate(updateUrl)
 	if err != nil {
-		fmt.Printf("Failed to update Hyphen CLI: %v\n", err)
+		errors.PrintError(cmd, fmt.Errorf("Failed to update Hyphen CLI: %v\n", err))
 		return
 	}
-	fmt.Println("Hyphen CLI updated successfully")
+	printUpdateSummary(cliVersion.GetVersion(), latestVersion, osType)
 }
 
 func (u *Updater) fetchLatestVersion() (string, error) {
@@ -284,3 +287,26 @@ func init() {
 }
 
 var version string
+
+var (
+	green  = color.New(color.FgGreen, color.Bold).SprintFunc()
+	cyan   = color.New(color.FgCyan).SprintFunc()
+	yellow = color.New(color.FgYellow).SprintFunc()
+	white  = color.New(color.FgWhite, color.Bold).SprintFunc()
+)
+
+func printIsLatestVersion(currentVersion string) {
+	fmt.Println("\n" + yellow("--- Update Check ---"))
+	fmt.Printf("%s %s\n", green("✅"), white("You are already using the latest version of Hyphen CLI."))
+	fmt.Printf("   %s %s\n", white("Current version:"), cyan(currentVersion))
+}
+
+func printUpdateSummary(currentVersion, latestVersion, osType string) {
+	fmt.Println("\n" + yellow("--- Update Summary ---"))
+	fmt.Printf("%s %s\n", green("✅"), white("Successfully updated Hyphen CLI"))
+	fmt.Printf("   %s %s\n", white("Previous version:"), cyan(currentVersion))
+	fmt.Printf("   %s %s\n", white("New version:"), cyan(latestVersion))
+	fmt.Printf("   %s %s\n", white("Platform:"), cyan(osType))
+	fmt.Printf("   %s %s\n", white("Update method:"), cyan("In-place update"))
+	fmt.Println("\n" + green("Hyphen CLI is now up-to-date and ready for use."))
+}
