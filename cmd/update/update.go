@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	cliVersion "github.com/Hyphen/cli/cmd/version"
+	"github.com/Hyphen/cli/pkg/conf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/fatih/color"
 
@@ -86,10 +87,7 @@ var UpdateCmd = &cobra.Command{
 }
 
 func NewDefaultUpdater(version string) *Updater {
-	baseURL := os.Getenv("HYPHEN_CUSTOM_APIX")
-	if baseURL == "" {
-		baseURL = "https://api.hyphen.ai"
-	}
+	baseURL := conf.GetBaseApixUrl()
 
 	urlTemplate := fmt.Sprintf("%s/api/downloads/hyphen-cli/%%s?os=%%s", baseURL)
 

@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/Hyphen/cli/internal/oauth"
+	"github.com/Hyphen/cli/pkg/conf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
 )
@@ -23,10 +23,7 @@ type UserService struct {
 }
 
 func NewService() UserServicer {
-	baseUrl := "https://dev-api.hyphen.ai"
-	if customAPI := os.Getenv("HYPHEN_CUSTOM_APIX"); customAPI != "" {
-		baseUrl = customAPI
-	}
+	baseUrl := conf.GetBaseApixUrl()
 	return &UserService{
 		baseUrl:      baseUrl,
 		oauthService: oauth.DefaultOAuthService(),

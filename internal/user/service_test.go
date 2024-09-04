@@ -117,7 +117,7 @@ func TestNewService(t *testing.T) {
 		{
 			name:            "Default base URL",
 			customAPIValue:  "",
-			expectedBaseURL: "https://dev-api.hyphen.ai",
+			expectedBaseURL: "https://api.hyphen.ai",
 		},
 		{
 			name:            "Custom base URL",

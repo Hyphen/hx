@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 
 	"github.com/Hyphen/cli/internal/oauth"
+	"github.com/Hyphen/cli/pkg/conf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
 )
@@ -29,10 +29,7 @@ type EnvService struct {
 var _ EnvServicer = (*EnvService)(nil)
 
 func NewService() *EnvService {
-	baseUrl := "https://dev-api.hyphen.ai"
-	if customAPI := os.Getenv("HYPHEN_CUSTOM_APIX"); customAPI != "" {
-		baseUrl = customAPI
-	}
+	baseUrl := conf.GetBaseApixUrl()
 
 	return &EnvService{
 		baseUrl:      baseUrl,
