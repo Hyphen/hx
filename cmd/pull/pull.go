@@ -55,19 +55,28 @@ Example:
 			return
 		}
 
+		if envName == "" {
+			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, manifest)
+			if err != nil {
+				cprint.Error(cmd, err)
+				return
+			}
+
+			printPullSummary(manifest.AppId, pulledEnvs)
+		}
+
 		err = service.checkForEnvironment(orgId, envName, manifest)
 		if err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
-
-		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, manifest)
-		if err != nil {
+		if err = service.saveDecryptedEnvIntoFile(orgId, envName, manifest); err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
 
-		printPullSummary(manifest.AppId, pulledEnvs)
+		printPullSummary(manifest.AppId, []string{envName})
+
 	},
 }
 

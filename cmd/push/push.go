@@ -69,26 +69,20 @@ and have reviewed the changes before pushing.
 			return
 		}
 
-		err = service.checkForEnvironment(orgId, envName, manifest)
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		e, err := service.getLocalEnv(envName, manifest)
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
 		if err := service.checkIfLocalEnvsExistAsEnvironments(envs, orgId, manifest); err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
-
-		if err := service.putEnv(orgId, envName, e, manifest); err != nil {
-			cprint.Error(cmd, err)
-			return
+		for _, envName := range envs {
+			e, err := service.getLocalEnv(envName, manifest)
+			if err != nil {
+				cprint.Error(cmd, err)
+				return
+			}
+			if err := service.putEnv(orgId, envName, e, manifest); err != nil {
+				cprint.Error(cmd, err)
+				return
+			}
 		}
 
 		printPushSummary(orgId, manifest.AppId, envs)
@@ -104,18 +98,6 @@ func newService(envService env.EnvServicer) *service {
 	return &service{
 		envService,
 	}
-}
-
-func (s *service) checkForEnvironment(orgId, envName string, m manifest.Manifest) error {
-	_, exist, err := s.envService.GetEnvironment(orgId, m.AppId, envName)
-	if !exist && err == nil {
-		return fmt.Errorf("Environment %s not found", envName)
-	}
-	if err != nil {
-		return fmt.Errorf("Error: %s", err)
-	}
-
-	return nil
 }
 
 func (s *service) getLocalEnv(envName string, m manifest.Manifest) (env.Env, error) {
