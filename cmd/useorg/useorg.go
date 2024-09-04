@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Hyphen/cli/config"
-	"github.com/fatih/color"
+	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/spf13/cobra"
 )
 
@@ -24,16 +24,10 @@ var UseOrgCmd = &cobra.Command{
 	},
 }
 
-// Color definitions
-var (
-	green = color.New(color.FgGreen, color.Bold).SprintFunc()
-	cyan  = color.New(color.FgCyan).SprintFunc()
-	white = color.New(color.FgWhite, color.Bold).SprintFunc()
-)
-
 func printOrgUpdateSuccess(orgID string) {
-	fmt.Println("\n--- Organization Update ---")
-	fmt.Printf("%s %s\n", green("✅"), white("Successfully updated organization ID"))
-	fmt.Printf("   %s %s\n", white("New Organization ID:"), cyan(orgID))
-	fmt.Println("\n" + green("Hyphen CLI is now set to use the new organization."))
+	cprint.PrintHeader("--- Organization Update ---")
+	cprint.Success("Successfully updated organization ID")
+	cprint.PrintDetail("New Organization ID", orgID)
+	fmt.Println()
+	cprint.GreenPrint("Hyphen CLI is now set to use the new organization.")
 }

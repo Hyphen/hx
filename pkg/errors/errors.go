@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/fatih/color"
-	"github.com/spf13/cobra"
 )
 
 // Error wraps the original error and adds a user-friendly message
@@ -83,11 +80,4 @@ func HandleHTTPError(resp *http.Response) *Error {
 	default:
 		return Wrapf(New("UnexpectedError"), "unexpected error (status code %d): %s", resp.StatusCode, string(body))
 	}
-}
-
-func PrintError(cmd *cobra.Command, err error) {
-	red := color.New(color.FgRed, color.Bold).SprintFunc()
-	errorDetails := color.New(color.FgWhite).SprintFunc()
-
-	cmd.PrintErrf("%s %s\n", red("ERROR:"), errorDetails(err.Error()))
 }

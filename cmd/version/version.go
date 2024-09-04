@@ -1,9 +1,7 @@
 package version
 
 import (
-	"fmt"
-
-	"github.com/fatih/color"
+	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/spf13/cobra"
 )
 
@@ -19,21 +17,16 @@ var VersionCmd = &cobra.Command{
 	},
 }
 
-// Color definitions
-var (
-	cyan  = color.New(color.FgCyan).SprintFunc()
-	white = color.New(color.FgWhite, color.Bold).SprintFunc()
-)
-
 func printVersionInfo() {
 	version := GetVersion()
-	fmt.Println("\n--- Hyphen Version Information ---")
-	fmt.Printf("%s %s\n", white("Version:"), cyan(version))
+	cprint.PrintHeader("Hyphen Version Information")
+	cprint.PrintDetail("Version", version)
 }
 
+// GetVersion returns the current version of the CLI
 func GetVersion() string {
 	if Version == "" {
-		Version = "unknown"
+		Version = "unknown" // Default if not set by ldflags
 	}
 	return Version
 }

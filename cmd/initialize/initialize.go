@@ -9,9 +9,8 @@ import (
 
 	"github.com/Hyphen/cli/internal/app"
 	"github.com/Hyphen/cli/internal/manifest"
-	"github.com/Hyphen/cli/pkg/errors"
+	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/utils"
-	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -37,14 +36,6 @@ Flags:
 	Run:  runInit,
 }
 
-// Color definitions
-var (
-	green  = color.New(color.FgGreen, color.Bold).SprintFunc()
-	cyan   = color.New(color.FgCyan).SprintFunc()
-	yellow = color.New(color.FgYellow).SprintFunc()
-	white  = color.New(color.FgWhite, color.Bold).SprintFunc()
-)
-
 func init() {
 	InitCmd.Flags().StringVarP(&appIDFlag, "id", "i", "", "App ID (optional)")
 }
@@ -53,13 +44,13 @@ func runInit(cmd *cobra.Command, args []string) {
 	appService := app.NewService()
 	orgID, err := utils.GetOrganizationID()
 	if err != nil {
-		errors.PrintError(cmd, err)
+		cprint.Error(cmd, err)
 		return
 	}
 
 	appName := args[0]
 	if appName == "" {
-		errors.PrintError(cmd, fmt.Errorf("app name is required"))
+		cprint.Error(cmd, fmt.Errorf("app name is required"))
 		return
 	}
 
@@ -69,27 +60,27 @@ func runInit(cmd *cobra.Command, args []string) {
 	}
 
 	if manifest.Exists() && !shouldOverwrite(cmd) {
-		printInfo(cmd, "Operation cancelled.")
+		cprint.Info("Operation cancelled.")
 		return
 	}
 
 	newApp, err := appService.CreateApp(orgID, appAlternateId, appName)
 	if err != nil {
-		errors.PrintError(cmd, err)
-		os.Exit(1)
+		cprint.Error(cmd, err)
+		return
 	}
 
 	_, err = manifest.Initialize(orgID, newApp.Name, newApp.ID, newApp.AlternateId)
 	if err != nil {
-		errors.PrintError(cmd, err)
-		os.Exit(1)
+		cprint.Error(cmd, err)
+		return
 	}
 
-	printSuccess(cmd, "App initialized")
+	printInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
 
 	if err := ensureGitignore(manifest.ManifestConfigFile); err != nil {
-		errors.PrintError(cmd, fmt.Errorf("error checking/updating .gitignore: %w", err))
-		os.Exit(1)
+		cprint.Error(cmd, fmt.Errorf("error checking/updating .gitignore: %w", err))
+		return
 	}
 }
 
@@ -106,10 +97,10 @@ func getAppID(cmd *cobra.Command, appName string) string {
 		yesFlag, _ := cmd.Flags().GetBool("yes")
 		if yesFlag {
 			appAlternateId = suggestedID
-			printInfo(cmd, "Using suggested app ID: %s", suggestedID)
+			cprint.Info(fmt.Sprintf("Using suggested app ID: %s", suggestedID))
 		} else {
 			if !promptForSuggestedID(os.Stdin, suggestedID) {
-				printInfo(cmd, "Operation cancelled.")
+				cprint.Info("Operation cancelled.")
 				return ""
 			}
 			appAlternateId = suggestedID
@@ -133,10 +124,10 @@ func generateDefaultAppId(appName string) string {
 func promptForOverwrite(reader io.Reader) bool {
 	r := bufio.NewReader(reader)
 	for {
-		fmt.Print(yellow("Manifest file exists. Do you want to overwrite it? (y/N): "))
+		cprint.Prompt("Manifest file exists. Do you want to overwrite it? (y/N): ")
 		response, err := r.ReadString('\n')
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading input: %s\n", err)
+			cprint.Error(nil, fmt.Errorf("Error reading input: %s", err))
 			os.Exit(1)
 		}
 		response = strings.TrimSpace(response)
@@ -146,7 +137,7 @@ func promptForOverwrite(reader io.Reader) bool {
 		case "n", "no", "":
 			return false
 		default:
-			fmt.Println("Invalid response. Please enter 'y' or 'n'.")
+			cprint.Warning("Invalid response. Please enter 'y' or 'n'.")
 		}
 	}
 }
@@ -154,10 +145,10 @@ func promptForOverwrite(reader io.Reader) bool {
 func promptForSuggestedID(reader io.Reader, suggestedID string) bool {
 	r := bufio.NewReader(reader)
 	for {
-		fmt.Printf(yellow("Invalid app ID. Do you want to use the suggested ID [%s]? (Y/n): "), cyan(suggestedID))
+		cprint.Prompt(fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]? (Y/n): ", suggestedID))
 		response, err := r.ReadString('\n')
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading input: %s\n", err)
+			cprint.Error(nil, fmt.Errorf("Error reading input: %s", err))
 			os.Exit(1)
 		}
 		response = strings.TrimSpace(response)
@@ -167,15 +158,16 @@ func promptForSuggestedID(reader io.Reader, suggestedID string) bool {
 		case "n", "no":
 			return false
 		default:
-			fmt.Println("Invalid response. Please enter 'y' or 'n'.")
+			cprint.Warning("Invalid response. Please enter 'y' or 'n'.")
 		}
 	}
 }
 
-func printInfo(cmd *cobra.Command, format string, a ...interface{}) {
-	cmd.Printf(white(format)+"\n", a...)
-}
-
-func printSuccess(cmd *cobra.Command, format string, a ...interface{}) {
-	cmd.Printf(green("✅ ")+white(format)+"\n", a...)
+func printInitializationSummary(appName, appAlternateId, appID, orgID string) {
+	cprint.PrintHeader("--- App Initialization Summary ---")
+	cprint.Success("App successfully initialized")
+	cprint.PrintDetail("App Name", appName)
+	cprint.PrintDetail("App AlternateId", appAlternateId)
+	cprint.PrintDetail("App ID", appID)
+	cprint.PrintDetail("Organization ID", orgID)
 }
