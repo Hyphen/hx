@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	// "github.com/Hyphen/cli/cmd/env"
 	"github.com/Hyphen/cli/cmd/auth"
 	"github.com/Hyphen/cli/cmd/initialize"
 	"github.com/Hyphen/cli/cmd/pull"
