@@ -7,12 +7,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/pkg/errors"
-	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+type MockHTTPClient struct {
+	mock.Mock
+}
+
+func (m *MockHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	args := m.Called(req)
+	return args.Get(0).(*http.Response), args.Error(1)
+}
 
 func TestNewService(t *testing.T) {
 	os.Setenv("HYPHEN_CUSTOM_APIX", "https://custom-api.example.com")
@@ -20,21 +27,16 @@ func TestNewService(t *testing.T) {
 
 	service := NewService()
 	assert.Equal(t, "https://custom-api.example.com", service.baseUrl)
-	assert.NotNil(t, service.oauthService)
 	assert.NotNil(t, service.httpClient)
 }
 
 func TestGetListApps(t *testing.T) {
-	mockHTTPClient := new(httputil.MockHTTPClient)
-	mockOAuthService := new(oauth.MockOAuthService)
+	mockHTTPClient := new(MockHTTPClient)
 
 	service := &AppService{
-		baseUrl:      "https://api.example.com",
-		oauthService: mockOAuthService,
-		httpClient:   mockHTTPClient,
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
 	}
-
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
 	responseBody := `{
 		"total": 2,
@@ -60,21 +62,16 @@ func TestGetListApps(t *testing.T) {
 	assert.Equal(t, "app1", apps[0].ID)
 	assert.Equal(t, "app2", apps[1].ID)
 
-	mockOAuthService.AssertExpectations(t)
 	mockHTTPClient.AssertExpectations(t)
 }
 
 func TestCreateApp(t *testing.T) {
-	mockHTTPClient := new(httputil.MockHTTPClient)
-	mockOAuthService := new(oauth.MockOAuthService)
+	mockHTTPClient := new(MockHTTPClient)
 
 	service := &AppService{
-		baseUrl:      "https://api.example.com",
-		oauthService: mockOAuthService,
-		httpClient:   mockHTTPClient,
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
 	}
-
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
 	responseBody := `{"id": "new_app", "alternateId": "alt_new", "name": "New app", "organization": {"id": "org1", "name": "Org 1"}}`
 
@@ -92,21 +89,16 @@ func TestCreateApp(t *testing.T) {
 	assert.Equal(t, "alt_new", app.AlternateId)
 	assert.Equal(t, "New app", app.Name)
 
-	mockOAuthService.AssertExpectations(t)
 	mockHTTPClient.AssertExpectations(t)
 }
 
 func TestGetApp(t *testing.T) {
-	mockHTTPClient := new(httputil.MockHTTPClient)
-	mockOAuthService := new(oauth.MockOAuthService)
+	mockHTTPClient := new(MockHTTPClient)
 
 	service := &AppService{
-		baseUrl:      "https://api.example.com",
-		oauthService: mockOAuthService,
-		httpClient:   mockHTTPClient,
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
 	}
-
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
 	responseBody := `{"id": "app1", "alternateId": "alt1", "name": "app 1", "organization": {"id": "org1", "name": "Org 1"}}`
 
@@ -124,21 +116,16 @@ func TestGetApp(t *testing.T) {
 	assert.Equal(t, "alt1", app.AlternateId)
 	assert.Equal(t, "app 1", app.Name)
 
-	mockOAuthService.AssertExpectations(t)
 	mockHTTPClient.AssertExpectations(t)
 }
 
 func TestDeleteApp(t *testing.T) {
-	mockHTTPClient := new(httputil.MockHTTPClient)
-	mockOAuthService := new(oauth.MockOAuthService)
+	mockHTTPClient := new(MockHTTPClient)
 
 	service := &AppService{
-		baseUrl:      "https://api.example.com",
-		oauthService: mockOAuthService,
-		httpClient:   mockHTTPClient,
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
 	}
-
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
 	mockResponse := &http.Response{
 		StatusCode: http.StatusNoContent,
@@ -151,39 +138,17 @@ func TestDeleteApp(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	mockOAuthService.AssertExpectations(t)
 	mockHTTPClient.AssertExpectations(t)
 }
 
 func TestErrorHandling(t *testing.T) {
-	t.Run("Authentication Error", func(t *testing.T) {
-		mockHTTPClient := new(httputil.MockHTTPClient)
-		mockOAuthService := new(oauth.MockOAuthService)
-
-		service := &AppService{
-			baseUrl:      "https://api.example.com",
-			oauthService: mockOAuthService,
-			httpClient:   mockHTTPClient,
-		}
-
-		mockOAuthService.On("GetValidToken").Return("", errors.New("auth error"))
-
-		_, err := service.GetListApps("org1", 10, 1)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Failed to authenticate")
-	})
-
 	t.Run("HTTP Error", func(t *testing.T) {
-		mockHTTPClient := new(httputil.MockHTTPClient)
-		mockOAuthService := new(oauth.MockOAuthService)
+		mockHTTPClient := new(MockHTTPClient)
 
 		service := &AppService{
-			baseUrl:      "https://api.example.com",
-			oauthService: mockOAuthService,
-			httpClient:   mockHTTPClient,
+			baseUrl:    "https://api.example.com",
+			httpClient: mockHTTPClient,
 		}
-
-		mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
 		mockResponse := &http.Response{
 			StatusCode: http.StatusInternalServerError,
@@ -198,16 +163,12 @@ func TestErrorHandling(t *testing.T) {
 	})
 
 	t.Run("JSON Parsing Error", func(t *testing.T) {
-		mockHTTPClient := new(httputil.MockHTTPClient)
-		mockOAuthService := new(oauth.MockOAuthService)
+		mockHTTPClient := new(MockHTTPClient)
 
 		service := &AppService{
-			baseUrl:      "https://api.example.com",
-			oauthService: mockOAuthService,
-			httpClient:   mockHTTPClient,
+			baseUrl:    "https://api.example.com",
+			httpClient: mockHTTPClient,
 		}
-
-		mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
 		mockResponse := &http.Response{
 			StatusCode: http.StatusOK,
@@ -223,16 +184,13 @@ func TestErrorHandling(t *testing.T) {
 }
 
 func TestAppService_HTTPClientError(t *testing.T) {
-	mockHTTPClient := new(httputil.MockHTTPClient)
-	mockOAuthService := new(oauth.MockOAuthService)
+	mockHTTPClient := new(MockHTTPClient)
 
 	service := &AppService{
-		baseUrl:      "https://api.example.com",
-		oauthService: mockOAuthService,
-		httpClient:   mockHTTPClient,
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
 	}
 
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 	mockHTTPClient.On("Do", mock.Anything).Return(&http.Response{
 		StatusCode: http.StatusInternalServerError,
 		Body:       io.NopCloser(strings.NewReader("error")),
@@ -240,32 +198,28 @@ func TestAppService_HTTPClientError(t *testing.T) {
 
 	_, err := service.GetListApps("org1", 10, 1)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Failed to send request")
+	assert.Contains(t, err.Error(), "network error")
 
 	_, err = service.CreateApp("org1", "alt1", "Test app")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Failed to send request")
+	assert.Contains(t, err.Error(), "network error")
 
 	_, err = service.GetApp("org1", "app1")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Failed to send request")
+	assert.Contains(t, err.Error(), "network error")
 
 	err = service.DeleteApp("org1", "app1")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Failed to send request")
+	assert.Contains(t, err.Error(), "network error")
 }
 
 func TestAppService_ReadBodyError(t *testing.T) {
-	mockHTTPClient := new(httputil.MockHTTPClient)
-	mockOAuthService := new(oauth.MockOAuthService)
+	mockHTTPClient := new(MockHTTPClient)
 
 	service := &AppService{
-		baseUrl:      "https://api.example.com",
-		oauthService: mockOAuthService,
-		httpClient:   mockHTTPClient,
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
 	}
-
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
 	errorReader := &ErrorReader{Err: errors.New("read error")}
 	mockResponseGet := &http.Response{
@@ -308,10 +262,6 @@ func TestAppService_NewRequestError(t *testing.T) {
 	service := &AppService{
 		baseUrl: "://invalid-url",
 	}
-
-	mockOAuthService := new(oauth.MockOAuthService)
-	service.oauthService = mockOAuthService
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
 	_, err := service.GetListApps("org1", 10, 1)
 	assert.Error(t, err)

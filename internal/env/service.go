@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/pkg/conf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
@@ -21,9 +20,8 @@ type EnvServicer interface {
 }
 
 type EnvService struct {
-	baseUrl      string
-	oauthService oauth.OAuthServicer
-	httpClient   httputil.Client
+	baseUrl    string
+	httpClient httputil.Client
 }
 
 var _ EnvServicer = (*EnvService)(nil)
@@ -32,19 +30,13 @@ func NewService() *EnvService {
 	baseUrl := conf.GetBaseApixUrl()
 
 	return &EnvService{
-		baseUrl:      baseUrl,
-		oauthService: oauth.DefaultOAuthService(),
-		httpClient:   &http.Client{},
+		baseUrl:    baseUrl,
+		httpClient: httputil.NewHyphenHTTPClient(),
 	}
 
 }
 
 func (es *EnvService) GetEnvironment(organizationId, appId, environmentId string) (Environment, bool, error) {
-	token, err := es.oauthService.GetValidToken()
-	if err != nil {
-		return Environment{}, false, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
-	}
-
 	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments/%s/", es.baseUrl, organizationId, appId, environmentId)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -52,11 +44,9 @@ func (es *EnvService) GetEnvironment(organizationId, appId, environmentId string
 		return Environment{}, false, errors.Wrap(err, "Failed to create a new HTTP request")
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-
 	resp, err := es.httpClient.Do(req)
 	if err != nil {
-		return Environment{}, false, errors.Wrap(err, "Failed to perform the HTTP request")
+		return Environment{}, false, err
 	}
 	defer resp.Body.Close()
 
@@ -75,11 +65,6 @@ func (es *EnvService) GetEnvironment(organizationId, appId, environmentId string
 }
 
 func (es *EnvService) PutEnv(organizationId, appId, environmentId string, env Env) error {
-	token, err := es.oauthService.GetValidToken()
-	if err != nil {
-		return errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
-	}
-
 	envName, err := GetEnvName(environmentId)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get environment name")
@@ -97,12 +82,9 @@ func (es *EnvService) PutEnv(organizationId, appId, environmentId string, env En
 		return errors.Wrap(err, "Failed to create a new HTTP request")
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-
 	resp, err := es.httpClient.Do(req)
 	if err != nil {
-		return errors.Wrap(err, "Failed to perform the HTTP request")
+		return err
 	}
 	defer resp.Body.Close()
 
@@ -114,10 +96,6 @@ func (es *EnvService) PutEnv(organizationId, appId, environmentId string, env En
 }
 
 func (es *EnvService) GetEnv(organizationId, appId, envName string) (Env, error) {
-	token, err := es.oauthService.GetValidToken()
-	if err != nil {
-		return Env{}, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
-	}
 	url := fmt.Sprintf("%s/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, appId, envName)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -125,12 +103,9 @@ func (es *EnvService) GetEnv(organizationId, appId, envName string) (Env, error)
 		return Env{}, errors.Wrap(err, "Failed to create a new HTTP request")
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-
 	resp, err := es.httpClient.Do(req)
 	if err != nil {
-		return Env{}, errors.Wrap(err, "Failed to perform the HTTP request")
+		return Env{}, err
 	}
 	defer resp.Body.Close()
 
@@ -148,10 +123,6 @@ func (es *EnvService) GetEnv(organizationId, appId, envName string) (Env, error)
 }
 
 func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]Env, error) {
-	token, err := es.oauthService.GetValidToken()
-	if err != nil {
-		return []Env{}, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
-	}
 
 	url := fmt.Sprintf("%s/env/organizations/%s/apps/%s/envs?pageSize=%d&pageNum=%d",
 		es.baseUrl, organizationId, appId, size, page)
@@ -161,12 +132,9 @@ func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]
 		return []Env{}, errors.Wrap(err, "Failed to create a new HTTP request")
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-
 	resp, err := es.httpClient.Do(req)
 	if err != nil {
-		return []Env{}, errors.Wrap(err, "Failed to perform the HTTP request")
+		return []Env{}, err
 	}
 	defer resp.Body.Close()
 
@@ -189,10 +157,6 @@ func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]
 }
 
 func (es *EnvService) ListEnvironments(organizationId, appId string, size, page int) ([]Environment, error) {
-	token, err := es.oauthService.GetValidToken()
-	if err != nil {
-		return []Environment{}, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
-	}
 
 	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments?pageSize=%d&pageNum=%d",
 		es.baseUrl, organizationId, appId, size, page)
@@ -202,12 +166,9 @@ func (es *EnvService) ListEnvironments(organizationId, appId string, size, page 
 		return []Environment{}, errors.Wrap(err, "Failed to create a new HTTP request")
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-
 	resp, err := es.httpClient.Do(req)
 	if err != nil {
-		return []Environment{}, errors.Wrap(err, "Failed to perform the HTTP request")
+		return []Environment{}, err
 	}
 	defer resp.Body.Close()
 
