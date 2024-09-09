@@ -1,12 +1,26 @@
 package env
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
 	"os"
 	"testing"
 
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
+
+type MockHTTPClient struct {
+	mock.Mock
+}
+
+func (m *MockHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	args := m.Called(req)
+	return args.Get(0).(*http.Response), args.Error(1)
+}
 
 func TestNew(t *testing.T) {
 	// Create a temporary .env file
@@ -134,54 +148,152 @@ func TestGetFileName(t *testing.T) {
 }
 
 func TestEnvService_GetEnvironment(t *testing.T) {
-	mockService := new(MockEnvService)
-	expectedEnv := Environment{ID: "123", Name: "TestEnv"}
-	mockService.On("GetEnvironment", "org1", "app1", "env1").Return(expectedEnv, true, nil)
+	mockHTTPClient := new(MockHTTPClient)
+	service := &EnvService{
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
+	}
 
-	env, found, err := mockService.GetEnvironment("org1", "app1", "env1")
+	expectedEnv := Environment{ID: "123", Name: "TestEnv"}
+	responseBody, _ := json.Marshal(expectedEnv)
+
+	mockResponse := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader(responseBody)),
+	}
+
+	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
+
+	env, found, err := service.GetEnvironment("org1", "app1", "env1")
 	assert.NoError(t, err)
 	assert.True(t, found)
 	assert.Equal(t, expectedEnv, env)
 
-	mockService.AssertExpectations(t)
+	mockHTTPClient.AssertExpectations(t)
 }
 
 func TestEnvService_PutEnv(t *testing.T) {
-	mockService := new(MockEnvService)
-	mockService.On("PutEnv", "org1", "app1", "env1").Return(nil)
+	mockHTTPClient := new(MockHTTPClient)
+	service := &EnvService{
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
+	}
 
-	err := mockService.PutEnv("org1", "app1", "env1")
+	env := Env{Size: "100 bytes", CountVariables: 5}
+
+	mockResponse := &http.Response{
+		StatusCode: http.StatusCreated,
+		Body:       io.NopCloser(bytes.NewReader([]byte{})),
+	}
+
+	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
+
+	err := service.PutEnv("org1", "app1", "env1", env)
 	assert.NoError(t, err)
 
-	mockService.AssertExpectations(t)
+	mockHTTPClient.AssertExpectations(t)
 }
 
 func TestEnvService_GetEnv(t *testing.T) {
-	mockService := new(MockEnvService)
-	expectedEnv := Env{Size: "100 bytes", CountVariables: 5}
-	mockService.On("GetEnv", "org1", "app1", "env1").Return(expectedEnv, nil)
+	mockHTTPClient := new(MockHTTPClient)
+	service := &EnvService{
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
+	}
 
-	env, err := mockService.GetEnv("org1", "app1", "env1")
+	expectedEnv := Env{Size: "100 bytes", CountVariables: 5}
+	responseBody, _ := json.Marshal(expectedEnv)
+
+	mockResponse := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader(responseBody)),
+	}
+
+	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
+
+	env, err := service.GetEnv("org1", "app1", "env1")
 	assert.NoError(t, err)
 	assert.Equal(t, expectedEnv, env)
 
-	mockService.AssertExpectations(t)
+	mockHTTPClient.AssertExpectations(t)
 }
 
 func TestEnvService_ListEnvs(t *testing.T) {
-	mockService := new(MockEnvService)
+	mockHTTPClient := new(MockHTTPClient)
+	service := &EnvService{
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
+	}
+
 	expectedEnvs := []Env{
 		{Size: "100 bytes", CountVariables: 5},
 		{Size: "200 bytes", CountVariables: 10},
 	}
-	mockService.On("ListEnvs", "org1", "app1", 10, 1).Return(expectedEnvs, nil)
+	envsData := struct {
+		Data       []Env `json:"data"`
+		TotalCount int   `json:"totalCount"`
+		PageNum    int   `json:"pageNum"`
+		PageSize   int   `json:"pageSize"`
+	}{
+		Data:       expectedEnvs,
+		TotalCount: 2,
+		PageNum:    1,
+		PageSize:   10,
+	}
+	responseBody, _ := json.Marshal(envsData)
 
-	envs, err := mockService.ListEnvs("org1", "app1", 10, 1)
+	mockResponse := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader(responseBody)),
+	}
+
+	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
+
+	envs, err := service.ListEnvs("org1", "app1", 10, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedEnvs, envs)
 	assert.Len(t, envs, 2)
 
-	mockService.AssertExpectations(t)
+	mockHTTPClient.AssertExpectations(t)
+}
+
+func TestEnvService_ListEnvironments(t *testing.T) {
+	mockHTTPClient := new(MockHTTPClient)
+	service := &EnvService{
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
+	}
+
+	expectedEnvs := []Environment{
+		{ID: "env1", Name: "Env 1"},
+		{ID: "env2", Name: "Env 2"},
+	}
+	envsData := struct {
+		Data       []Environment `json:"data"`
+		TotalCount int           `json:"totalCount"`
+		PageNum    int           `json:"pageNum"`
+		PageSize   int           `json:"pageSize"`
+	}{
+		Data:       expectedEnvs,
+		TotalCount: 2,
+		PageNum:    1,
+		PageSize:   10,
+	}
+	responseBody, _ := json.Marshal(envsData)
+
+	mockResponse := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader(responseBody)),
+	}
+
+	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
+
+	envs, err := service.ListEnvironments("org1", "app1", 10, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedEnvs, envs)
+	assert.Len(t, envs, 2)
+
+	mockHTTPClient.AssertExpectations(t)
 }
 
 func TestGetEnvsInDirectory(t *testing.T) {

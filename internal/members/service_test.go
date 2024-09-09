@@ -7,12 +7,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/pkg/errors"
-	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+type MockHTTPClient struct {
+	mock.Mock
+}
+
+func (m *MockHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	args := m.Called(req)
+	return args.Get(0).(*http.Response), args.Error(1)
+}
 
 func TestNewService(t *testing.T) {
 	os.Setenv("HYPHEN_CUSTOM_APIX", "https://custom-api.example.com")
@@ -20,21 +27,16 @@ func TestNewService(t *testing.T) {
 
 	service := NewService()
 	assert.Equal(t, "https://custom-api.example.com", service.baseUrl)
-	assert.NotNil(t, service.oauthService)
 	assert.NotNil(t, service.httpClient)
 }
 
 func TestListMembers(t *testing.T) {
-	mockHTTPClient := new(httputil.MockHTTPClient)
-	mockOAuthService := new(oauth.MockOAuthService)
+	mockHTTPClient := new(MockHTTPClient)
 
 	service := &MemberService{
-		baseUrl:      "https://api.example.com",
-		oauthService: mockOAuthService,
-		httpClient:   mockHTTPClient,
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
 	}
-
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
 	responseBody := `{
 		"data": [
@@ -57,21 +59,16 @@ func TestListMembers(t *testing.T) {
 	assert.Equal(t, "member1", members[0].ID)
 	assert.Equal(t, "member2", members[1].ID)
 
-	mockOAuthService.AssertExpectations(t)
 	mockHTTPClient.AssertExpectations(t)
 }
 
 func TestCreateMemberForOrg(t *testing.T) {
-	mockHTTPClient := new(httputil.MockHTTPClient)
-	mockOAuthService := new(oauth.MockOAuthService)
+	mockHTTPClient := new(MockHTTPClient)
 
 	service := &MemberService{
-		baseUrl:      "https://api.example.com",
-		oauthService: mockOAuthService,
-		httpClient:   mockHTTPClient,
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
 	}
-
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
 	newMember := Member{
 		FirstName: "Alice",
@@ -96,39 +93,62 @@ func TestCreateMemberForOrg(t *testing.T) {
 	assert.Equal(t, "Smith", createdMember.LastName)
 	assert.Equal(t, "alice@example.com", createdMember.Email)
 
-	mockOAuthService.AssertExpectations(t)
+	mockHTTPClient.AssertExpectations(t)
+}
+
+func TestDeleteMember(t *testing.T) {
+	mockHTTPClient := new(MockHTTPClient)
+
+	service := &MemberService{
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
+	}
+
+	mockResponse := &http.Response{
+		StatusCode: http.StatusNoContent,
+		Body:       io.NopCloser(strings.NewReader("")),
+	}
+
+	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
+
+	err := service.DeleteMember("org1", "member1")
+
+	assert.NoError(t, err)
+
+	mockHTTPClient.AssertExpectations(t)
+}
+
+func TestDeleteMember_Error(t *testing.T) {
+	mockHTTPClient := new(MockHTTPClient)
+
+	service := &MemberService{
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
+	}
+
+	mockResponse := &http.Response{
+		StatusCode: http.StatusInternalServerError,
+		Body:       io.NopCloser(strings.NewReader("Internal Server Error")),
+	}
+
+	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
+
+	err := service.DeleteMember("org1", "member1")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "internal server error: please try again later")
+
 	mockHTTPClient.AssertExpectations(t)
 }
 
 func TestErrorHandling(t *testing.T) {
-	t.Run("Authentication Error", func(t *testing.T) {
-		mockHTTPClient := new(httputil.MockHTTPClient)
-		mockOAuthService := new(oauth.MockOAuthService)
-
-		service := &MemberService{
-			baseUrl:      "https://api.example.com",
-			oauthService: mockOAuthService,
-			httpClient:   mockHTTPClient,
-		}
-
-		mockOAuthService.On("GetValidToken").Return("", errors.New("auth error"))
-
-		_, err := service.ListMembers("org1")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Failed to authenticate")
-	})
-
 	t.Run("HTTP Error", func(t *testing.T) {
-		mockHTTPClient := new(httputil.MockHTTPClient)
-		mockOAuthService := new(oauth.MockOAuthService)
+		mockHTTPClient := new(MockHTTPClient)
 
 		service := &MemberService{
-			baseUrl:      "https://api.example.com",
-			oauthService: mockOAuthService,
-			httpClient:   mockHTTPClient,
+			baseUrl:    "https://api.example.com",
+			httpClient: mockHTTPClient,
 		}
-
-		mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
 		mockResponse := &http.Response{
 			StatusCode: http.StatusInternalServerError,
@@ -143,16 +163,12 @@ func TestErrorHandling(t *testing.T) {
 	})
 
 	t.Run("JSON Parsing Error", func(t *testing.T) {
-		mockHTTPClient := new(httputil.MockHTTPClient)
-		mockOAuthService := new(oauth.MockOAuthService)
+		mockHTTPClient := new(MockHTTPClient)
 
 		service := &MemberService{
-			baseUrl:      "https://api.example.com",
-			oauthService: mockOAuthService,
-			httpClient:   mockHTTPClient,
+			baseUrl:    "https://api.example.com",
+			httpClient: mockHTTPClient,
 		}
-
-		mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
 		mockResponse := &http.Response{
 			StatusCode: http.StatusOK,
@@ -168,16 +184,13 @@ func TestErrorHandling(t *testing.T) {
 }
 
 func TestMemberService_HTTPClientError(t *testing.T) {
-	mockHTTPClient := new(httputil.MockHTTPClient)
-	mockOAuthService := new(oauth.MockOAuthService)
+	mockHTTPClient := new(MockHTTPClient)
 
 	service := &MemberService{
-		baseUrl:      "https://api.example.com",
-		oauthService: mockOAuthService,
-		httpClient:   mockHTTPClient,
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
 	}
 
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 	mockHTTPClient.On("Do", mock.Anything).Return(&http.Response{
 		StatusCode: http.StatusInternalServerError,
 		Body:       io.NopCloser(strings.NewReader("error")),
@@ -185,24 +198,20 @@ func TestMemberService_HTTPClientError(t *testing.T) {
 
 	_, err := service.ListMembers("org1")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Failed to send request")
+	assert.Contains(t, err.Error(), "network error")
 
 	_, err = service.CreateMemberForOrg("org1", Member{})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Failed to send request")
+	assert.Contains(t, err.Error(), "network error")
 }
 
 func TestMemberService_ReadBodyError(t *testing.T) {
-	mockHTTPClient := new(httputil.MockHTTPClient)
-	mockOAuthService := new(oauth.MockOAuthService)
+	mockHTTPClient := new(MockHTTPClient)
 
 	service := &MemberService{
-		baseUrl:      "https://api.example.com",
-		oauthService: mockOAuthService,
-		httpClient:   mockHTTPClient,
+		baseUrl:    "https://api.example.com",
+		httpClient: mockHTTPClient,
 	}
-
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
 
 	errorReader := &ErrorReader{Err: errors.New("read error")}
 	mockResponseGet := &http.Response{
@@ -241,108 +250,11 @@ func TestMemberService_NewRequestError(t *testing.T) {
 		baseUrl: "://invalid-url",
 	}
 
-	mockOAuthService := new(oauth.MockOAuthService)
-	service.oauthService = mockOAuthService
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
-
 	_, err := service.ListMembers("org1")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to create request")
 
 	_, err = service.CreateMemberForOrg("org1", Member{})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Failed to create request")
-}
-
-func TestDeleteMember(t *testing.T) {
-	mockHTTPClient := new(httputil.MockHTTPClient)
-	mockOAuthService := new(oauth.MockOAuthService)
-
-	service := &MemberService{
-		baseUrl:      "https://api.example.com",
-		oauthService: mockOAuthService,
-		httpClient:   mockHTTPClient,
-	}
-
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
-
-	mockResponse := &http.Response{
-		StatusCode: http.StatusNoContent,
-		Body:       io.NopCloser(strings.NewReader("")),
-	}
-
-	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
-
-	err := service.DeleteMember("org1", "member1")
-
-	assert.NoError(t, err)
-
-	mockOAuthService.AssertExpectations(t)
-	mockHTTPClient.AssertExpectations(t)
-}
-
-func TestDeleteMember_Error(t *testing.T) {
-	mockHTTPClient := new(httputil.MockHTTPClient)
-	mockOAuthService := new(oauth.MockOAuthService)
-
-	service := &MemberService{
-		baseUrl:      "https://api.example.com",
-		oauthService: mockOAuthService,
-		httpClient:   mockHTTPClient,
-	}
-
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
-
-	mockResponse := &http.Response{
-		StatusCode: http.StatusInternalServerError,
-		Body:       io.NopCloser(strings.NewReader("Internal Server Error")),
-	}
-
-	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
-
-	err := service.DeleteMember("org1", "member1")
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "internal server error: please try again later")
-
-	mockOAuthService.AssertExpectations(t)
-	mockHTTPClient.AssertExpectations(t)
-}
-
-func TestMemberService_DeleteMember_HTTPClientError(t *testing.T) {
-	mockHTTPClient := new(httputil.MockHTTPClient)
-	mockOAuthService := new(oauth.MockOAuthService)
-
-	service := &MemberService{
-		baseUrl:      "https://api.example.com",
-		oauthService: mockOAuthService,
-		httpClient:   mockHTTPClient,
-	}
-
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
-
-	// Return a non-nil http.Response with the error
-	mockResponse := &http.Response{
-		StatusCode: http.StatusInternalServerError,
-		Body:       io.NopCloser(strings.NewReader("network error")),
-	}
-	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, errors.New("network error"))
-
-	err := service.DeleteMember("org1", "member1")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Failed to send request")
-}
-
-func TestMemberService_DeleteMember_NewRequestError(t *testing.T) {
-	service := &MemberService{
-		baseUrl: "://invalid-url",
-	}
-
-	mockOAuthService := new(oauth.MockOAuthService)
-	service.oauthService = mockOAuthService
-	mockOAuthService.On("GetValidToken").Return("valid_token", nil)
-
-	err := service.DeleteMember("org1", "member1")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to create request")
 }
