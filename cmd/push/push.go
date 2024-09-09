@@ -47,7 +47,7 @@ and have reviewed the changes before pushing.
 			return
 		}
 
-		envName, err := utils.GetEnvronmentID()
+		envName, err := env.GetEnvronmentID()
 		if err != nil {
 			cmd.PrintErrf("Error: %s\n", err)
 			return

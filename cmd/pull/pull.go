@@ -43,7 +43,7 @@ Example:
 			return
 		}
 
-		envName, err := utils.GetEnvronmentID()
+		envName, err := env.GetEnvronmentID()
 		if err != nil {
 			cprint.Error(cmd, err)
 			return

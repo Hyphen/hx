@@ -34,6 +34,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&utils.ProjFlag, "proj", "", "Project ID (e.g., proj_123)")
 	rootCmd.PersistentFlags().StringVar(&utils.EnvironmentFlag, "env", "", "Environment ID (e.g., env_12345)")
 	rootCmd.PersistentFlags().BoolVarP(&utils.YesFlag, "yes", "y", false, "Automatically answer yes for prompts")
+	rootCmd.PersistentFlags().StringVar(&utils.ApiKey, "app-key", "", "API Key")
 }
 
 func Execute() {

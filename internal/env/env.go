@@ -11,6 +11,7 @@ import (
 
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/errors"
+	"github.com/Hyphen/cli/pkg/utils"
 )
 
 type Env struct {
@@ -210,4 +211,17 @@ func GetEnvNameFromFile(fileName string) (string, error) {
 	envName := strings.TrimSuffix(trimmedName, ".env")
 
 	return envName, nil
+}
+
+func GetEnvronmentID() (string, error) {
+	if utils.EnvironmentFlag != "" {
+		envName, err := GetEnvName(utils.EnvironmentFlag)
+		if err != nil {
+			return "", errors.Wrap(err, fmt.Sprintf("environment '%s' is not valid", utils.EnvironmentFlag))
+		}
+		return envName, nil
+	}
+
+	return "", nil
+
 }
