@@ -19,6 +19,7 @@ Global Flags:
   - `--org`: Organization ID (e.g., org_123)
   - `--proj`: Project ID (e.g., proj_123)
   - `--env`: Environment ID (e.g., env_12345)
+  - `--api-key`: API Key (e.g, key_123)
   - `--yes, -y`: Automatically answer yes for prompts
 
 Available Commands:
