@@ -10,12 +10,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"os/exec"
 	"runtime"
 	"time"
 
 	"github.com/Hyphen/cli/config"
+	"github.com/Hyphen/cli/pkg/conf"
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
@@ -76,10 +76,7 @@ func DefaultOAuthService() *OAuthService {
 }
 
 func NewOAuthService(httpClient HTTPClient, timeProvider TimeProvider, browserOpener BrowserOpener) *OAuthService {
-	baseUrl := os.Getenv("HYPHEN_CUSTOM_AUTH")
-	if baseUrl == "" {
-		baseUrl = "https://auth.hyphen.ai"
-	}
+	baseUrl := conf.GetBaseAuthUrl()
 
 	return &OAuthService{
 		baseUrl:       baseUrl,

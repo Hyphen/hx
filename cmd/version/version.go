@@ -1,8 +1,7 @@
 package version
 
 import (
-	"fmt"
-
+	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/spf13/cobra"
 )
 
@@ -14,11 +13,14 @@ var VersionCmd = &cobra.Command{
 	Short: "Print the version number of Hyphen",
 	Long:  `All software has versions. This is Hyphen's`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if Version == "" {
-			Version = "unknown" // Default if not set by ldflags
-		}
-		fmt.Printf("Hyphen Version %s\n", Version)
+		printVersionInfo()
 	},
+}
+
+func printVersionInfo() {
+	version := GetVersion()
+	cprint.PrintHeader("Hyphen Version Information")
+	cprint.PrintDetail("Version", version)
 }
 
 // GetVersion returns the current version of the CLI

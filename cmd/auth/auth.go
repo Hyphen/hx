@@ -2,49 +2,66 @@ package auth
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/Hyphen/cli/config"
 	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/internal/user"
+	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/spf13/cobra"
 )
 
 var AuthCmd = &cobra.Command{
 	Use:   "auth",
-	Short: "auth with hyphen",
-	Long:  `Configure sets up environment variables and aliases for the CLI tool.`,
+	Short: "Authenticate with Hyphen",
+	Long:  `Authenticate and set up credentials for the Hyphen CLI.`,
 	Run: func(cmd *cobra.Command, args []string) {
-
 		if err := login(); err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
+			cprint.Error(cmd, err)
+			return
 		}
 	},
 }
 
 func login() error {
+	cprint.PrintHeader("Hyphen Authentication Process")
+
 	oauthService := oauth.DefaultOAuthService()
 	token, err := oauthService.StartOAuthServer()
 	if err != nil {
 		return fmt.Errorf("failed to start OAuth server: %w", err)
 	}
+
+	cprint.Success("OAuth server started successfully")
+
 	var organizationID string
 
 	if err := config.SaveCredentials(organizationID, token.AccessToken, token.RefreshToken, token.IDToken, token.ExpiryTime); err != nil {
 		return fmt.Errorf("failed to save credentials: %w", err)
 	}
 
-	user, error := user.NewService().GetUserInformation()
-	if error != nil {
-		return fmt.Errorf("failed to get user information: %w", error)
+	cprint.Success("Credentials saved successfully")
+
+	user, err := user.NewService().GetUserInformation()
+	if err != nil {
+		return fmt.Errorf("failed to get user information: %w", err)
 	}
+
 	organizationID = user.Memberships[0].Organization.ID
 
 	if err := config.UpdateOrganizationID(organizationID); err != nil {
 		return fmt.Errorf("failed to update organization ID: %w", err)
 	}
 
-	fmt.Println("Login successful!")
+	printAuthenticationSummary(&user, organizationID)
 	return nil
+}
+
+func printAuthenticationSummary(user *user.UserInfo, organizationID string) {
+	cprint.PrintHeader("Authentication Summary")
+	cprint.Success("Login successful!")
+	cprint.Print("") // Add an empty line for better spacing
+	cprint.PrintDetail("User", user.Memberships[0].Email)
+	cprint.PrintDetail("Organization ID", organizationID)
+	cprint.Print("") // Add an empty line for better spacing
+	cprint.GreenPrint("You are now authenticated and ready to use Hyphen CLI.")
 }
