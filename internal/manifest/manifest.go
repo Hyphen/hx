@@ -2,11 +2,29 @@ package manifest
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
+	"github.com/Hyphen/cli/config"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/errors"
 )
+
+type configProvider interface {
+	GetConfigDirectory() string
+}
+
+type defaultConfigProvider struct{}
+
+func (d *defaultConfigProvider) GetConfigDirectory() string {
+	return config.GetConfigDirectory()
+}
+
+var currentConfigProvider configProvider = &defaultConfigProvider{}
+
+func SetConfigProvider(provider configProvider) {
+	currentConfigProvider = provider
+}
 
 var (
 	ManifestConfigFile = ".hyphen-manifest-key.json"
@@ -17,6 +35,7 @@ type ManifestConfig struct {
 	AppName        string `json:"app_name"`
 	AppId          string `json:"app_id"`
 	AppAlternateId string `json:"app_alternate_id"`
+	OrganisationId string `json:"organisation_id"`
 }
 
 type Manifest struct {
@@ -42,6 +61,7 @@ func Initialize(organizationId, appName, appID, appAlternateId string) (Manifest
 		AppName:        appName,
 		AppId:          appID,
 		AppAlternateId: appAlternateId,
+		OrganisationId: organizationId,
 	}
 	jsonData, err := json.MarshalIndent(mc, "", "  ")
 	if err != nil {
@@ -71,38 +91,91 @@ func Initialize(organizationId, appName, appID, appAlternateId string) (Manifest
 
 	return m, nil
 }
+
 func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, error) {
-	mc, err := readAndUnmarshalConfigJSON[ManifestConfig](manifestConfigFile)
-	if err != nil {
-		return Manifest{}, err
+	var mconfig ManifestConfig
+	var secret ManifestSecret
+	var hasConfig, hasSecret bool
+
+	globalConfigFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), manifestConfigFile)
+	globalConfig, globalConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
+	if globalConfigErr == nil {
+		mconfig = globalConfig
+		hasConfig = true
 	}
 
-	ms, err := readAndUnmarshalConfigJSON[ManifestSecret](manifestSecretFile)
-	if err != nil {
-		return Manifest{}, err
+	globalSecretFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), manifestSecretFile)
+	globalSecret, globalSecretErr := readAndUnmarshalConfigJSON[ManifestSecret](globalSecretFile)
+	if globalSecretErr == nil {
+		secret = globalSecret
+		hasSecret = true
+	}
+
+	localConfig, localConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](manifestConfigFile)
+	if localConfigErr == nil {
+		mconfig = mergeConfigs(mconfig, localConfig)
+		hasConfig = true
+	}
+
+	localSecret, localSecretErr := readAndUnmarshalConfigJSON[ManifestSecret](manifestSecretFile)
+	if localSecretErr == nil {
+		secret = mergeSecrets(secret, localSecret)
+		hasSecret = true
+	}
+
+	if !hasConfig {
+		return Manifest{}, errors.New("No valid configuration found (neither global nor local)")
+	}
+	if !hasSecret {
+		return Manifest{}, errors.New("No valid secret found (neither global nor local)")
 	}
 
 	return Manifest{
-		ManifestConfig: mc,
-		ManifestSecret: ms,
+		ManifestConfig: mconfig,
+		ManifestSecret: secret,
 	}, nil
+}
+
+func mergeConfigs(base, override ManifestConfig) ManifestConfig {
+	merged := base
+
+	if override.AppName != "" {
+		merged.AppName = override.AppName
+	}
+	if override.AppId != "" {
+		merged.AppId = override.AppId
+	}
+	if override.AppAlternateId != "" {
+		merged.AppAlternateId = override.AppAlternateId
+	}
+	if override.OrganisationId != "" {
+		merged.OrganisationId = override.OrganisationId
+	}
+
+	return merged
+}
+
+func mergeSecrets(base, override ManifestSecret) ManifestSecret {
+	merged := base
+
+	if override.SecretKey != "" {
+		merged.SecretKey = override.SecretKey
+	}
+
+	return merged
 }
 
 func readAndUnmarshalConfigJSON[T any](filename string) (T, error) {
 	var result T
 
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		return result, errors.New("You must init the environment with 'env init'")
-	}
-
 	jsonData, err := os.ReadFile(filename)
 	if err != nil {
-		return result, errors.Wrap(err, "Error reading JSON file")
+		return result, err
 	}
 
 	err = json.Unmarshal(jsonData, &result)
 	if err != nil {
-		return result, errors.Wrap(err, "Error decoding JSON file")
+		return result, errors.Wrapf(err, "Error decoding JSON file: %s", filename)
 	}
 
 	return result, nil

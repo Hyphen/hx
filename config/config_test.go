@@ -17,7 +17,7 @@ func TestSaveCredentialsSuccess(t *testing.T) {
 	mockFS := &fsutil.MockFileSystem{}
 	FS = mockFS
 
-	credentialFile := filepath.Join(getConfigDirectory(), CredentialFile)
+	credentialFile := filepath.Join(GetConfigDirectory(), CredentialFile)
 	expectedCredentials := CredentialsConfig{
 		Default: Credentials{
 			HyphenAccessToken:  "user_access_token",
@@ -95,7 +95,7 @@ func TestLoadCredentialsSuccess(t *testing.T) {
 	mockFS := &fsutil.MockFileSystem{}
 	FS = mockFS
 
-	credentialFile := filepath.Join(getConfigDirectory(), CredentialFile)
+	credentialFile := filepath.Join(GetConfigDirectory(), CredentialFile)
 	expectedCredentials := CredentialsConfig{
 		Default: Credentials{
 			HyphenAccessToken:  "user_access_token",
@@ -162,7 +162,7 @@ func TestUpdateOrganizationID(t *testing.T) {
 	mockFS := &fsutil.MockFileSystem{}
 	FS = mockFS
 
-	credentialFile := filepath.Join(getConfigDirectory(), CredentialFile)
+	credentialFile := filepath.Join(GetConfigDirectory(), CredentialFile)
 	initialCredentials := CredentialsConfig{
 		Default: Credentials{
 			HyphenAccessToken:  "user_access_token",

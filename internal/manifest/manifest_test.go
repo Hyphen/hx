@@ -9,6 +9,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type mockConfigProvider struct {
+	configDir string
+}
+
+func (m *mockConfigProvider) GetConfigDirectory() string {
+	return m.configDir
+}
+
 func TestInitialize(t *testing.T) {
 	// Temporarily change ManifestConfigFile and ManifestSecretFile for testing
 	oldManifestConfigFile := ManifestConfigFile
@@ -49,68 +57,48 @@ func TestInitialize(t *testing.T) {
 }
 
 func TestRestoreFromFile(t *testing.T) {
-	t.Run("Successful restore", func(t *testing.T) {
-		configFile, err := os.CreateTemp("", "test-manifest-config-*.json")
-		require.NoError(t, err)
-		defer os.Remove(configFile.Name())
+	// Set up mock config provider
+	mockProvider := &mockConfigProvider{configDir: "/mock/config"}
+	SetConfigProvider(mockProvider)
+	defer SetConfigProvider(&defaultConfigProvider{})
 
-		secretFile, err := os.CreateTemp("", "test-manifest-secret-*.json")
-		require.NoError(t, err)
-		defer os.Remove(secretFile.Name())
-
-		configContent := `{
+	t.Run("Successful restore with local files", func(t *testing.T) {
+		// Create temporary files for testing
+		localConfigFile := createTempFile(t, `{
 			"app_name": "TestApp",
 			"app_id": "app1",
-			"app_alternate_id": "test-app"
-		}`
-		_, err = configFile.WriteString(configContent)
-		require.NoError(t, err)
-		configFile.Close()
+			"app_alternate_id": "test-app",
+			"organisation_id": "org1"
+		}`)
+		defer os.Remove(localConfigFile.Name())
 
-		secretContent := `{
+		localSecretFile := createTempFile(t, `{
 			"secret_key": "dGVzdC1zZWNyZXQta2V5"
-		}`
-		_, err = secretFile.WriteString(secretContent)
-		require.NoError(t, err)
-		secretFile.Close()
+		}`)
+		defer os.Remove(localSecretFile.Name())
 
-		m, err := RestoreFromFile(configFile.Name(), secretFile.Name())
+		m, err := RestoreFromFile(localConfigFile.Name(), localSecretFile.Name())
 		assert.NoError(t, err)
 		assert.Equal(t, "TestApp", m.AppName)
 		assert.Equal(t, "app1", m.AppId)
 		assert.Equal(t, "test-app", m.AppAlternateId)
+		assert.Equal(t, "org1", m.OrganisationId)
 		assert.Equal(t, "dGVzdC1zZWNyZXQta2V5", m.SecretKey)
 	})
 
-	t.Run("Config file does not exist", func(t *testing.T) {
-		_, err := RestoreFromFile("non-existent-file", "some-secret-file")
+	t.Run("No config files exist", func(t *testing.T) {
+		_, err := RestoreFromFile("non-existent-config.json", "non-existent-secret.json")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "You must init the environment with 'env init'")
-	})
-
-	t.Run("Secret file does not exist", func(t *testing.T) {
-		configFile, err := os.CreateTemp("", "test-manifest-config-*.json")
-		require.NoError(t, err)
-		defer os.Remove(configFile.Name())
-
-		_, err = RestoreFromFile("non-existent-file", "non-existent-file")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "You must init the environment with 'env init'")
+		assert.Contains(t, err.Error(), "No valid configuration found")
 	})
 
 	t.Run("Invalid JSON content", func(t *testing.T) {
-		tempFile, err := os.CreateTemp("", "test-manifest-*.json")
-		require.NoError(t, err)
-		defer os.Remove(tempFile.Name())
+		invalidFile := createTempFile(t, `invalid json content`)
+		defer os.Remove(invalidFile.Name())
 
-		content := `invalid json content`
-		_, err = tempFile.WriteString(content)
-		require.NoError(t, err)
-		tempFile.Close()
-
-		_, err = RestoreFromFile(tempFile.Name(), tempFile.Name())
+		_, err := RestoreFromFile(invalidFile.Name(), invalidFile.Name())
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Error decoding JSON file")
+		assert.Contains(t, err.Error(), "No valid configuration found (neither global nor local)")
 	})
 }
 
@@ -130,7 +118,8 @@ func TestRestore(t *testing.T) {
 		configContent := `{
 			"app_name": "TestApp",
 			"app_id": "app1",
-			"app_alternate_id": "test-app"
+			"app_alternate_id": "test-app",
+			"organisation_id": "org1"
 		}`
 		err := os.WriteFile(ManifestConfigFile, []byte(configContent), 0644)
 		require.NoError(t, err)
@@ -146,15 +135,16 @@ func TestRestore(t *testing.T) {
 		assert.Equal(t, "TestApp", m.AppName)
 		assert.Equal(t, "app1", m.AppId)
 		assert.Equal(t, "test-app", m.AppAlternateId)
+		assert.Equal(t, "org1", m.OrganisationId)
 		assert.Equal(t, "dGVzdC1zZWNyZXQta2V5", m.SecretKey)
 	})
 
-	t.Run("File does not exist", func(t *testing.T) {
+	t.Run("Files do not exist", func(t *testing.T) {
 		os.Remove(ManifestConfigFile)
 		os.Remove(ManifestSecretFile)
 		_, err := Restore()
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "You must init the environment with 'env init'")
+		assert.Contains(t, err.Error(), "No valid configuration found")
 	})
 }
 
@@ -190,4 +180,17 @@ func TestGetSecretKey(t *testing.T) {
 	sk := m.GetSecretKey()
 	assert.IsType(t, &secretkey.SecretKey{}, sk)
 	assert.Equal(t, "dGVzdC1zZWNyZXQta2V5", sk.Base64())
+}
+
+func createTempFile(t *testing.T, content string) *os.File {
+	tmpfile, err := os.CreateTemp("", "test-manifest-*.json")
+	require.NoError(t, err)
+
+	_, err = tmpfile.Write([]byte(content))
+	require.NoError(t, err)
+
+	err = tmpfile.Close()
+	require.NoError(t, err)
+
+	return tmpfile
 }
