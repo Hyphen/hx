@@ -1,4 +1,4 @@
-package conf
+package apiconf
 
 import "os"
 

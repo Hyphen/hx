@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/Hyphen/cli/pkg/conf"
+	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
 )
@@ -20,7 +20,7 @@ type UserService struct {
 }
 
 func NewService() UserServicer {
-	baseUrl := conf.GetBaseApixUrl()
+	baseUrl := apiconf.GetBaseApixUrl()
 	return &UserService{
 		baseUrl: baseUrl,
 		client:  httputil.NewHyphenHTTPClient(),
