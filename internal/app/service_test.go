@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+// todo use the http client
 type MockHTTPClient struct {
 	mock.Mock
 }

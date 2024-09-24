@@ -32,10 +32,10 @@ var (
 )
 
 type ManifestConfig struct {
-	AppName        string `json:"app_name"`
-	AppId          string `json:"app_id"`
-	AppAlternateId string `json:"app_alternate_id"`
-	OrganisationId string `json:"organisation_id"`
+	AppName        *string `json:"app_name,omitempty"`
+	AppId          *string `json:"app_id,omitempty"`
+	AppAlternateId *string `json:"app_alternate_id,omitempty"`
+	OrganisationId string  `json:"organisation_id"`
 }
 
 type Manifest struct {
@@ -58,9 +58,9 @@ func Initialize(organizationId, appName, appID, appAlternateId string) (Manifest
 	}
 
 	mc := ManifestConfig{
-		AppName:        appName,
-		AppId:          appID,
-		AppAlternateId: appAlternateId,
+		AppName:        &appName,
+		AppId:          &appID,
+		AppAlternateId: &appAlternateId,
 		OrganisationId: organizationId,
 	}
 	jsonData, err := json.MarshalIndent(mc, "", "  ")
@@ -96,12 +96,14 @@ func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, e
 	var mconfig ManifestConfig
 	var secret ManifestSecret
 	var hasConfig, hasSecret bool
+	var hasOnlyGlobalConfig bool
 
 	globalConfigFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), manifestConfigFile)
 	globalConfig, globalConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
 	if globalConfigErr == nil {
 		mconfig = globalConfig
 		hasConfig = true
+		hasOnlyGlobalConfig = true
 	}
 
 	globalSecretFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), manifestSecretFile)
@@ -109,6 +111,7 @@ func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, e
 	if globalSecretErr == nil {
 		secret = globalSecret
 		hasSecret = true
+		hasOnlyGlobalConfig = false
 	}
 
 	localConfig, localConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](manifestConfigFile)
@@ -123,13 +126,11 @@ func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, e
 		hasSecret = true
 	}
 
-	if !hasConfig ||
-		mconfig.AppId == "" ||
-		mconfig.AppName == "" ||
-		mconfig.AppAlternateId == "" {
+	if !hasConfig {
 		return Manifest{}, errors.New("No valid configuration found (neither global nor local)")
 	}
-	if !hasSecret {
+
+	if !hasSecret && !hasOnlyGlobalConfig {
 		return Manifest{}, errors.New("No valid secret found (neither global nor local)")
 	}
 
@@ -142,13 +143,13 @@ func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, e
 func mergeConfigs(base, override ManifestConfig) ManifestConfig {
 	merged := base
 
-	if override.AppName != "" {
+	if override.AppName != nil {
 		merged.AppName = override.AppName
 	}
-	if override.AppId != "" {
+	if override.AppId != nil {
 		merged.AppId = override.AppId
 	}
-	if override.AppAlternateId != "" {
+	if override.AppAlternateId != nil {
 		merged.AppAlternateId = override.AppAlternateId
 	}
 	if override.OrganisationId != "" {
@@ -217,9 +218,9 @@ func UpdateOrganizationID(organizationID string) error {
 
 	if !hasConfig {
 		mc := ManifestConfig{
-			AppName:        "",
-			AppId:          "",
-			AppAlternateId: "",
+			AppName:        nil,
+			AppId:          nil,
+			AppAlternateId: nil,
 			OrganisationId: organizationID,
 		}
 		jsonData, err := json.MarshalIndent(mc, "", "  ")

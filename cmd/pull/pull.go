@@ -55,6 +55,12 @@ Example:
 			return
 		}
 
+		if manifest.AppId == nil {
+			cprint.Error(cmd, fmt.Errorf("No app ID found in manifest"))
+			return
+		}
+		appId := *manifest.AppId
+
 		if envName == "" {
 			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, manifest)
 			if err != nil {
@@ -62,7 +68,7 @@ Example:
 				return
 			}
 
-			printPullSummary(manifest.AppId, pulledEnvs)
+			printPullSummary(appId, pulledEnvs)
 		} else {
 			err = service.checkForEnvironment(orgId, envName, manifest)
 			if err != nil {
@@ -74,7 +80,7 @@ Example:
 				return
 			}
 
-			printPullSummary(manifest.AppId, []string{envName})
+			printPullSummary(appId, []string{envName})
 		}
 
 	},
@@ -91,7 +97,7 @@ func newService(envService env.EnvServicer) *service {
 }
 
 func (s *service) checkForEnvironment(orgId, envName string, m manifest.Manifest) error {
-	_, exist, err := s.envService.GetEnvironment(orgId, m.AppId, envName)
+	_, exist, err := s.envService.GetEnvironment(orgId, *m.AppId, envName)
 	if !exist && err == nil {
 		return fmt.Errorf("Environment %s not found", envName)
 	}
@@ -103,7 +109,7 @@ func (s *service) checkForEnvironment(orgId, envName string, m manifest.Manifest
 }
 
 func (s *service) saveDecryptedEnvIntoFile(orgId, envName string, m manifest.Manifest) error {
-	e, err := s.envService.GetEnv(orgId, m.AppId, envName)
+	e, err := s.envService.GetEnv(orgId, *m.AppId, envName)
 	if err != nil {
 		return err
 	}
@@ -121,7 +127,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName string, m manifest.Man
 }
 
 func (s *service) getAllEnvsAndDecryptIntoFiles(orgId string, m manifest.Manifest) ([]string, error) {
-	allEnvs, err := s.envService.ListEnvs(orgId, m.AppId, 100, 1)
+	allEnvs, err := s.envService.ListEnvs(orgId, *m.AppId, 100, 1)
 	if err != nil {
 		return nil, err
 	}
