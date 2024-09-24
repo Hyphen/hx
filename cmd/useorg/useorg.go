@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Hyphen/cli/config"
+	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +19,15 @@ var UseOrgCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to update organization ID: %w", err)
 		}
-		fmt.Printf("Organization ID updated to: %s\n", orgID)
+		printOrgUpdateSuccess(orgID)
 		return nil
 	},
+}
+
+func printOrgUpdateSuccess(orgID string) {
+	cprint.PrintHeader("--- Organization Update ---")
+	cprint.Success("Successfully updated organization ID")
+	cprint.PrintDetail("New Organization ID", orgID)
+	fmt.Println()
+	cprint.GreenPrint("Hyphen CLI is now set to use the new organization.")
 }

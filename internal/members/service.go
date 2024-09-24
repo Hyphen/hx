@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"time"
 
-	"github.com/Hyphen/cli/internal/oauth"
+	"github.com/Hyphen/cli/pkg/conf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
 )
@@ -21,30 +19,19 @@ type MemberServicer interface {
 }
 
 type MemberService struct {
-	baseUrl      string
-	oauthService oauth.OAuthServicer
-	httpClient   httputil.Client
+	baseUrl    string
+	httpClient httputil.Client
 }
 
 func NewService() *MemberService {
-	baseUrl := "https://dev-api.hyphen.ai"
-	if customAPI := os.Getenv("HYPHEN_CUSTOM_APIX"); customAPI != "" {
-		baseUrl = customAPI
-	}
+	baseUrl := conf.GetBaseApixUrl()
 	return &MemberService{
-		baseUrl:      baseUrl,
-		oauthService: oauth.DefaultOAuthService(),
-		httpClient: &http.Client{
-			Timeout: time.Second * 30,
-		},
+		baseUrl:    baseUrl,
+		httpClient: httputil.NewHyphenHTTPClient(),
 	}
 }
 
 func (ms *MemberService) ListMembers(orgID string) ([]Member, error) {
-	token, err := ms.oauthService.GetValidToken()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
-	}
 
 	url := fmt.Sprintf("%s/api/organizations/%s/members/", ms.baseUrl, orgID)
 
@@ -53,12 +40,9 @@ func (ms *MemberService) ListMembers(orgID string) ([]Member, error) {
 		return nil, errors.Wrap(err, "Failed to create request")
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-
 	resp, err := ms.httpClient.Do(req)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to send request")
+		return nil, err
 	}
 	defer resp.Body.Close()
 
@@ -83,10 +67,6 @@ func (ms *MemberService) ListMembers(orgID string) ([]Member, error) {
 }
 
 func (ms *MemberService) CreateMemberForOrg(orgID string, member Member) (Member, error) {
-	token, err := ms.oauthService.GetValidToken()
-	if err != nil {
-		return Member{}, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
-	}
 
 	url := fmt.Sprintf("%s/api/organizations/%s/members/", ms.baseUrl, orgID)
 
@@ -100,13 +80,9 @@ func (ms *MemberService) CreateMemberForOrg(orgID string, member Member) (Member
 		return Member{}, errors.Wrap(err, "Failed to create request")
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
 	resp, err := ms.httpClient.Do(req)
 	if err != nil {
-		return Member{}, errors.Wrap(err, "Failed to send request")
+		return Member{}, err
 	}
 	defer resp.Body.Close()
 
@@ -129,10 +105,6 @@ func (ms *MemberService) CreateMemberForOrg(orgID string, member Member) (Member
 }
 
 func (ms *MemberService) DeleteMember(orgID, memberID string) error {
-	token, err := ms.oauthService.GetValidToken()
-	if err != nil {
-		return errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
-	}
 
 	url := fmt.Sprintf("%s/api/organizations/%s/members/%s/", ms.baseUrl, orgID, memberID)
 
@@ -141,16 +113,11 @@ func (ms *MemberService) DeleteMember(orgID, memberID string) error {
 		return errors.Wrap(err, "Failed to create request")
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-
 	resp, err := ms.httpClient.Do(req)
 	if err != nil {
-		return errors.Wrap(err, "Failed to send request")
+		return err
 	}
-	if resp != nil && resp.Body != nil {
-		defer resp.Body.Close()
-	}
+	defer resp.Body.Close()
 
 	if resp == nil {
 		return errors.New("Received nil response")

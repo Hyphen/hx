@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"time"
 
-	"github.com/Hyphen/cli/internal/oauth"
+	"github.com/Hyphen/cli/pkg/conf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
 )
@@ -22,31 +20,19 @@ type AppServicer interface {
 }
 
 type AppService struct {
-	baseUrl      string
-	oauthService oauth.OAuthServicer
-	httpClient   httputil.Client
+	baseUrl    string
+	httpClient httputil.Client
 }
 
 func NewService() *AppService {
-	baseUrl := "https://dev-api.hyphen.ai"
-	if customAPI := os.Getenv("HYPHEN_CUSTOM_APIX"); customAPI != "" {
-		baseUrl = customAPI
-	}
+	baseUrl := conf.GetBaseApixUrl()
 	return &AppService{
-		baseUrl:      baseUrl,
-		oauthService: oauth.DefaultOAuthService(),
-		httpClient: &http.Client{
-			Timeout: time.Second * 30,
-		},
+		baseUrl:    baseUrl,
+		httpClient: httputil.NewHyphenHTTPClient(),
 	}
 }
 
 func (ps *AppService) GetListApps(organizationID string, pageSize, pageNum int) ([]App, error) {
-	token, err := ps.oauthService.GetValidToken()
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
-	}
-
 	url := fmt.Sprintf("%s/api/organizations/%s/projects/?pageNum=%d&pageSize=%d", ps.baseUrl, organizationID, pageNum, pageSize)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -54,12 +40,9 @@ func (ps *AppService) GetListApps(organizationID string, pageSize, pageNum int) 
 		return nil, errors.Wrap(err, "Failed to create request")
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-
 	resp, err := ps.httpClient.Do(req)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to send request")
+		return nil, err
 	}
 	defer resp.Body.Close()
 
@@ -88,11 +71,6 @@ func (ps *AppService) GetListApps(organizationID string, pageSize, pageNum int) 
 }
 
 func (ps *AppService) CreateApp(organizationID, alternateID, name string) (App, error) {
-	token, err := ps.oauthService.GetValidToken()
-	if err != nil {
-		return App{}, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
-	}
-
 	url := fmt.Sprintf("%s/api/organizations/%s/projects/", ps.baseUrl, organizationID)
 
 	payload := struct {
@@ -113,13 +91,9 @@ func (ps *AppService) CreateApp(organizationID, alternateID, name string) (App, 
 		return App{}, errors.Wrap(err, "Failed to create request")
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
 	resp, err := ps.httpClient.Do(req)
 	if err != nil {
-		return App{}, errors.Wrap(err, "Failed to send request")
+		return App{}, err
 	}
 	defer resp.Body.Close()
 
@@ -142,11 +116,6 @@ func (ps *AppService) CreateApp(organizationID, alternateID, name string) (App, 
 }
 
 func (ps *AppService) GetApp(organizationID, appID string) (App, error) {
-	token, err := ps.oauthService.GetValidToken()
-	if err != nil {
-		return App{}, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
-	}
-
 	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/", ps.baseUrl, organizationID, appID)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -154,12 +123,9 @@ func (ps *AppService) GetApp(organizationID, appID string) (App, error) {
 		return App{}, errors.Wrap(err, "Failed to create request")
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-
 	resp, err := ps.httpClient.Do(req)
 	if err != nil {
-		return App{}, errors.Wrap(err, "Failed to send request")
+		return App{}, err
 	}
 	defer resp.Body.Close()
 
@@ -182,11 +148,6 @@ func (ps *AppService) GetApp(organizationID, appID string) (App, error) {
 }
 
 func (ps *AppService) DeleteApp(organizationID, appID string) error {
-	token, err := ps.oauthService.GetValidToken()
-	if err != nil {
-		return errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
-	}
-
 	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/", ps.baseUrl, organizationID, appID)
 
 	req, err := http.NewRequest("DELETE", url, nil)
@@ -194,11 +155,9 @@ func (ps *AppService) DeleteApp(organizationID, appID string) error {
 		return errors.Wrap(err, "Failed to create request")
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-
 	resp, err := ps.httpClient.Do(req)
 	if err != nil {
-		return errors.Wrap(err, "Failed to send request")
+		return err
 	}
 	defer resp.Body.Close()
 

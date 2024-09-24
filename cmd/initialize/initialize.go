@@ -9,6 +9,7 @@ import (
 
 	"github.com/Hyphen/cli/internal/app"
 	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/utils"
 	"github.com/spf13/cobra"
 )
@@ -32,74 +33,88 @@ Flags:
   --id, -i   Specify a custom app ID (optional)
   --yes, -y  Automatically confirm prompts and overwrite files if necessary`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		appService := app.NewService()
-		orgID, err := utils.GetOrganizationID()
-		if err != nil {
-			cmd.PrintErrf("Error: %s\n", err)
-			return
-		}
-
-		appName := args[0]
-		if appName == "" {
-			cmd.PrintErrf("App name is required.\n")
-			return
-		}
-
-		defaultAppAlternateId := generateDefaultAppId(appName)
-		appAlternateId := appIDFlag
-		if appAlternateId == "" {
-			appAlternateId = defaultAppAlternateId
-		}
-
-		err = app.CheckAppId(appAlternateId)
-		if err != nil {
-			suggestedID := strings.TrimSpace(strings.Split(err.Error(), ":")[1])
-			yesFlag, _ := cmd.Flags().GetBool("yes")
-			if yesFlag {
-				appAlternateId = suggestedID
-				cmd.Printf("Using suggested app ID: %s\n", suggestedID)
-			} else {
-				if !promptForSuggestedID(os.Stdin, suggestedID) {
-					cmd.Println("Operation cancelled.")
-					return
-				}
-				appAlternateId = suggestedID
-			}
-		}
-
-		if manifest.Exists() {
-			yesFlag, _ := cmd.Flags().GetBool("yes")
-			if !yesFlag {
-				if !promptForOverwrite(os.Stdin) {
-					cmd.Println("Operation cancelled.")
-					return
-				}
-			}
-		}
-
-		newApp, err := appService.CreateApp(orgID, appAlternateId, appName)
-		if err != nil {
-			cmd.PrintErrf("%s\n", err)
-			os.Exit(1)
-		}
-
-		_, err = manifest.Initialize(orgID, newApp.Name, newApp.ID, newApp.AlternateId)
-		if err != nil {
-			cmd.PrintErrf("%s\n", err)
-			os.Exit(1)
-		}
-		cmd.Println("App initialized")
-
-		if err := ensureGitignore(manifest.ManifestConfigFile); err != nil {
-			cmd.PrintErrf("Error checking/updating .gitignore: %s\n", err)
-			os.Exit(1)
-		}
-	},
+	Run:  runInit,
 }
 
 func init() {
 	InitCmd.Flags().StringVarP(&appIDFlag, "id", "i", "", "App ID (optional)")
+}
+
+func runInit(cmd *cobra.Command, args []string) {
+	appService := app.NewService()
+	orgID, err := utils.GetOrganizationID()
+	if err != nil {
+		cprint.Error(cmd, err)
+		return
+	}
+
+	appName := args[0]
+	if appName == "" {
+		cprint.Error(cmd, fmt.Errorf("app name is required"))
+		return
+	}
+
+	appAlternateId := getAppID(cmd, appName)
+	if appAlternateId == "" {
+		return
+	}
+
+	if manifest.Exists() && !shouldOverwrite(cmd) {
+		cprint.Info("Operation cancelled.")
+		return
+	}
+
+	newApp, err := appService.CreateApp(orgID, appAlternateId, appName)
+	if err != nil {
+		cprint.Error(cmd, err)
+		return
+	}
+
+	_, err = manifest.Initialize(orgID, newApp.Name, newApp.ID, newApp.AlternateId)
+	if err != nil {
+		cprint.Error(cmd, err)
+		return
+	}
+
+	printInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
+
+	if err := ensureGitignore(manifest.ManifestConfigFile); err != nil {
+		cprint.Error(cmd, fmt.Errorf("error checking/updating .gitignore: %w", err))
+		return
+	}
+}
+
+func getAppID(cmd *cobra.Command, appName string) string {
+	defaultAppAlternateId := generateDefaultAppId(appName)
+	appAlternateId := appIDFlag
+	if appAlternateId == "" {
+		appAlternateId = defaultAppAlternateId
+	}
+
+	err := app.CheckAppId(appAlternateId)
+	if err != nil {
+		suggestedID := strings.TrimSpace(strings.Split(err.Error(), ":")[1])
+		yesFlag, _ := cmd.Flags().GetBool("yes")
+		if yesFlag {
+			appAlternateId = suggestedID
+			cprint.Info(fmt.Sprintf("Using suggested app ID: %s", suggestedID))
+		} else {
+			if !promptForSuggestedID(os.Stdin, suggestedID) {
+				cprint.Info("Operation cancelled.")
+				return ""
+			}
+			appAlternateId = suggestedID
+		}
+	}
+	return appAlternateId
+}
+
+func shouldOverwrite(cmd *cobra.Command) bool {
+	yesFlag, _ := cmd.Flags().GetBool("yes")
+	if yesFlag {
+		return true
+	}
+	return promptForOverwrite(os.Stdin)
 }
 
 func generateDefaultAppId(appName string) string {
@@ -109,10 +124,10 @@ func generateDefaultAppId(appName string) string {
 func promptForOverwrite(reader io.Reader) bool {
 	r := bufio.NewReader(reader)
 	for {
-		fmt.Print("Manifest file exists. Do you want to overwrite it? (y/N): ")
+		cprint.Prompt("Manifest file exists. Do you want to overwrite it? (y/N): ")
 		response, err := r.ReadString('\n')
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading input: %s\n", err)
+			cprint.Error(nil, fmt.Errorf("Error reading input: %s", err))
 			os.Exit(1)
 		}
 		response = strings.TrimSpace(response)
@@ -122,7 +137,7 @@ func promptForOverwrite(reader io.Reader) bool {
 		case "n", "no", "":
 			return false
 		default:
-			fmt.Println("Invalid response. Please enter 'y' or 'n'.")
+			cprint.Warning("Invalid response. Please enter 'y' or 'n'.")
 		}
 	}
 }
@@ -130,10 +145,10 @@ func promptForOverwrite(reader io.Reader) bool {
 func promptForSuggestedID(reader io.Reader, suggestedID string) bool {
 	r := bufio.NewReader(reader)
 	for {
-		fmt.Printf("Invalid app ID. Do you want to use the suggested ID [%s]? (Y/n): ", suggestedID)
+		cprint.Prompt(fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]? (Y/n): ", suggestedID))
 		response, err := r.ReadString('\n')
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading input: %s\n", err)
+			cprint.Error(nil, fmt.Errorf("Error reading input: %s", err))
 			os.Exit(1)
 		}
 		response = strings.TrimSpace(response)
@@ -143,7 +158,16 @@ func promptForSuggestedID(reader io.Reader, suggestedID string) bool {
 		case "n", "no":
 			return false
 		default:
-			fmt.Println("Invalid response. Please enter 'y' or 'n'.")
+			cprint.Warning("Invalid response. Please enter 'y' or 'n'.")
 		}
 	}
+}
+
+func printInitializationSummary(appName, appAlternateId, appID, orgID string) {
+	cprint.PrintHeader("--- App Initialization Summary ---")
+	cprint.Success("App successfully initialized")
+	cprint.PrintDetail("App Name", appName)
+	cprint.PrintDetail("App AlternateId", appAlternateId)
+	cprint.PrintDetail("App ID", appID)
+	cprint.PrintDetail("Organization ID", orgID)
 }

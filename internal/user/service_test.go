@@ -8,7 +8,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/stretchr/testify/assert"
@@ -18,14 +17,13 @@ import (
 func TestUserService_GetUserInformation(t *testing.T) {
 	tests := []struct {
 		name           string
-		setupMocks     func(*oauth.MockOAuthService, *httputil.MockHTTPClient)
+		setupMocks     func(*httputil.MockHTTPClient)
 		expectedError  string
 		expectedUserID string
 	}{
 		{
 			name: "Successful request",
-			setupMocks: func(mos *oauth.MockOAuthService, mhc *httputil.MockHTTPClient) {
-				mos.On("GetValidToken").Return("valid_token", nil)
+			setupMocks: func(mhc *httputil.MockHTTPClient) {
 				userInfo := UserInfo{
 					DecodedIdToken: TokenInfo{
 						Sub: "test_user_id",
@@ -40,24 +38,15 @@ func TestUserService_GetUserInformation(t *testing.T) {
 			expectedUserID: "test_user_id",
 		},
 		{
-			name: "OAuth token error",
-			setupMocks: func(mos *oauth.MockOAuthService, mhc *httputil.MockHTTPClient) {
-				mos.On("GetValidToken").Return("", errors.New("OAuth error"))
-			},
-			expectedError: "Failed to authenticate. Please check your credentials and try again.",
-		},
-		{
 			name: "HTTP request error",
-			setupMocks: func(mos *oauth.MockOAuthService, mhc *httputil.MockHTTPClient) {
-				mos.On("GetValidToken").Return("valid_token", nil)
+			setupMocks: func(mhc *httputil.MockHTTPClient) {
 				mhc.On("Do", mock.Anything).Return((*http.Response)(nil), errors.New("HTTP error"))
 			},
-			expectedError: "Failed to connect to the server. Please check your internet connection and try again.",
+			expectedError: "HTTP error",
 		},
 		{
 			name: "Non-200 status code",
-			setupMocks: func(mos *oauth.MockOAuthService, mhc *httputil.MockHTTPClient) {
-				mos.On("GetValidToken").Return("valid_token", nil)
+			setupMocks: func(mhc *httputil.MockHTTPClient) {
 				mhc.On("Do", mock.Anything).Return(&http.Response{
 					StatusCode: http.StatusBadRequest,
 					Body:       io.NopCloser(bytes.NewReader([]byte("Bad Request"))),
@@ -67,8 +56,7 @@ func TestUserService_GetUserInformation(t *testing.T) {
 		},
 		{
 			name: "Invalid JSON response",
-			setupMocks: func(mos *oauth.MockOAuthService, mhc *httputil.MockHTTPClient) {
-				mos.On("GetValidToken").Return("valid_token", nil)
+			setupMocks: func(mhc *httputil.MockHTTPClient) {
 				mhc.On("Do", mock.Anything).Return(&http.Response{
 					StatusCode: http.StatusOK,
 					Body:       io.NopCloser(bytes.NewReader([]byte("invalid json"))),
@@ -80,14 +68,12 @@ func TestUserService_GetUserInformation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockOAuth := new(oauth.MockOAuthService)
 			mockHTTP := new(httputil.MockHTTPClient)
-			tt.setupMocks(mockOAuth, mockHTTP)
+			tt.setupMocks(mockHTTP)
 
 			us := &UserService{
-				baseUrl:      "https://test-api.hyphen.ai",
-				oauthService: mockOAuth,
-				client:       mockHTTP,
+				baseUrl: "https://test-api.hyphen.ai",
+				client:  mockHTTP,
 			}
 
 			userInfo, err := us.GetUserInformation()
@@ -99,7 +85,6 @@ func TestUserService_GetUserInformation(t *testing.T) {
 				assert.Equal(t, tt.expectedUserID, userInfo.DecodedIdToken.Sub)
 			}
 
-			mockOAuth.AssertExpectations(t)
 			mockHTTP.AssertExpectations(t)
 		})
 	}
@@ -117,7 +102,7 @@ func TestNewService(t *testing.T) {
 		{
 			name:            "Default base URL",
 			customAPIValue:  "",
-			expectedBaseURL: "https://dev-api.hyphen.ai",
+			expectedBaseURL: "https://api.hyphen.ai",
 		},
 		{
 			name:            "Custom base URL",
