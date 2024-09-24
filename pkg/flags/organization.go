@@ -1,7 +1,7 @@
 package flags
 
 import (
-	"github.com/Hyphen/cli/config"
+	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
@@ -10,14 +10,14 @@ func GetOrganizationID() (string, error) {
 		return OrgFlag, nil
 	}
 
-	credentials, err := config.LoadCredentials()
+	manifest, err := manifest.Restore()
 	if err != nil {
 		return "", errors.Wrap(err, "Failed to load credentials")
 	}
 
-	if credentials.Default.OrganizationId == "" {
-		return "", errors.New("No organization ID provided and no default found in credentials")
+	if manifest.OrganisationId == "" {
+		return "", errors.New("No organization ID provided and no default found in manifest")
 	}
 
-	return credentials.Default.OrganizationId, nil
+	return manifest.OrganisationId, nil
 }

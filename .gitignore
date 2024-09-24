@@ -21,3 +21,4 @@
 go.work
 .hyphen-env-key
 .hyphen-manifest-key
+.hyphen-manifest-key.json
