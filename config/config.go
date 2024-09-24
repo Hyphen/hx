@@ -36,7 +36,7 @@ func Init(fs fsutil.FileSystem) {
 	FS = fs
 }
 
-func getConfigDirectory() string {
+func GetConfigDirectory() string {
 	switch runtime.GOOS {
 	case "windows":
 		return filepath.Join(os.Getenv("APPDATA"), WindowsConfigPath)
@@ -63,7 +63,7 @@ func ensureDir(dirName string) error {
 
 // SaveCredentials stores credentials in a system-dependent location
 func SaveCredentials(organizationID, accessToken, refreshToken, IDToken string, expiryTime int64) error {
-	configDir := getConfigDirectory()
+	configDir := GetConfigDirectory()
 	if err := ensureDir(configDir); err != nil {
 		return errors.Wrap(err, "Failed to create configuration directory")
 	}
@@ -94,7 +94,7 @@ func SaveCredentials(organizationID, accessToken, refreshToken, IDToken string, 
 
 // LoadCredentials retrieves credentials from a configuration file
 func LoadCredentials() (CredentialsConfig, error) {
-	configDir := getConfigDirectory()
+	configDir := GetConfigDirectory()
 	credentialFilePath := filepath.Join(configDir, CredentialFile)
 
 	data, err := FS.ReadFile(credentialFilePath)
@@ -119,7 +119,7 @@ func UpdateOrganizationID(organizationID string) error {
 
 	credentials.Default.OrganizationId = organizationID
 
-	configDir := getConfigDirectory()
+	configDir := GetConfigDirectory()
 	credentialFilePath := filepath.Join(configDir, CredentialFile)
 
 	jsonData, err := json.MarshalIndent(credentials, "", "  ")

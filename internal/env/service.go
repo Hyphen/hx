@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Hyphen/cli/pkg/conf"
+	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
 )
@@ -27,7 +27,7 @@ type EnvService struct {
 var _ EnvServicer = (*EnvService)(nil)
 
 func NewService() *EnvService {
-	baseUrl := conf.GetBaseApixUrl()
+	baseUrl := apiconf.GetBaseApixUrl()
 
 	return &EnvService{
 		baseUrl:    baseUrl,

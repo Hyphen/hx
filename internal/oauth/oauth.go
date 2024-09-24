@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/Hyphen/cli/config"
-	"github.com/Hyphen/cli/pkg/conf"
+	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
@@ -76,7 +76,7 @@ func DefaultOAuthService() *OAuthService {
 }
 
 func NewOAuthService(httpClient HTTPClient, timeProvider TimeProvider, browserOpener BrowserOpener) *OAuthService {
-	baseUrl := conf.GetBaseAuthUrl()
+	baseUrl := apiconf.GetBaseAuthUrl()
 
 	return &OAuthService{
 		baseUrl:       baseUrl,

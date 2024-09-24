@@ -2,19 +2,49 @@ package manifest
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
+	"github.com/Hyphen/cli/config"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
-var ManifestConfigFile = ".hyphen-manifest-key.json"
+type configProvider interface {
+	GetConfigDirectory() string
+}
 
-type Manifest struct {
+type defaultConfigProvider struct{}
+
+func (d *defaultConfigProvider) GetConfigDirectory() string {
+	return config.GetConfigDirectory()
+}
+
+var currentConfigProvider configProvider = &defaultConfigProvider{}
+
+func SetConfigProvider(provider configProvider) {
+	currentConfigProvider = provider
+}
+
+var (
+	ManifestConfigFile = ".hyphen-manifest-key.json"
+	ManifestSecretFile = ".hyphen-manifest-secret-key.json"
+)
+
+type ManifestConfig struct {
 	AppName        string `json:"app_name"`
 	AppId          string `json:"app_id"`
 	AppAlternateId string `json:"app_alternate_id"`
-	SecretKey      string `json:"secret_key"`
+	OrganisationId string `json:"organisation_id"`
+}
+
+type Manifest struct {
+	ManifestConfig
+	ManifestSecret
+}
+
+type ManifestSecret struct {
+	SecretKey string `json:"secret_key"`
 }
 
 func (m *Manifest) GetSecretKey() *secretkey.SecretKey {
@@ -27,48 +57,132 @@ func Initialize(organizationId, appName, appID, appAlternateId string) (Manifest
 		return Manifest{}, errors.Wrap(err, "Failed to create new secret key")
 	}
 
-	m := Manifest{
+	mc := ManifestConfig{
 		AppName:        appName,
 		AppId:          appID,
 		AppAlternateId: appAlternateId,
-		SecretKey:      sk.Base64(),
+		OrganisationId: organizationId,
 	}
-
-	jsonData, err := json.MarshalIndent(m, "", "  ")
+	jsonData, err := json.MarshalIndent(mc, "", "  ")
 	if err != nil {
 		return Manifest{}, errors.Wrap(err, "Error encoding JSON")
 	}
-
 	err = os.WriteFile(ManifestConfigFile, jsonData, 0644)
 	if err != nil {
 		return Manifest{}, errors.Wrapf(err, "Error writing file: %s", ManifestConfigFile)
 	}
 
+	ms := ManifestSecret{
+		SecretKey: sk.Base64(),
+	}
+	jsonData, err = json.MarshalIndent(ms, "", "  ")
+	if err != nil {
+		return Manifest{}, errors.Wrap(err, "Error encoding JSON")
+	}
+	err = os.WriteFile(ManifestSecretFile, jsonData, 0644)
+	if err != nil {
+		return Manifest{}, errors.Wrapf(err, "Error writing file: %s", ManifestSecretFile)
+	}
+
+	m := Manifest{
+		mc,
+		ms,
+	}
+
 	return m, nil
 }
 
-func RestoreFromFile(file string) (Manifest, error) {
-	m := Manifest{}
+func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, error) {
+	var mconfig ManifestConfig
+	var secret ManifestSecret
+	var hasConfig, hasSecret bool
 
-	if _, err := os.Stat(file); os.IsNotExist(err) {
-		return m, errors.New("You must init the environment with 'env init'")
+	globalConfigFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), manifestConfigFile)
+	globalConfig, globalConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
+	if globalConfigErr == nil {
+		mconfig = globalConfig
+		hasConfig = true
 	}
 
-	jsonData, err := os.ReadFile(file)
+	globalSecretFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), manifestSecretFile)
+	globalSecret, globalSecretErr := readAndUnmarshalConfigJSON[ManifestSecret](globalSecretFile)
+	if globalSecretErr == nil {
+		secret = globalSecret
+		hasSecret = true
+	}
+
+	localConfig, localConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](manifestConfigFile)
+	if localConfigErr == nil {
+		mconfig = mergeConfigs(mconfig, localConfig)
+		hasConfig = true
+	}
+
+	localSecret, localSecretErr := readAndUnmarshalConfigJSON[ManifestSecret](manifestSecretFile)
+	if localSecretErr == nil {
+		secret = mergeSecrets(secret, localSecret)
+		hasSecret = true
+	}
+
+	if !hasConfig {
+		return Manifest{}, errors.New("No valid configuration found (neither global nor local)")
+	}
+	if !hasSecret {
+		return Manifest{}, errors.New("No valid secret found (neither global nor local)")
+	}
+
+	return Manifest{
+		ManifestConfig: mconfig,
+		ManifestSecret: secret,
+	}, nil
+}
+
+func mergeConfigs(base, override ManifestConfig) ManifestConfig {
+	merged := base
+
+	if override.AppName != "" {
+		merged.AppName = override.AppName
+	}
+	if override.AppId != "" {
+		merged.AppId = override.AppId
+	}
+	if override.AppAlternateId != "" {
+		merged.AppAlternateId = override.AppAlternateId
+	}
+	if override.OrganisationId != "" {
+		merged.OrganisationId = override.OrganisationId
+	}
+
+	return merged
+}
+
+func mergeSecrets(base, override ManifestSecret) ManifestSecret {
+	merged := base
+
+	if override.SecretKey != "" {
+		merged.SecretKey = override.SecretKey
+	}
+
+	return merged
+}
+
+func readAndUnmarshalConfigJSON[T any](filename string) (T, error) {
+	var result T
+
+	jsonData, err := os.ReadFile(filename)
 	if err != nil {
-		return m, errors.Wrap(err, "Error reading JSON file")
+		return result, err
 	}
 
-	err = json.Unmarshal(jsonData, &m)
+	err = json.Unmarshal(jsonData, &result)
 	if err != nil {
-		return m, errors.Wrap(err, "Error decoding JSON file")
+		return result, errors.Wrapf(err, "Error decoding JSON file: %s", filename)
 	}
 
-	return m, nil
+	return result, nil
 }
 
 func Restore() (Manifest, error) {
-	return RestoreFromFile(ManifestConfigFile)
+	return RestoreFromFile(ManifestConfigFile, ManifestSecretFile)
 }
 
 func Exists() bool {
