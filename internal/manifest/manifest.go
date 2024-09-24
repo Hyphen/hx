@@ -1,20 +1,20 @@
 package manifest
 
 import (
+	"encoding/json"
 	"os"
 
-	"github.com/BurntSushi/toml"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
-var ManifestConfigFile = ".hyphen-manifest-key"
+var ManifestConfigFile = ".hyphen-manifest-key.json"
 
 type Manifest struct {
-	AppName        string `toml:"app_name"`
-	AppId          string `toml:"app_id"`
-	AppAlternateId string `toml:"app_alternate_id"`
-	SecretKey      string `toml:"secret_key"`
+	AppName        string `json:"app_name"`
+	AppId          string `json:"app_id"`
+	AppAlternateId string `json:"app_alternate_id"`
+	SecretKey      string `json:"secret_key"`
 }
 
 func (m *Manifest) GetSecretKey() *secretkey.SecretKey {
@@ -34,15 +34,14 @@ func Initialize(organizationId, appName, appID, appAlternateId string) (Manifest
 		SecretKey:      sk.Base64(),
 	}
 
-	file, err := os.Create(ManifestConfigFile)
+	jsonData, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
-		return Manifest{}, errors.Wrapf(err, "Error creating file: %s", ManifestConfigFile)
+		return Manifest{}, errors.Wrap(err, "Error encoding JSON")
 	}
-	defer file.Close()
 
-	enc := toml.NewEncoder(file)
-	if err := enc.Encode(m); err != nil {
-		return Manifest{}, errors.Wrap(err, "Error encoding TOML")
+	err = os.WriteFile(ManifestConfigFile, jsonData, 0644)
+	if err != nil {
+		return Manifest{}, errors.Wrapf(err, "Error writing file: %s", ManifestConfigFile)
 	}
 
 	return m, nil
@@ -55,9 +54,14 @@ func RestoreFromFile(file string) (Manifest, error) {
 		return m, errors.New("You must init the environment with 'env init'")
 	}
 
-	_, err := toml.DecodeFile(file, &m)
+	jsonData, err := os.ReadFile(file)
 	if err != nil {
-		return m, errors.Wrap(err, "Error decoding TOML file")
+		return m, errors.Wrap(err, "Error reading JSON file")
+	}
+
+	err = json.Unmarshal(jsonData, &m)
+	if err != nil {
+		return m, errors.Wrap(err, "Error decoding JSON file")
 	}
 
 	return m, nil

@@ -1,13 +1,13 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/BurntSushi/toml"
 	"github.com/Hyphen/cli/pkg/fsutil"
 	"github.com/stretchr/testify/assert"
 )
@@ -18,9 +18,15 @@ func TestSaveCredentialsSuccess(t *testing.T) {
 	FS = mockFS
 
 	credentialFile := filepath.Join(getConfigDirectory(), CredentialFile)
-	credentialsContent := fmt.Sprintf(
-		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\norganization_id=\"%s\"\nhyphen_id_token=\"%s\"\nexpiry_time=%d",
-		"user_access_token", "user_refresh_token", "org_id", "user_id_token", 12)
+	expectedCredentials := CredentialsConfig{
+		Default: Credentials{
+			HyphenAccessToken:  "user_access_token",
+			HyphenRefreshToken: "user_refresh_token",
+			OrganizationId:     "org_id",
+			HypenIDToken:       "user_id_token",
+			ExpiryTime:         12,
+		},
+	}
 
 	mockFS.StatFunc = func(name string) (os.FileInfo, error) {
 		return nil, os.ErrNotExist
@@ -30,7 +36,10 @@ func TestSaveCredentialsSuccess(t *testing.T) {
 	}
 	mockFS.WriteFileFunc = func(filename string, data []byte, perm os.FileMode) error {
 		assert.Equal(t, credentialFile, filename)
-		assert.Equal(t, []byte(credentialsContent), data)
+		var writtenCredentials CredentialsConfig
+		err := json.Unmarshal(data, &writtenCredentials)
+		assert.Nil(t, err, "Should be able to unmarshal written data")
+		assert.Equal(t, expectedCredentials, writtenCredentials)
 		assert.Equal(t, os.FileMode(0644), perm)
 		return nil
 	}
@@ -87,21 +96,22 @@ func TestLoadCredentialsSuccess(t *testing.T) {
 	FS = mockFS
 
 	credentialFile := filepath.Join(getConfigDirectory(), CredentialFile)
-	credentialsToml := `[default]
-hyphen_access_token="user_access_token"
-hyphen_refresh_token="user_refresh_token"
-organization_id="org_id"
-hyphen_id_token="user_id_token"
-expiry_time=12`
+	expectedCredentials := CredentialsConfig{
+		Default: Credentials{
+			HyphenAccessToken:  "user_access_token",
+			HyphenRefreshToken: "user_refresh_token",
+			OrganizationId:     "org_id",
+			HypenIDToken:       "user_id_token",
+			ExpiryTime:         12,
+		},
+	}
+
+	credentialsJSON, _ := json.Marshal(expectedCredentials)
 
 	mockFS.ReadFileFunc = func(filename string) ([]byte, error) {
 		assert.Equal(t, credentialFile, filename)
-		return []byte(credentialsToml), nil
+		return credentialsJSON, nil
 	}
-
-	var expectedCredentials CredentialsConfig
-	err := toml.Unmarshal([]byte(credentialsToml), &expectedCredentials)
-	assert.Nil(t, err, "Unmarshalling should succeed in test setup")
 
 	retrievedCredentials, err := LoadCredentials()
 	assert.Nil(t, err, "LoadCredentials should not return an error")
@@ -131,7 +141,7 @@ func TestLoadCredentialsFailures(t *testing.T) {
 			name: "failure decoding credentials",
 			setupMocks: func() {
 				mockFS.ReadFileFunc = func(filename string) ([]byte, error) {
-					return []byte("invalid toml data"), nil
+					return []byte("invalid json data"), nil
 				}
 			},
 			expectedErr: "Failed to parse credentials file: ",
@@ -153,16 +163,21 @@ func TestUpdateOrganizationID(t *testing.T) {
 	FS = mockFS
 
 	credentialFile := filepath.Join(getConfigDirectory(), CredentialFile)
-	initialToml := `[default]
-hyphen_access_token="user_access_token"
-hyphen_refresh_token="user_refresh_token"
-organization_id="old_org_id"
-hyphen_id_token="user_id_token"
-expiry_time=12`
+	initialCredentials := CredentialsConfig{
+		Default: Credentials{
+			HyphenAccessToken:  "user_access_token",
+			HyphenRefreshToken: "user_refresh_token",
+			OrganizationId:     "old_org_id",
+			HypenIDToken:       "user_id_token",
+			ExpiryTime:         12,
+		},
+	}
+
+	initialJSON, _ := json.MarshalIndent(initialCredentials, "", "  ")
 
 	mockFS.ReadFileFunc = func(filename string) ([]byte, error) {
 		assert.Equal(t, credentialFile, filename)
-		return []byte(initialToml), nil
+		return initialJSON, nil
 	}
 
 	var writtenData []byte
@@ -178,7 +193,7 @@ expiry_time=12`
 
 	// Verify that the new organization ID was written
 	var updatedConfig CredentialsConfig
-	err = toml.Unmarshal(writtenData, &updatedConfig)
+	err = json.Unmarshal(writtenData, &updatedConfig)
 	assert.Nil(t, err, "Should be able to unmarshal written data")
 	assert.Equal(t, "new_org_id", updatedConfig.Default.OrganizationId, "Organization ID should be updated")
 }

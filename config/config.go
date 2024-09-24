@@ -1,13 +1,12 @@
 package config
 
 import (
-	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 
-	"github.com/BurntSushi/toml"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/fsutil"
 )
@@ -15,22 +14,22 @@ import (
 var FS fsutil.FileSystem = fsutil.NewFileSystem()
 
 type CredentialsConfig struct {
-	Default Credentials `toml:"default"`
+	Default Credentials `json:"default"`
 }
 
 type Credentials struct {
-	HyphenAccessToken  string `toml:"hyphen_access_token"`
-	HyphenRefreshToken string `toml:"hyphen_refresh_token"`
-	OrganizationId     string `toml:"organization_id"`
-	HypenIDToken       string `toml:"hyphen_id_token"`
-	ExpiryTime         int64  `toml:"expiry_time"`
+	HyphenAccessToken  string `json:"hyphen_access_token"`
+	HyphenRefreshToken string `json:"hyphen_refresh_token"`
+	OrganizationId     string `json:"organization_id"`
+	HypenIDToken       string `json:"hyphen_id_token"`
+	ExpiryTime         int64  `json:"expiry_time"`
 }
 
 // Filepaths for credential storage
 const (
 	WindowsConfigPath = "Hyphen"
 	UnixConfigPath    = ".hyphen"
-	CredentialFile    = "credentials.toml"
+	CredentialFile    = "credentials.json"
 )
 
 func Init(fs fsutil.FileSystem) {
@@ -70,12 +69,23 @@ func SaveCredentials(organizationID, accessToken, refreshToken, IDToken string, 
 	}
 
 	credentialFilePath := filepath.Join(configDir, CredentialFile)
-	credentialsContent := fmt.Sprintf(
-		"[default]\nhyphen_access_token=\"%s\"\nhyphen_refresh_token=\"%s\"\norganization_id=\"%s\"\nhyphen_id_token=\"%s\"\nexpiry_time=%d",
-		accessToken, refreshToken, organizationID, IDToken, expiryTime)
+	credentials := CredentialsConfig{
+		Default: Credentials{
+			HyphenAccessToken:  accessToken,
+			HyphenRefreshToken: refreshToken,
+			OrganizationId:     organizationID,
+			HypenIDToken:       IDToken,
+			ExpiryTime:         expiryTime,
+		},
+	}
+
+	jsonData, err := json.MarshalIndent(credentials, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "Failed to marshal credentials to JSON")
+	}
 
 	// Write the credentials to the file
-	if err := FS.WriteFile(credentialFilePath, []byte(credentialsContent), 0644); err != nil {
+	if err := FS.WriteFile(credentialFilePath, jsonData, 0644); err != nil {
 		return errors.Wrap(err, "Failed to save credentials")
 	}
 
@@ -93,7 +103,7 @@ func LoadCredentials() (CredentialsConfig, error) {
 	}
 
 	var config CredentialsConfig
-	if err := toml.Unmarshal(data, &config); err != nil {
+	if err := json.Unmarshal(data, &config); err != nil {
 		return CredentialsConfig{}, fmt.Errorf("Failed to parse credentials file: %w", err)
 	}
 
@@ -112,13 +122,12 @@ func UpdateOrganizationID(organizationID string) error {
 	configDir := getConfigDirectory()
 	credentialFilePath := filepath.Join(configDir, CredentialFile)
 
-	var buf bytes.Buffer
-	encoder := toml.NewEncoder(&buf)
-	if err := encoder.Encode(credentials); err != nil {
-		return fmt.Errorf("Failed to encode updated credentials: %w", err)
+	jsonData, err := json.MarshalIndent(credentials, "", "  ")
+	if err != nil {
+		return fmt.Errorf("Failed to marshal updated credentials to JSON: %w", err)
 	}
 
-	if err := FS.WriteFile(credentialFilePath, buf.Bytes(), 0644); err != nil {
+	if err := FS.WriteFile(credentialFilePath, jsonData, 0644); err != nil {
 		return fmt.Errorf("Failed to write updated credentials: %w", err)
 	}
 

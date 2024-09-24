@@ -12,10 +12,10 @@ import (
 func TestInitialize(t *testing.T) {
 	// Temporarily change ManifestConfigFile for testing
 	oldManifestConfigFile := ManifestConfigFile
-	ManifestConfigFile = ".test-manifest-key"
+	ManifestConfigFile = ".test-manifest-key.json"
 	defer func() {
 		ManifestConfigFile = oldManifestConfigFile
-		os.Remove(".test-manifest-key")
+		os.Remove(".test-manifest-key.json")
 	}()
 
 	t.Run("Successful initialization", func(t *testing.T) {
@@ -33,27 +33,27 @@ func TestInitialize(t *testing.T) {
 
 	t.Run("Error creating file", func(t *testing.T) {
 		// Set ManifestConfigFile to a path that we can't write to
-		ManifestConfigFile = "/root/.test-manifest-key"
-		defer func() { ManifestConfigFile = ".test-manifest-key" }()
+		ManifestConfigFile = "/root/.test-manifest-key.json"
+		defer func() { ManifestConfigFile = ".test-manifest-key.json" }()
 
 		_, err := Initialize("org1", "TestApp", "app1", "test-app")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Error creating file")
+		assert.Contains(t, err.Error(), "Error writing file")
 	})
 }
 
 func TestRestoreFromFile(t *testing.T) {
 	t.Run("Successful restore", func(t *testing.T) {
-		tempFile, err := os.CreateTemp("", "test-manifest-*.toml")
+		tempFile, err := os.CreateTemp("", "test-manifest-*.json")
 		require.NoError(t, err)
 		defer os.Remove(tempFile.Name())
 
-		content := `
-app_name = "TestApp"
-app_id = "app1"
-app_alternate_id = "test-app"
-secret_key = "dGVzdC1zZWNyZXQta2V5"
-`
+		content := `{
+			"app_name": "TestApp",
+			"app_id": "app1",
+			"app_alternate_id": "test-app",
+			"secret_key": "dGVzdC1zZWNyZXQta2V5"
+		}`
 		_, err = tempFile.WriteString(content)
 		require.NoError(t, err)
 		tempFile.Close()
@@ -72,39 +72,39 @@ secret_key = "dGVzdC1zZWNyZXQta2V5"
 		assert.Contains(t, err.Error(), "You must init the environment with 'env init'")
 	})
 
-	t.Run("Invalid TOML content", func(t *testing.T) {
-		tempFile, err := os.CreateTemp("", "test-manifest-*.toml")
+	t.Run("Invalid JSON content", func(t *testing.T) {
+		tempFile, err := os.CreateTemp("", "test-manifest-*.json")
 		require.NoError(t, err)
 		defer os.Remove(tempFile.Name())
 
 		content := `
-invalid toml content
-`
+		invalid json content
+		`
 		_, err = tempFile.WriteString(content)
 		require.NoError(t, err)
 		tempFile.Close()
 
 		_, err = RestoreFromFile(tempFile.Name())
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Error decoding TOML file")
+		assert.Contains(t, err.Error(), "Error decoding JSON file")
 	})
 }
 
 func TestRestore(t *testing.T) {
 	oldManifestConfigFile := ManifestConfigFile
-	ManifestConfigFile = ".test-manifest-key"
+	ManifestConfigFile = ".test-manifest-key.json"
 	defer func() {
 		ManifestConfigFile = oldManifestConfigFile
-		os.Remove(".test-manifest-key")
+		os.Remove(".test-manifest-key.json")
 	}()
 
 	t.Run("Successful restore", func(t *testing.T) {
-		content := `
-app_name = "TestApp"
-app_id = "app1"
-app_alternate_id = "test-app"
-secret_key = "dGVzdC1zZWNyZXQta2V5"
-`
+		content := `{
+			"app_name": "TestApp",
+			"app_id": "app1",
+			"app_alternate_id": "test-app",
+			"secret_key": "dGVzdC1zZWNyZXQta2V5"
+		}`
 		err := os.WriteFile(ManifestConfigFile, []byte(content), 0644)
 		require.NoError(t, err)
 
@@ -126,10 +126,10 @@ secret_key = "dGVzdC1zZWNyZXQta2V5"
 
 func TestExists(t *testing.T) {
 	oldManifestConfigFile := ManifestConfigFile
-	ManifestConfigFile = ".test-manifest-key"
+	ManifestConfigFile = ".test-manifest-key.json"
 	defer func() {
 		ManifestConfigFile = oldManifestConfigFile
-		os.Remove(".test-manifest-key")
+		os.Remove(".test-manifest-key.json")
 	}()
 
 	t.Run("File does not exist", func(t *testing.T) {
