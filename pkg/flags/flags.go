@@ -1,4 +1,4 @@
-package utils
+package flags
 
 var (
 	OrgFlag         string

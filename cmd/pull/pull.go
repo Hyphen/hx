@@ -6,7 +6,7 @@ import (
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/cprint"
-	"github.com/Hyphen/cli/pkg/utils"
+	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +37,7 @@ Example:
 	Run: func(cmd *cobra.Command, args []string) {
 		service := newService(env.NewService())
 
-		orgId, err := utils.GetOrganizationID()
+		orgId, err := flags.GetOrganizationID()
 		if err != nil {
 			cprint.Error(cmd, err)
 			return

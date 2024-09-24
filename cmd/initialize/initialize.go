@@ -10,7 +10,7 @@ import (
 	"github.com/Hyphen/cli/internal/app"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/cprint"
-	"github.com/Hyphen/cli/pkg/utils"
+	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
 
@@ -42,7 +42,7 @@ func init() {
 
 func runInit(cmd *cobra.Command, args []string) {
 	appService := app.NewService()
-	orgID, err := utils.GetOrganizationID()
+	orgID, err := flags.GetOrganizationID()
 	if err != nil {
 		cprint.Error(cmd, err)
 		return

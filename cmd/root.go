@@ -11,7 +11,7 @@ import (
 	"github.com/Hyphen/cli/cmd/update"
 	"github.com/Hyphen/cli/cmd/useorg"
 	"github.com/Hyphen/cli/cmd/version"
-	"github.com/Hyphen/cli/pkg/utils"
+	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
 
@@ -30,11 +30,11 @@ func init() {
 	rootCmd.AddCommand(pull.PullCmd)
 	rootCmd.AddCommand(push.PushCmd)
 
-	rootCmd.PersistentFlags().StringVar(&utils.OrgFlag, "org", "", "Organization ID (e.g., org_123)")
-	rootCmd.PersistentFlags().StringVar(&utils.ProjFlag, "proj", "", "Project ID (e.g., proj_123)")
-	rootCmd.PersistentFlags().StringVar(&utils.EnvironmentFlag, "env", "", "Environment ID (e.g., env_12345)")
-	rootCmd.PersistentFlags().BoolVarP(&utils.YesFlag, "yes", "y", false, "Automatically answer yes for prompts")
-	rootCmd.PersistentFlags().StringVar(&utils.ApiKey, "app-key", "", "API Key")
+	rootCmd.PersistentFlags().StringVar(&flags.OrgFlag, "org", "", "Organization ID (e.g., org_123)")
+	rootCmd.PersistentFlags().StringVar(&flags.ProjFlag, "proj", "", "Project ID (e.g., proj_123)")
+	rootCmd.PersistentFlags().StringVar(&flags.EnvironmentFlag, "env", "", "Environment ID (e.g., env_12345)")
+	rootCmd.PersistentFlags().BoolVarP(&flags.YesFlag, "yes", "y", false, "Automatically answer yes for prompts")
+	rootCmd.PersistentFlags().StringVar(&flags.ApiKey, "app-key", "", "API Key")
 }
 
 func Execute() {
