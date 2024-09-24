@@ -68,6 +68,10 @@ and have reviewed the changes before pushing.
 			cprint.Error(cmd, err)
 			return
 		}
+		if manifest.AppId == nil {
+			cprint.Error(cmd, fmt.Errorf("No app ID found in manifest"))
+			return
+		}
 
 		if err := service.checkIfLocalEnvsExistAsEnvironments(envs, orgId, manifest); err != nil {
 			cprint.Error(cmd, err)
@@ -85,7 +89,7 @@ and have reviewed the changes before pushing.
 			}
 		}
 
-		printPushSummary(orgId, manifest.AppId, envs)
+		printPushSummary(orgId, *manifest.AppId, envs)
 
 	},
 }
@@ -122,14 +126,14 @@ func (s *service) getLocalEnv(envName string, m manifest.Manifest) (env.Env, err
 
 func (s *service) putEnv(orgId, envName string, e env.Env, m manifest.Manifest) error {
 
-	if err := s.envService.PutEnv(orgId, m.AppId, envName, e); err != nil {
+	if err := s.envService.PutEnv(orgId, *m.AppId, envName, e); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (s *service) checkIfLocalEnvsExistAsEnvironments(envs []string, orgId string, m manifest.Manifest) error {
-	environments, err := s.envService.ListEnvironments(orgId, m.AppId, 100, 1)
+	environments, err := s.envService.ListEnvironments(orgId, *m.AppId, 100, 1)
 	if err != nil {
 		return err
 	}
