@@ -8,13 +8,24 @@ import (
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
-var ManifestConfigFile = ".hyphen-manifest-key.json"
+var (
+	ManifestConfigFile = ".hyphen-manifest-key.json"
+	ManifestSecretFile = ".hyphen-manifest-secret-key.json"
+)
 
-type Manifest struct {
+type ManifestConfig struct {
 	AppName        string `json:"app_name"`
 	AppId          string `json:"app_id"`
 	AppAlternateId string `json:"app_alternate_id"`
-	SecretKey      string `json:"secret_key"`
+}
+
+type Manifest struct {
+	ManifestConfig
+	ManifestSecret
+}
+
+type ManifestSecret struct {
+	SecretKey string `json:"secret_key"`
 }
 
 func (m *Manifest) GetSecretKey() *secretkey.SecretKey {
@@ -27,48 +38,78 @@ func Initialize(organizationId, appName, appID, appAlternateId string) (Manifest
 		return Manifest{}, errors.Wrap(err, "Failed to create new secret key")
 	}
 
-	m := Manifest{
+	mc := ManifestConfig{
 		AppName:        appName,
 		AppId:          appID,
 		AppAlternateId: appAlternateId,
-		SecretKey:      sk.Base64(),
 	}
-
-	jsonData, err := json.MarshalIndent(m, "", "  ")
+	jsonData, err := json.MarshalIndent(mc, "", "  ")
 	if err != nil {
 		return Manifest{}, errors.Wrap(err, "Error encoding JSON")
 	}
-
 	err = os.WriteFile(ManifestConfigFile, jsonData, 0644)
 	if err != nil {
 		return Manifest{}, errors.Wrapf(err, "Error writing file: %s", ManifestConfigFile)
 	}
 
+	ms := ManifestSecret{
+		SecretKey: sk.Base64(),
+	}
+	jsonData, err = json.MarshalIndent(ms, "", "  ")
+	if err != nil {
+		return Manifest{}, errors.Wrap(err, "Error encoding JSON")
+	}
+	err = os.WriteFile(ManifestSecretFile, jsonData, 0644)
+	if err != nil {
+		return Manifest{}, errors.Wrapf(err, "Error writing file: %s", ManifestSecretFile)
+	}
+
+	m := Manifest{
+		mc,
+		ms,
+	}
+
 	return m, nil
+}
+func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, error) {
+	mc, err := readAndUnmarshalConfigJSON[ManifestConfig](manifestConfigFile)
+	if err != nil {
+		return Manifest{}, err
+	}
+
+	ms, err := readAndUnmarshalConfigJSON[ManifestSecret](manifestSecretFile)
+	if err != nil {
+		return Manifest{}, err
+	}
+
+	return Manifest{
+		ManifestConfig: mc,
+		ManifestSecret: ms,
+	}, nil
 }
 
-func RestoreFromFile(file string) (Manifest, error) {
-	m := Manifest{}
+func readAndUnmarshalConfigJSON[T any](filename string) (T, error) {
+	var result T
 
-	if _, err := os.Stat(file); os.IsNotExist(err) {
-		return m, errors.New("You must init the environment with 'env init'")
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return result, errors.New("You must init the environment with 'env init'")
 	}
 
-	jsonData, err := os.ReadFile(file)
+	jsonData, err := os.ReadFile(filename)
 	if err != nil {
-		return m, errors.Wrap(err, "Error reading JSON file")
+		return result, errors.Wrap(err, "Error reading JSON file")
 	}
 
-	err = json.Unmarshal(jsonData, &m)
+	err = json.Unmarshal(jsonData, &result)
 	if err != nil {
-		return m, errors.Wrap(err, "Error decoding JSON file")
+		return result, errors.Wrap(err, "Error decoding JSON file")
 	}
 
-	return m, nil
+	return result, nil
 }
 
 func Restore() (Manifest, error) {
-	return RestoreFromFile(ManifestConfigFile)
+	return RestoreFromFile(ManifestConfigFile, ManifestSecretFile)
 }
 
 func Exists() bool {
