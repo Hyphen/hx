@@ -8,7 +8,7 @@ import (
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
-func ensureGitignore(manifestFileName string) error {
+func ensureGitignore(manifestSecretsFileName string) error {
 	const gitDirPath = ".git"
 	const gitignorePath = ".gitignore"
 
@@ -23,7 +23,7 @@ func ensureGitignore(manifestFileName string) error {
 		}
 		defer file.Close()
 
-		_, err = file.WriteString(manifestFileName + "\n")
+		_, err = file.WriteString(manifestSecretsFileName + "\n")
 		if err != nil {
 			return errors.Wrap(err, "Error writing to .gitignore")
 		}
@@ -38,7 +38,7 @@ func ensureGitignore(manifestFileName string) error {
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		if strings.TrimSpace(scanner.Text()) == manifestFileName {
+		if strings.TrimSpace(scanner.Text()) == manifestSecretsFileName {
 			return nil
 		}
 	}
@@ -47,7 +47,7 @@ func ensureGitignore(manifestFileName string) error {
 		return errors.Wrap(err, "Error reading .gitignore")
 	}
 
-	_, err = file.WriteString(manifestFileName + "\n")
+	_, err = file.WriteString(manifestSecretsFileName + "\n")
 	if err != nil {
 		return errors.Wrap(err, "Error writing to .gitignore")
 	}
