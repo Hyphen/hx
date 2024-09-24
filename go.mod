@@ -3,7 +3,6 @@ module github.com/Hyphen/cli
 go 1.22.2
 
 require (
-	github.com/BurntSushi/toml v1.3.2
 	github.com/fatih/color v1.17.0
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.9.0
