@@ -351,7 +351,7 @@ func (s *OAuthService) GetValidToken() (string, error) {
 		if err != nil {
 			return "", errors.Wrap(err, "Failed to refresh token")
 		}
-		err = config.SaveCredentials(credentials.Default.OrganizationId, tokenResponse.AccessToken, tokenResponse.RefreshToken, tokenResponse.IDToken, tokenResponse.ExpiryTime)
+		err = config.SaveCredentials(tokenResponse.AccessToken, tokenResponse.RefreshToken, tokenResponse.IDToken, tokenResponse.ExpiryTime)
 		if err != nil {
 			return "", errors.Wrap(err, "Failed to save refreshed credentials")
 		}

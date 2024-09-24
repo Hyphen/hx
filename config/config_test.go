@@ -22,7 +22,6 @@ func TestSaveCredentialsSuccess(t *testing.T) {
 		Default: Credentials{
 			HyphenAccessToken:  "user_access_token",
 			HyphenRefreshToken: "user_refresh_token",
-			OrganizationId:     "org_id",
 			HypenIDToken:       "user_id_token",
 			ExpiryTime:         12,
 		},
@@ -44,7 +43,7 @@ func TestSaveCredentialsSuccess(t *testing.T) {
 		return nil
 	}
 
-	err := SaveCredentials("org_id", "user_access_token", "user_refresh_token", "user_id_token", 12)
+	err := SaveCredentials("user_access_token", "user_refresh_token", "user_id_token", 12)
 	assert.Nil(t, err, "SaveCredentials should not return an error")
 }
 
@@ -84,7 +83,7 @@ func TestSaveCredentialsFailures(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setupMocks()
-			err := SaveCredentials("org_id", "user_access_token", "user_refresh_token", "user_id_token", 12)
+			err := SaveCredentials("user_access_token", "user_refresh_token", "user_id_token", 12)
 			assert.NotNil(t, err, "SaveCredentials should return an error")
 		})
 	}
@@ -100,7 +99,6 @@ func TestLoadCredentialsSuccess(t *testing.T) {
 		Default: Credentials{
 			HyphenAccessToken:  "user_access_token",
 			HyphenRefreshToken: "user_refresh_token",
-			OrganizationId:     "org_id",
 			HypenIDToken:       "user_id_token",
 			ExpiryTime:         12,
 		},
@@ -155,57 +153,4 @@ func TestLoadCredentialsFailures(t *testing.T) {
 			assert.Contains(t, err.Error(), tc.expectedErr, "Error message should contain expected string for "+tc.name)
 		})
 	}
-}
-
-// TestUpdateOrganizationID tests the UpdateOrganizationID function
-func TestUpdateOrganizationID(t *testing.T) {
-	mockFS := &fsutil.MockFileSystem{}
-	FS = mockFS
-
-	credentialFile := filepath.Join(GetConfigDirectory(), CredentialFile)
-	initialCredentials := CredentialsConfig{
-		Default: Credentials{
-			HyphenAccessToken:  "user_access_token",
-			HyphenRefreshToken: "user_refresh_token",
-			OrganizationId:     "old_org_id",
-			HypenIDToken:       "user_id_token",
-			ExpiryTime:         12,
-		},
-	}
-
-	initialJSON, _ := json.MarshalIndent(initialCredentials, "", "  ")
-
-	mockFS.ReadFileFunc = func(filename string) ([]byte, error) {
-		assert.Equal(t, credentialFile, filename)
-		return initialJSON, nil
-	}
-
-	var writtenData []byte
-	mockFS.WriteFileFunc = func(filename string, data []byte, perm os.FileMode) error {
-		assert.Equal(t, credentialFile, filename)
-		assert.Equal(t, os.FileMode(0644), perm)
-		writtenData = data
-		return nil
-	}
-
-	err := UpdateOrganizationID("new_org_id")
-	assert.Nil(t, err, "UpdateOrganizationID should not return an error")
-
-	// Verify that the new organization ID was written
-	var updatedConfig CredentialsConfig
-	err = json.Unmarshal(writtenData, &updatedConfig)
-	assert.Nil(t, err, "Should be able to unmarshal written data")
-	assert.Equal(t, "new_org_id", updatedConfig.Default.OrganizationId, "Organization ID should be updated")
-}
-
-func TestUpdateOrganizationIDFailure(t *testing.T) {
-	mockFS := &fsutil.MockFileSystem{}
-	FS = mockFS
-
-	mockFS.ReadFileFunc = func(filename string) ([]byte, error) {
-		return nil, errors.New("failed to read file")
-	}
-
-	err := UpdateOrganizationID("new_org_id")
-	assert.NotNil(t, err, "UpdateOrganizationID should return an error when reading fails")
 }

@@ -20,7 +20,6 @@ type CredentialsConfig struct {
 type Credentials struct {
 	HyphenAccessToken  string `json:"hyphen_access_token"`
 	HyphenRefreshToken string `json:"hyphen_refresh_token"`
-	OrganizationId     string `json:"organization_id"`
 	HypenIDToken       string `json:"hyphen_id_token"`
 	ExpiryTime         int64  `json:"expiry_time"`
 }
@@ -62,7 +61,7 @@ func ensureDir(dirName string) error {
 }
 
 // SaveCredentials stores credentials in a system-dependent location
-func SaveCredentials(organizationID, accessToken, refreshToken, IDToken string, expiryTime int64) error {
+func SaveCredentials(accessToken, refreshToken, IDToken string, expiryTime int64) error {
 	configDir := GetConfigDirectory()
 	if err := ensureDir(configDir); err != nil {
 		return errors.Wrap(err, "Failed to create configuration directory")
@@ -73,7 +72,6 @@ func SaveCredentials(organizationID, accessToken, refreshToken, IDToken string, 
 		Default: Credentials{
 			HyphenAccessToken:  accessToken,
 			HyphenRefreshToken: refreshToken,
-			OrganizationId:     organizationID,
 			HypenIDToken:       IDToken,
 			ExpiryTime:         expiryTime,
 		},
@@ -108,28 +106,4 @@ func LoadCredentials() (CredentialsConfig, error) {
 	}
 
 	return config, nil
-}
-
-// UpdateOrganizationID updates the organization ID in the credentials file
-func UpdateOrganizationID(organizationID string) error {
-	credentials, err := LoadCredentials()
-	if err != nil {
-		return fmt.Errorf("Failed to load existing credentials: %w", err)
-	}
-
-	credentials.Default.OrganizationId = organizationID
-
-	configDir := GetConfigDirectory()
-	credentialFilePath := filepath.Join(configDir, CredentialFile)
-
-	jsonData, err := json.MarshalIndent(credentials, "", "  ")
-	if err != nil {
-		return fmt.Errorf("Failed to marshal updated credentials to JSON: %w", err)
-	}
-
-	if err := FS.WriteFile(credentialFilePath, jsonData, 0644); err != nil {
-		return fmt.Errorf("Failed to write updated credentials: %w", err)
-	}
-
-	return nil
 }

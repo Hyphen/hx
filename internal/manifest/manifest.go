@@ -123,7 +123,10 @@ func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, e
 		hasSecret = true
 	}
 
-	if !hasConfig {
+	if !hasConfig ||
+		mconfig.AppId == "" ||
+		mconfig.AppName == "" ||
+		mconfig.AppAlternateId == "" {
 		return Manifest{}, errors.New("No valid configuration found (neither global nor local)")
 	}
 	if !hasSecret {
@@ -188,4 +191,63 @@ func Restore() (Manifest, error) {
 func Exists() bool {
 	_, err := os.Stat(ManifestConfigFile)
 	return !os.IsNotExist(err)
+}
+
+func UpdateOrganizationID(organizationID string) error {
+	var mconfig ManifestConfig
+	var hasConfig bool
+
+	globalConfigFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), ManifestConfigFile)
+	localConfigFile := ManifestConfigFile
+	localConfig, localConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](localConfigFile)
+	if localConfigErr == nil {
+		mconfig = localConfig
+		hasConfig = true
+	}
+	fmt.Println(globalConfigFile)
+	fmt.Println(localConfigFile)
+
+	if !hasConfig {
+		globalConfig, globalConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
+		if globalConfigErr == nil {
+			mconfig = globalConfig
+			hasConfig = true
+		}
+	}
+
+	if !hasConfig {
+		mc := ManifestConfig{
+			AppName:        "",
+			AppId:          "",
+			AppAlternateId: "",
+			OrganisationId: organizationID,
+		}
+		jsonData, err := json.MarshalIndent(mc, "", "  ")
+		if err != nil {
+			return errors.Wrap(err, "Error encoding JSON")
+		}
+		err = os.WriteFile(globalConfigFile, jsonData, 0644)
+		if err != nil {
+			return errors.Wrapf(err, "Error writing file: %s", ManifestConfigFile)
+		}
+		return nil
+	}
+
+	mconfig.OrganisationId = organizationID
+
+	configFile := localConfigFile
+	if localConfigErr != nil {
+		configFile = globalConfigFile
+	}
+
+	jsonData, err := json.MarshalIndent(mconfig, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "Error encoding JSON")
+	}
+	err = os.WriteFile(configFile, jsonData, 0644)
+	if err != nil {
+		return errors.Wrapf(err, "Error writing file: %s", configFile)
+	}
+
+	return nil
 }
