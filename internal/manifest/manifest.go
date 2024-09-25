@@ -99,31 +99,40 @@ func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, e
 	var hasOnlyGlobalConfig bool
 
 	globalConfigFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), manifestConfigFile)
-	globalConfig, globalConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
-	if globalConfigErr == nil {
+	globalSecretFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), manifestSecretFile)
+
+	globalConfig, err := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
+	if err == nil {
 		mconfig = globalConfig
 		hasConfig = true
 		hasOnlyGlobalConfig = true
+	} else if !os.IsNotExist(err) {
+		return Manifest{}, err //return the json parse error
 	}
 
-	globalSecretFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), manifestSecretFile)
-	globalSecret, globalSecretErr := readAndUnmarshalConfigJSON[ManifestSecret](globalSecretFile)
-	if globalSecretErr == nil {
+	globalSecret, err := readAndUnmarshalConfigJSON[ManifestSecret](globalSecretFile)
+	if err == nil {
 		secret = globalSecret
 		hasSecret = true
 		hasOnlyGlobalConfig = false
+	} else if !os.IsNotExist(err) {
+		return Manifest{}, err //return the json parse error
 	}
 
-	localConfig, localConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](manifestConfigFile)
-	if localConfigErr == nil {
+	localConfig, err := readAndUnmarshalConfigJSON[ManifestConfig](manifestConfigFile)
+	if err == nil {
 		mconfig = mergeConfigs(mconfig, localConfig)
 		hasConfig = true
+	} else if !os.IsNotExist(err) {
+		return Manifest{}, err //return the json parse error
 	}
 
-	localSecret, localSecretErr := readAndUnmarshalConfigJSON[ManifestSecret](manifestSecretFile)
-	if localSecretErr == nil {
+	localSecret, err := readAndUnmarshalConfigJSON[ManifestSecret](manifestSecretFile)
+	if err == nil {
 		secret = mergeSecrets(secret, localSecret)
 		hasSecret = true
+	} else if !os.IsNotExist(err) {
+		return Manifest{}, err //return the json parse error
 	}
 
 	if !hasConfig {
