@@ -108,7 +108,7 @@ func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, e
 		hasConfig = true
 		hasOnlyGlobalConfig = true
 	} else if !os.IsNotExist(err) {
-		return Manifest{}, err //return the json parse error
+		return Manifest{}, err
 	}
 
 	globalSecret, err := readAndUnmarshalConfigJSON[ManifestSecret](globalSecretFile)
@@ -117,29 +117,29 @@ func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, e
 		hasSecret = true
 		hasOnlyGlobalConfig = false
 	} else if !os.IsNotExist(err) {
-		return Manifest{}, err //return the json parse error
+		return Manifest{}, err
 	}
 
 	localConfig, localConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](manifestConfigFile)
 	if localConfigErr == nil {
 		mergeErr := mergo.Merge(&mconfig, localConfig, mergo.WithOverride)
 		if mergeErr != nil {
-			return Manifest{}, errors.Wrap(mergeErr, "Error parsing your .hx config(s)")
+			return Manifest{}, errors.Wrap(mergeErr, "Error merging your .hx config(s)")
 		}
 		hasConfig = true
-	} else if !os.IsNotExist(err) {
-		return Manifest{}, err //return the json parse error
+	} else if !os.IsNotExist(localConfigErr) {
+		return Manifest{}, localConfigErr
 	}
 
 	localSecret, localSecretErr := readAndUnmarshalConfigJSON[ManifestSecret](manifestSecretFile)
 	if localSecretErr == nil {
 		mergeErr := mergo.Merge(&secret, localSecret, mergo.WithOverride)
 		if mergeErr != nil {
-			return Manifest{}, errors.Wrap(mergeErr, "Error parsing your .hxkey secret(s)")
+			return Manifest{}, errors.Wrap(mergeErr, "Error merging your .hxkey secret(s)")
 		}
 		hasSecret = true
-	} else if !os.IsNotExist(err) {
-		return Manifest{}, err //return the json parse error
+	} else if !os.IsNotExist(localSecretErr) {
+		return Manifest{}, localSecretErr
 	}
 
 	if !hasConfig {
@@ -166,7 +166,7 @@ func readAndUnmarshalConfigJSON[T any](filename string) (T, error) {
 
 	err = json.Unmarshal(jsonData, &result)
 	if err != nil {
-		return result, errors.Wrapf(err, "Error decoding JSON file: %s", filename)
+		return result, errors.Wrapf(err, "Error decoding JSON file: %s, error: %v", filename, err)
 	}
 
 	return result, nil
@@ -230,7 +230,7 @@ func UpdateOrganizationID(organizationID string) error {
 
 	jsonData, err := json.MarshalIndent(mconfig, "", "  ")
 	if err != nil {
-		return errors.Wrap(err, "Error encoding JSON")
+		return errors.Wrapf(err, "Error decoding JSON file: %s, error: %v", configFile, err)
 	}
 	err = os.WriteFile(configFile, jsonData, 0644)
 	if err != nil {

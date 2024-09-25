@@ -68,6 +68,8 @@ and have reviewed the changes before pushing.
 			cprint.Error(cmd, err)
 			return
 		}
+		fmt.Println(manifest)
+		fmt.Println(*manifest.AppName)
 		if manifest.AppId == nil {
 			cprint.Error(cmd, fmt.Errorf("No app ID found in manifest"))
 			return

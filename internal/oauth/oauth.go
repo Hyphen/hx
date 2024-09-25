@@ -343,7 +343,7 @@ func (s *OAuthService) RefreshToken(refreshToken string) (*TokenResponse, error)
 func (s *OAuthService) GetValidToken() (string, error) {
 	credentials, err := config.LoadCredentials()
 	if err != nil {
-		return "", errors.Wrap(err, "Failed to load credentials")
+		return "", err
 	}
 
 	if s.IsTokenExpired(credentials.Default.ExpiryTime) {
