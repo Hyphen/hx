@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/Hyphen/cli/config"
-	"github.com/Hyphen/cli/pkg/conf"
+	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
@@ -76,7 +76,7 @@ func DefaultOAuthService() *OAuthService {
 }
 
 func NewOAuthService(httpClient HTTPClient, timeProvider TimeProvider, browserOpener BrowserOpener) *OAuthService {
-	baseUrl := conf.GetBaseAuthUrl()
+	baseUrl := apiconf.GetBaseAuthUrl()
 
 	return &OAuthService{
 		baseUrl:       baseUrl,
@@ -343,7 +343,7 @@ func (s *OAuthService) RefreshToken(refreshToken string) (*TokenResponse, error)
 func (s *OAuthService) GetValidToken() (string, error) {
 	credentials, err := config.LoadCredentials()
 	if err != nil {
-		return "", errors.Wrap(err, "Failed to load credentials")
+		return "", err
 	}
 
 	if s.IsTokenExpired(credentials.Default.ExpiryTime) {
@@ -351,7 +351,7 @@ func (s *OAuthService) GetValidToken() (string, error) {
 		if err != nil {
 			return "", errors.Wrap(err, "Failed to refresh token")
 		}
-		err = config.SaveCredentials(credentials.Default.OrganizationId, tokenResponse.AccessToken, tokenResponse.RefreshToken, tokenResponse.IDToken, tokenResponse.ExpiryTime)
+		err = config.SaveCredentials(tokenResponse.AccessToken, tokenResponse.RefreshToken, tokenResponse.IDToken, tokenResponse.ExpiryTime)
 		if err != nil {
 			return "", errors.Wrap(err, "Failed to save refreshed credentials")
 		}

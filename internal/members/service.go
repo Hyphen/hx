@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/Hyphen/cli/pkg/conf"
+	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
 )
@@ -24,7 +24,7 @@ type MemberService struct {
 }
 
 func NewService() *MemberService {
-	baseUrl := conf.GetBaseApixUrl()
+	baseUrl := apiconf.GetBaseApixUrl()
 	return &MemberService{
 		baseUrl:    baseUrl,
 		httpClient: httputil.NewHyphenHTTPClient(),

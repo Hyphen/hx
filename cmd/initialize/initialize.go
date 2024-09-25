@@ -78,7 +78,7 @@ func runInit(cmd *cobra.Command, args []string) {
 
 	printInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
 
-	if err := ensureGitignore(manifest.ManifestConfigFile); err != nil {
+	if err := ensureGitignore(manifest.ManifestSecretFile); err != nil {
 		cprint.Error(cmd, fmt.Errorf("error checking/updating .gitignore: %w", err))
 		return
 	}

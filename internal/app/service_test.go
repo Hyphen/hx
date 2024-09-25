@@ -8,18 +8,10 @@ import (
 	"testing"
 
 	"github.com/Hyphen/cli/pkg/errors"
+	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
-
-type MockHTTPClient struct {
-	mock.Mock
-}
-
-func (m *MockHTTPClient) Do(req *http.Request) (*http.Response, error) {
-	args := m.Called(req)
-	return args.Get(0).(*http.Response), args.Error(1)
-}
 
 func TestNewService(t *testing.T) {
 	os.Setenv("HYPHEN_CUSTOM_APIX", "https://custom-api.example.com")
@@ -31,7 +23,7 @@ func TestNewService(t *testing.T) {
 }
 
 func TestGetListApps(t *testing.T) {
-	mockHTTPClient := new(MockHTTPClient)
+	mockHTTPClient := new(httputil.MockHTTPClient)
 
 	service := &AppService{
 		baseUrl:    "https://api.example.com",
@@ -66,7 +58,7 @@ func TestGetListApps(t *testing.T) {
 }
 
 func TestCreateApp(t *testing.T) {
-	mockHTTPClient := new(MockHTTPClient)
+	mockHTTPClient := new(httputil.MockHTTPClient)
 
 	service := &AppService{
 		baseUrl:    "https://api.example.com",
@@ -93,7 +85,7 @@ func TestCreateApp(t *testing.T) {
 }
 
 func TestGetApp(t *testing.T) {
-	mockHTTPClient := new(MockHTTPClient)
+	mockHTTPClient := new(httputil.MockHTTPClient)
 
 	service := &AppService{
 		baseUrl:    "https://api.example.com",
@@ -120,7 +112,7 @@ func TestGetApp(t *testing.T) {
 }
 
 func TestDeleteApp(t *testing.T) {
-	mockHTTPClient := new(MockHTTPClient)
+	mockHTTPClient := new(httputil.MockHTTPClient)
 
 	service := &AppService{
 		baseUrl:    "https://api.example.com",
@@ -143,7 +135,7 @@ func TestDeleteApp(t *testing.T) {
 
 func TestErrorHandling(t *testing.T) {
 	t.Run("HTTP Error", func(t *testing.T) {
-		mockHTTPClient := new(MockHTTPClient)
+		mockHTTPClient := new(httputil.MockHTTPClient)
 
 		service := &AppService{
 			baseUrl:    "https://api.example.com",
@@ -163,7 +155,7 @@ func TestErrorHandling(t *testing.T) {
 	})
 
 	t.Run("JSON Parsing Error", func(t *testing.T) {
-		mockHTTPClient := new(MockHTTPClient)
+		mockHTTPClient := new(httputil.MockHTTPClient)
 
 		service := &AppService{
 			baseUrl:    "https://api.example.com",
@@ -184,7 +176,7 @@ func TestErrorHandling(t *testing.T) {
 }
 
 func TestAppService_HTTPClientError(t *testing.T) {
-	mockHTTPClient := new(MockHTTPClient)
+	mockHTTPClient := new(httputil.MockHTTPClient)
 
 	service := &AppService{
 		baseUrl:    "https://api.example.com",
@@ -214,7 +206,7 @@ func TestAppService_HTTPClientError(t *testing.T) {
 }
 
 func TestAppService_ReadBodyError(t *testing.T) {
-	mockHTTPClient := new(MockHTTPClient)
+	mockHTTPClient := new(httputil.MockHTTPClient)
 
 	service := &AppService{
 		baseUrl:    "https://api.example.com",

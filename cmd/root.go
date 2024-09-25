@@ -6,6 +6,7 @@ import (
 
 	"github.com/Hyphen/cli/cmd/auth"
 	"github.com/Hyphen/cli/cmd/initialize"
+	"github.com/Hyphen/cli/cmd/link"
 	"github.com/Hyphen/cli/cmd/pull"
 	"github.com/Hyphen/cli/cmd/push"
 	"github.com/Hyphen/cli/cmd/update"
@@ -29,6 +30,7 @@ func init() {
 	rootCmd.AddCommand(useorg.UseOrgCmd)
 	rootCmd.AddCommand(pull.PullCmd)
 	rootCmd.AddCommand(push.PushCmd)
+	rootCmd.AddCommand(link.LinkCmd)
 
 	rootCmd.PersistentFlags().StringVar(&flags.OrgFlag, "org", "", "Organization ID (e.g., org_123)")
 	rootCmd.PersistentFlags().StringVar(&flags.ProjFlag, "proj", "", "Project ID (e.g., proj_123)")

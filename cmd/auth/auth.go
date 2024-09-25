@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Hyphen/cli/config"
+	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
@@ -33,9 +34,7 @@ func login() error {
 
 	cprint.Success("OAuth server started successfully")
 
-	var organizationID string
-
-	if err := config.SaveCredentials(organizationID, token.AccessToken, token.RefreshToken, token.IDToken, token.ExpiryTime); err != nil {
+	if err := config.SaveCredentials(token.AccessToken, token.RefreshToken, token.IDToken, token.ExpiryTime); err != nil {
 		return fmt.Errorf("failed to save credentials: %w", err)
 	}
 
@@ -46,9 +45,10 @@ func login() error {
 		return fmt.Errorf("failed to get user information: %w", err)
 	}
 
+	var organizationID string
 	organizationID = user.Memberships[0].Organization.ID
 
-	if err := config.UpdateOrganizationID(organizationID); err != nil {
+	if err := manifest.UpdateOrganizationID(organizationID); err != nil {
 		return fmt.Errorf("failed to update organization ID: %w", err)
 	}
 
