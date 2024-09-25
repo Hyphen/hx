@@ -35,7 +35,7 @@ type ManifestConfig struct {
 	AppName        *string `json:"app_name,omitempty"`
 	AppId          *string `json:"app_id,omitempty"`
 	AppAlternateId *string `json:"app_alternate_id,omitempty"`
-	OrganisationId string  `json:"organisation_id"`
+	OrganizationId string  `json:"organization_id"`
 }
 
 type Manifest struct {
@@ -61,7 +61,7 @@ func Initialize(organizationId, appName, appID, appAlternateId string) (Manifest
 		AppName:        &appName,
 		AppId:          &appID,
 		AppAlternateId: &appAlternateId,
-		OrganisationId: organizationId,
+		OrganizationId: organizationId,
 	}
 	jsonData, err := json.MarshalIndent(mc, "", "  ")
 	if err != nil {
@@ -152,8 +152,8 @@ func mergeConfigs(base, override ManifestConfig) ManifestConfig {
 	if override.AppAlternateId != nil {
 		merged.AppAlternateId = override.AppAlternateId
 	}
-	if override.OrganisationId != "" {
-		merged.OrganisationId = override.OrganisationId
+	if override.OrganizationId != "" {
+		merged.OrganizationId = override.OrganizationId
 	}
 
 	return merged
@@ -221,7 +221,7 @@ func UpdateOrganizationID(organizationID string) error {
 			AppName:        nil,
 			AppId:          nil,
 			AppAlternateId: nil,
-			OrganisationId: organizationID,
+			OrganizationId: organizationID,
 		}
 		jsonData, err := json.MarshalIndent(mc, "", "  ")
 		if err != nil {
@@ -234,7 +234,7 @@ func UpdateOrganizationID(organizationID string) error {
 		return nil
 	}
 
-	mconfig.OrganisationId = organizationID
+	mconfig.OrganizationId = organizationID
 
 	configFile := localConfigFile
 	if localConfigErr != nil {

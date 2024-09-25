@@ -71,7 +71,7 @@ func TestRestoreFromFile(t *testing.T) {
 			"app_name": "TestApp",
 			"app_id": "app1",
 			"app_alternate_id": "test-app",
-			"organisation_id": "org1"
+			"organization_id": "org1"
 		}`)
 		defer os.Remove(localConfigFile.Name())
 
@@ -88,7 +88,7 @@ func TestRestoreFromFile(t *testing.T) {
 		assert.Equal(t, "app1", *m.AppId)
 		assert.NotNil(t, m.AppAlternateId)
 		assert.Equal(t, "test-app", *m.AppAlternateId)
-		assert.Equal(t, "org1", m.OrganisationId)
+		assert.Equal(t, "org1", m.OrganizationId)
 		assert.Equal(t, "dGVzdC1zZWNyZXQta2V5", m.SecretKey)
 	})
 
@@ -125,7 +125,7 @@ func TestRestore(t *testing.T) {
 			"app_name": "TestApp",
 			"app_id": "app1",
 			"app_alternate_id": "test-app",
-			"organisation_id": "org1"
+			"organization_id": "org1"
 		}`
 		err := os.WriteFile(ManifestConfigFile, []byte(configContent), 0644)
 		require.NoError(t, err)
@@ -144,7 +144,7 @@ func TestRestore(t *testing.T) {
 		assert.Equal(t, "app1", *m.AppId)
 		assert.NotNil(t, m.AppAlternateId)
 		assert.Equal(t, "test-app", *m.AppAlternateId)
-		assert.Equal(t, "org1", m.OrganisationId)
+		assert.Equal(t, "org1", m.OrganizationId)
 		assert.Equal(t, "dGVzdC1zZWNyZXQta2V5", m.SecretKey)
 	})
 

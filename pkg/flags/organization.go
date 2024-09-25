@@ -15,9 +15,9 @@ func GetOrganizationID() (string, error) {
 		return "", errors.Wrap(err, "Failed to load credentials")
 	}
 
-	if manifest.OrganisationId == "" {
+	if manifest.OrganizationId == "" {
 		return "", errors.New("No organization ID provided and no default found in manifest")
 	}
 
-	return manifest.OrganisationId, nil
+	return manifest.OrganizationId, nil
 }
