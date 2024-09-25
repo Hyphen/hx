@@ -27,8 +27,8 @@ func SetConfigProvider(provider configProvider) {
 }
 
 var (
-	ManifestConfigFile = ".hyphen-manifest-key.json"
-	ManifestSecretFile = ".hyphen-manifest-secret-key.json"
+	ManifestConfigFile = ".hx.json"
+	ManifestSecretFile = ".hxkey.json"
 )
 
 type ManifestConfig struct {
