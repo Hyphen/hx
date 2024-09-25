@@ -7,6 +7,7 @@ import (
 	"github.com/Hyphen/cli/cmd/auth"
 	"github.com/Hyphen/cli/cmd/initialize"
 	"github.com/Hyphen/cli/cmd/link"
+	"github.com/Hyphen/cli/cmd/project"
 	"github.com/Hyphen/cli/cmd/pull"
 	"github.com/Hyphen/cli/cmd/push"
 	"github.com/Hyphen/cli/cmd/update"
@@ -31,12 +32,13 @@ func init() {
 	rootCmd.AddCommand(pull.PullCmd)
 	rootCmd.AddCommand(push.PushCmd)
 	rootCmd.AddCommand(link.LinkCmd)
+	rootCmd.AddCommand(project.ProjectCmd)
 
 	rootCmd.PersistentFlags().StringVar(&flags.OrgFlag, "org", "", "Organization ID (e.g., org_123)")
 	rootCmd.PersistentFlags().StringVar(&flags.ProjFlag, "proj", "", "Project ID (e.g., proj_123)")
 	rootCmd.PersistentFlags().StringVar(&flags.EnvironmentFlag, "env", "", "Environment ID (e.g., env_12345)")
 	rootCmd.PersistentFlags().BoolVarP(&flags.YesFlag, "yes", "y", false, "Automatically answer yes for prompts")
-	rootCmd.PersistentFlags().StringVar(&flags.ApiKey, "app-key", "", "API Key")
+	rootCmd.PersistentFlags().StringVar(&flags.ApiKey, "api-key", "", "API Key")
 }
 
 func Execute() {
