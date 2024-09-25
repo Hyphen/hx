@@ -104,7 +104,7 @@ func TestRestoreFromFile(t *testing.T) {
 
 		_, err := RestoreFromFile(invalidFile.Name(), invalidFile.Name())
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "No valid configuration found (neither global nor local)")
+		assert.Contains(t, err.Error(), "Error decoding JSON file")
 	})
 }
 
