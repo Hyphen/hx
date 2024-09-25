@@ -96,7 +96,6 @@ func TestCreateQRCode(t *testing.T) {
 
 	responseBody := `{
 		"id": "qr123",
-		"title": "Test QR",
 		"qrCode": "base64encodedimage",
 		"qrLink": "https://qr.example.com/qr123"
 	}`
@@ -108,11 +107,10 @@ func TestCreateQRCode(t *testing.T) {
 
 	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
 
-	qr, err := service.CreateQRCode("org123", "code456", "Test QR")
+	qr, err := service.CreateQRCode("org123", "code456")
 
 	assert.NoError(t, err)
 	assert.Equal(t, "qr123", qr.ID)
-	assert.Equal(t, "Test QR", qr.Title)
 	assert.Equal(t, "base64encodedimage", qr.QRCode)
 	assert.Equal(t, "https://qr.example.com/qr123", qr.QRLink)
 
