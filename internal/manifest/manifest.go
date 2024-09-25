@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"dario.cat/mergo"
 	"github.com/Hyphen/cli/config"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/errors"
@@ -119,17 +120,23 @@ func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, e
 		return Manifest{}, err //return the json parse error
 	}
 
-	localConfig, err := readAndUnmarshalConfigJSON[ManifestConfig](manifestConfigFile)
-	if err == nil {
-		mconfig = mergeConfigs(mconfig, localConfig)
+	localConfig, localConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](manifestConfigFile)
+	if localConfigErr == nil {
+		mergeErr := mergo.Merge(&mconfig, localConfig, mergo.WithOverride)
+		if mergeErr != nil {
+			return Manifest{}, errors.Wrap(mergeErr, "Error parsing your .hx config(s)")
+		}
 		hasConfig = true
 	} else if !os.IsNotExist(err) {
 		return Manifest{}, err //return the json parse error
 	}
 
-	localSecret, err := readAndUnmarshalConfigJSON[ManifestSecret](manifestSecretFile)
-	if err == nil {
-		secret = mergeSecrets(secret, localSecret)
+	localSecret, localSecretErr := readAndUnmarshalConfigJSON[ManifestSecret](manifestSecretFile)
+	if localSecretErr == nil {
+		mergeErr := mergo.Merge(&secret, localSecret, mergo.WithOverride)
+		if mergeErr != nil {
+			return Manifest{}, errors.Wrap(mergeErr, "Error parsing your .hxkey secret(s)")
+		}
 		hasSecret = true
 	} else if !os.IsNotExist(err) {
 		return Manifest{}, err //return the json parse error
@@ -147,35 +154,6 @@ func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, e
 		ManifestConfig: mconfig,
 		ManifestSecret: secret,
 	}, nil
-}
-
-func mergeConfigs(base, override ManifestConfig) ManifestConfig {
-	merged := base
-
-	if override.AppName != nil {
-		merged.AppName = override.AppName
-	}
-	if override.AppId != nil {
-		merged.AppId = override.AppId
-	}
-	if override.AppAlternateId != nil {
-		merged.AppAlternateId = override.AppAlternateId
-	}
-	if override.OrganizationId != "" {
-		merged.OrganizationId = override.OrganizationId
-	}
-
-	return merged
-}
-
-func mergeSecrets(base, override ManifestSecret) ManifestSecret {
-	merged := base
-
-	if override.SecretKey != "" {
-		merged.SecretKey = override.SecretKey
-	}
-
-	return merged
 }
 
 func readAndUnmarshalConfigJSON[T any](filename string) (T, error) {
