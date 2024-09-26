@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/Hyphen/cli/cmd/app/create"
+	"github.com/Hyphen/cli/cmd/app/get"
 	"github.com/Hyphen/cli/cmd/app/list"
 	"github.com/spf13/cobra"
 )
@@ -18,4 +19,5 @@ var AppCmd = &cobra.Command{
 func init() {
 	AppCmd.AddCommand(list.ListCmd)
 	AppCmd.AddCommand(create.CreateCmd)
+	AppCmd.AddCommand(get.GetCmd)
 }
