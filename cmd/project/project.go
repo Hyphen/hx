@@ -38,8 +38,8 @@ var projectListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
-			fmt.Println(err)
 			cprint.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
+			return
 		}
 
 		service := projects.NewService(orgId)
@@ -72,8 +72,8 @@ var projectGetCmd = &cobra.Command{
 		projectID := args[0]
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
-			fmt.Println(err)
 			cprint.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
+			return
 		}
 
 		service := projects.NewService(orgId)
