@@ -14,7 +14,17 @@ import (
 var ProjectCmd = &cobra.Command{
 	Use:   "project",
 	Short: "Manage projects",
-	Long:  `todo`,
+	Long: `
+Manage projects within your organization.
+
+This command allows you to interact with the project resources in your organization.
+You can list all projects, get details of a specific project and create a new project.
+
+Examples:
+  hyphen project list
+  hyphen project get <project_id>
+  hyphen project create "New Project"
+`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// check if the subcommand is unsupported
 		// If no subcommand is provided, default to 'list' command
