@@ -15,7 +15,7 @@ var UseOrgCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		orgID := args[0]
-		err := manifest.UpdateOrganizationID(orgID)
+		err := manifest.UpsertOrganizationID(orgID)
 		if err != nil {
 			return fmt.Errorf("failed to update organization ID: %w", err)
 		}

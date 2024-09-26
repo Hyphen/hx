@@ -59,18 +59,39 @@ func runInit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	if manifest.Exists() && !shouldOverwrite(cmd) {
+	if manifest.ExistsLocal() && !shouldOverwrite(cmd) {
 		cprint.Info("Operation cancelled.")
 		return
 	}
 
-	newApp, err := appService.CreateApp(orgID, appAlternateId, appName)
+	m, err := manifest.Restore()
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
 	}
 
-	_, err = manifest.Initialize(orgID, newApp.Name, newApp.ID, newApp.AlternateId)
+	if m.ProjectId == nil {
+		cprint.Error(cmd, fmt.Errorf("No project found in Manifest"))
+		return
+	}
+
+	newApp, err := appService.CreateApp(orgID, *m.ProjectId, appAlternateId, appName)
+	if err != nil {
+		cprint.Error(cmd, err)
+		return
+	}
+
+	mcl := manifest.ManifestConfig{
+		ProjectId:          m.ProjectId,
+		ProjectAlternateId: m.ProjectAlternateId,
+		ProjectName:        m.ProjectName,
+		OrganizationId:     m.OrganizationId,
+		AppName:            &newApp.Name,
+		AppAlternateId:     &newApp.AlternateId,
+		AppId:              &newApp.ID,
+	}
+
+	_, err = manifest.LocalInitialize(mcl)
 	if err != nil {
 		cprint.Error(cmd, err)
 		return

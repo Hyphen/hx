@@ -42,6 +42,11 @@ func runCreate(cmd *cobra.Command, args []string) {
 		cprint.Error(cmd, err)
 		return
 	}
+	projID, err := flags.GetProjectID()
+	if err != nil {
+		cprint.Error(cmd, err)
+		return
+	}
 
 	appName := args[0]
 	if appName == "" {
@@ -54,7 +59,7 @@ func runCreate(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	newApp, err := appService.CreateApp(orgID, appAlternateId, appName)
+	newApp, err := appService.CreateApp(orgID, projID, appAlternateId, appName)
 	if err != nil {
 		cprint.Error(cmd, err)
 		return

@@ -13,8 +13,9 @@ import (
 )
 
 var (
-	pageSize int
-	page     int
+	pageSize  int
+	page      int
+	showTable bool
 )
 
 var ListCmd = &cobra.Command{
@@ -27,11 +28,16 @@ var ListCmd = &cobra.Command{
 			cprint.Error(cmd, err)
 			return
 		}
+		projectId, err := flags.GetProjectID()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
 		service := newService(app.NewService())
 
 		cprint.PrintHeader("Listing Applications")
 
-		apps, err := service.ListApps(orgId, pageSize, page)
+		apps, err := service.ListApps(orgId, projectId, pageSize, page)
 		if err != nil {
 			cprint.Error(cmd, fmt.Errorf("failed to list apps: %w", err))
 			return
@@ -42,36 +48,57 @@ var ListCmd = &cobra.Command{
 			return
 		}
 
-		// Define color functions
-		cyan := color.New(color.FgCyan).SprintFunc()
-		green := color.New(color.FgGreen).SprintFunc()
-		yellow := color.New(color.FgYellow).SprintFunc()
-		magenta := color.New(color.FgMagenta).SprintFunc()
-		blue := color.New(color.FgBlue).SprintFunc()
-		red := color.New(color.FgRed).SprintFunc()
-
-		t := table.New(os.Stdout)
-		t.SetHeaders(
-			cyan("App ID"),
-			cyan("Alternate ID"),
-			cyan("Name"),
-			cyan("Organization ID"),
-			cyan("Organization Name"),
-		)
-
-		for _, app := range apps {
-			t.AddRow(
-				green(app.ID),
-				yellow(app.AlternateId),
-				magenta(app.Name),
-				blue(app.Organization.ID),
-				red(app.Organization.Name),
-			)
+		if showTable {
+			displayTable(apps)
+		} else {
+			displayList(apps)
 		}
 
-		t.Render()
 		cprint.Success("Applications listed successfully")
 	},
+}
+
+func displayTable(apps []app.App) {
+	// Define color functions
+	cyan := color.New(color.FgCyan).SprintFunc()
+	green := color.New(color.FgGreen).SprintFunc()
+	yellow := color.New(color.FgYellow).SprintFunc()
+	magenta := color.New(color.FgMagenta).SprintFunc()
+	blue := color.New(color.FgBlue).SprintFunc()
+	red := color.New(color.FgRed).SprintFunc()
+
+	t := table.New(os.Stdout)
+	t.SetHeaders(
+		cyan("App ID"),
+		cyan("Alternate ID"),
+		cyan("Name"),
+		cyan("Organization ID"),
+		cyan("Organization Name"),
+	)
+
+	for _, app := range apps {
+		t.AddRow(
+			green(app.ID),
+			yellow(app.AlternateId),
+			magenta(app.Name),
+			blue(app.Organization.ID),
+			red(app.Organization.Name),
+		)
+	}
+
+	t.Render()
+}
+
+func displayList(apps []app.App) {
+	for _, app := range apps {
+		cprint.PrintHeader("--- App Details ---")
+		cprint.PrintDetail("App Name", app.Name)
+		cprint.PrintDetail("App AlternateId", app.AlternateId)
+		cprint.PrintDetail("App ID", app.ID)
+		cprint.PrintDetail("Organization ID", app.Organization.ID)
+		cprint.PrintDetail("Organization Name", app.Organization.Name)
+		fmt.Println()
+	}
 }
 
 type service struct {
@@ -84,11 +111,12 @@ func newService(appService app.AppServicer) *service {
 	}
 }
 
-func (s *service) ListApps(organizationId string, limit, page int) ([]app.App, error) {
-	return s.appService.GetListApps(organizationId, limit, page)
+func (s *service) ListApps(organizationId, projectId string, limit, page int) ([]app.App, error) {
+	return s.appService.GetListApps(organizationId, projectId, limit, page)
 }
 
 func init() {
 	ListCmd.Flags().IntVar(&pageSize, "page-size", 10, "Number of results per page")
 	ListCmd.Flags().IntVar(&page, "page", 1, "Page number")
+	ListCmd.Flags().BoolVar(&showTable, "table", false, "Display results in a table format")
 }
