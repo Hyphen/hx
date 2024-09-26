@@ -5,5 +5,6 @@ var (
 	YesFlag          bool
 	ProjectFlag      string
 	EnvironmentFlag  string
+	ApplicationFlag  string
 	ApiKeyFlag       string
 )

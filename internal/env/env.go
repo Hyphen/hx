@@ -79,8 +79,10 @@ func (e *Env) DecryptData(key secretkey.SecretKeyer) (string, error) {
 }
 
 func (e *Env) ListDecryptedVars(key secretkey.SecretKeyer) ([]string, error) {
+	fmt.Println("Decrypted Data:", e.Data)
 	decryptedData, err := key.Decrypt(e.Data)
 	if err != nil {
+		fmt.Println("Error:", err)
 		return nil, errors.Wrap(err, "Failed to decrypt environment variables")
 	}
 	return strings.Split(decryptedData, "\n"), nil
@@ -95,6 +97,7 @@ func (e *Env) DecryptVarsAndSaveIntoFile(fileName string, key secretkey.SecretKe
 
 	decryptedVarList, err := e.ListDecryptedVars(key)
 	if err != nil {
+		fmt.Println("Error:", err)
 		return "", errors.Wrap(err, "Failed to list decrypted variables")
 	}
 
