@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Hyphen/cli/cmd/app"
 	"github.com/Hyphen/cli/cmd/auth"
 	"github.com/Hyphen/cli/cmd/initialize"
 	"github.com/Hyphen/cli/cmd/link"
@@ -32,6 +33,7 @@ func init() {
 	rootCmd.AddCommand(pull.PullCmd)
 	rootCmd.AddCommand(push.PushCmd)
 	rootCmd.AddCommand(link.LinkCmd)
+	rootCmd.AddCommand(app.AppCmd)
 	rootCmd.AddCommand(project.ProjectCmd)
 
 	rootCmd.PersistentFlags().StringVarP(&flags.OrganizationFlag, "organization", "o", "", "Organization ID (e.g., org_123)")

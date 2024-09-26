@@ -31,7 +31,13 @@ func TestInitialize(t *testing.T) {
 	}()
 
 	t.Run("Successful initialization", func(t *testing.T) {
-		m, err := Initialize("org1", "TestApp", "app1", "test-app")
+		mc := ManifestConfig{
+			AppName:        stringPtr("TestApp"),
+			AppId:          stringPtr("app1"),
+			AppAlternateId: stringPtr("test-app"),
+			OrganizationId: "org1",
+		}
+		m, err := Initialize(mc, ManifestSecretFile, ManifestConfigFile)
 		assert.NoError(t, err)
 		assert.NotNil(t, m.AppName)
 		assert.Equal(t, "TestApp", *m.AppName)
@@ -53,7 +59,13 @@ func TestInitialize(t *testing.T) {
 		ManifestConfigFile = "/root/.test-manifest-key.json"
 		defer func() { ManifestConfigFile = ".test-manifest-key.json" }()
 
-		_, err := Initialize("org1", "TestApp", "app1", "test-app")
+		mc := ManifestConfig{
+			AppName:        stringPtr("TestApp"),
+			AppId:          stringPtr("app1"),
+			AppAlternateId: stringPtr("test-app"),
+			OrganizationId: "org1",
+		}
+		_, err := Initialize(mc, ManifestSecretFile, ManifestConfigFile)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "Error writing file")
 	})
@@ -167,13 +179,13 @@ func TestExists(t *testing.T) {
 
 	t.Run("File does not exist", func(t *testing.T) {
 		os.Remove(ManifestConfigFile)
-		assert.False(t, Exists())
+		assert.False(t, ExistsLocal())
 	})
 
 	t.Run("File exists", func(t *testing.T) {
 		_, err := os.Create(ManifestConfigFile)
 		require.NoError(t, err)
-		assert.True(t, Exists())
+		assert.True(t, ExistsLocal())
 	})
 }
 
@@ -202,4 +214,8 @@ func createTempFile(t *testing.T, content string) *os.File {
 	require.NoError(t, err)
 
 	return tmpfile
+}
+
+func stringPtr(s string) *string {
+	return &s
 }

@@ -12,11 +12,11 @@ import (
 )
 
 type EnvServicer interface {
-	GetEnvironment(organizationId, appId, env string) (Environment, bool, error)
-	PutEnv(organizationId, appId, environmentId string, env Env) error
-	GetEnv(organizationId, appId, env string) (Env, error)
-	ListEnvs(organizationId, appId string, size, page int) ([]Env, error)
-	ListEnvironments(organizationId, appId string, size, page int) ([]Environment, error)
+	GetEnvironment(organizationId, projectId, env string) (Environment, bool, error)
+	PutEnv(organizationId, projectId, environmentId string, env Env) error
+	GetEnv(organizationId, projectId, env string) (Env, error)
+	ListEnvs(organizationId, projectId string, size, page int) ([]Env, error)
+	ListEnvironments(organizationId, projectId string, size, page int) ([]Environment, error)
 }
 
 type EnvService struct {
@@ -36,8 +36,8 @@ func NewService() *EnvService {
 
 }
 
-func (es *EnvService) GetEnvironment(organizationId, appId, environmentId string) (Environment, bool, error) {
-	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments/%s/", es.baseUrl, organizationId, appId, environmentId)
+func (es *EnvService) GetEnvironment(organizationId, projectId, environmentId string) (Environment, bool, error) {
+	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments/%s/", es.baseUrl, organizationId, projectId, environmentId)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -64,13 +64,13 @@ func (es *EnvService) GetEnvironment(organizationId, appId, environmentId string
 	return environment, true, nil
 }
 
-func (es *EnvService) PutEnv(organizationId, appId, environmentId string, env Env) error {
+func (es *EnvService) PutEnv(organizationId, projectId, environmentId string, env Env) error {
 	envName, err := GetEnvName(environmentId)
 	if err != nil {
 		return errors.Wrap(err, "Failed to get environment name")
 	}
 
-	url := fmt.Sprintf("%s/env/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, appId, envName)
+	url := fmt.Sprintf("%s/env/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, projectId, envName)
 
 	envJSON, err := json.Marshal(env)
 	if err != nil {
@@ -95,8 +95,8 @@ func (es *EnvService) PutEnv(organizationId, appId, environmentId string, env En
 	return nil
 }
 
-func (es *EnvService) GetEnv(organizationId, appId, envName string) (Env, error) {
-	url := fmt.Sprintf("%s/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, appId, envName)
+func (es *EnvService) GetEnv(organizationId, projectId, envName string) (Env, error) {
+	url := fmt.Sprintf("%s/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, projectId, envName)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -122,10 +122,10 @@ func (es *EnvService) GetEnv(organizationId, appId, envName string) (Env, error)
 
 }
 
-func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]Env, error) {
+func (es *EnvService) ListEnvs(organizationId, projectId string, size, page int) ([]Env, error) {
 
 	url := fmt.Sprintf("%s/env/organizations/%s/apps/%s/envs?pageSize=%d&pageNum=%d",
-		es.baseUrl, organizationId, appId, size, page)
+		es.baseUrl, organizationId, projectId, size, page)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -156,10 +156,10 @@ func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]
 	return envsData.Data, nil
 }
 
-func (es *EnvService) ListEnvironments(organizationId, appId string, size, page int) ([]Environment, error) {
+func (es *EnvService) ListEnvironments(organizationId, projectId string, size, page int) ([]Environment, error) {
 
 	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments?pageSize=%d&pageNum=%d",
-		es.baseUrl, organizationId, appId, size, page)
+		es.baseUrl, organizationId, projectId, size, page)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

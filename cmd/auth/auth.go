@@ -6,6 +6,7 @@ import (
 	"github.com/Hyphen/cli/config"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/oauth"
+	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/spf13/cobra"
@@ -48,8 +49,29 @@ func login() error {
 	var organizationID string
 	organizationID = user.Memberships[0].Organization.ID
 
-	if err := manifest.UpdateOrganizationID(organizationID); err != nil {
-		return fmt.Errorf("failed to update organization ID: %w", err)
+	projectService := projects.NewService(organizationID)
+	projectList, err := projectService.ListProjects()
+	if err != nil {
+		return err
+	}
+	if len(projectList) == 0 {
+		return fmt.Errorf("No projects found")
+	}
+
+	defaultProject := projectList[0]
+
+	mc := manifest.ManifestConfig{
+		ProjectId:          defaultProject.ID,
+		ProjectName:        &defaultProject.Name,
+		ProjectAlternateId: &defaultProject.AlternateID,
+		OrganizationId:     organizationID,
+		AppId:              nil,
+		AppName:            nil,
+		AppAlternateId:     nil,
+	}
+
+	if _, err := manifest.GlobalInitialize(mc); err != nil {
+		return err
 	}
 
 	printAuthenticationSummary(&user, organizationID)

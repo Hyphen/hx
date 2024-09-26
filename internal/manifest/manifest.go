@@ -33,10 +33,13 @@ var (
 )
 
 type ManifestConfig struct {
-	AppName        *string `json:"app_name,omitempty"`
-	AppId          *string `json:"app_id,omitempty"`
-	AppAlternateId *string `json:"app_alternate_id,omitempty"`
-	OrganizationId string  `json:"organization_id"`
+	ProjectName        *string `json:"project_name,omitempty"`
+	ProjectId          *string `json:"project_id,omitempty"`
+	ProjectAlternateId *string `json:"project_alternate_id,omitempty"`
+	AppName            *string `json:"app_name,omitempty"`
+	AppId              *string `json:"app_id,omitempty"`
+	AppAlternateId     *string `json:"app_alternate_id,omitempty"`
+	OrganizationId     string  `json:"organization_id"`
 }
 
 type Manifest struct {
@@ -52,25 +55,32 @@ func (m *Manifest) GetSecretKey() *secretkey.SecretKey {
 	return secretkey.FromBase64(m.SecretKey)
 }
 
-func Initialize(organizationId, appName, appID, appAlternateId string) (Manifest, error) {
+func LocalInitialize(mc ManifestConfig) (Manifest, error) {
+	return Initialize(mc, ManifestSecretFile, ManifestConfigFile)
+}
+
+func GlobalInitialize(mc ManifestConfig) (Manifest, error) {
+	configDirectory := currentConfigProvider.GetConfigDirectory()
+
+	manifestSecretFilePath := fmt.Sprintf("%s/%s", configDirectory, ManifestSecretFile)
+	manifestConfigFilePath := fmt.Sprintf("%s/%s", configDirectory, ManifestConfigFile)
+
+	return Initialize(mc, manifestSecretFilePath, manifestConfigFilePath)
+}
+
+func Initialize(mc ManifestConfig, secretFile, configFile string) (Manifest, error) {
 	sk, err := secretkey.New()
 	if err != nil {
 		return Manifest{}, errors.Wrap(err, "Failed to create new secret key")
 	}
 
-	mc := ManifestConfig{
-		AppName:        &appName,
-		AppId:          &appID,
-		AppAlternateId: &appAlternateId,
-		OrganizationId: organizationId,
-	}
 	jsonData, err := json.MarshalIndent(mc, "", "  ")
 	if err != nil {
 		return Manifest{}, errors.Wrap(err, "Error encoding JSON")
 	}
-	err = os.WriteFile(ManifestConfigFile, jsonData, 0644)
+	err = os.WriteFile(configFile, jsonData, 0644)
 	if err != nil {
-		return Manifest{}, errors.Wrapf(err, "Error writing file: %s", ManifestConfigFile)
+		return Manifest{}, errors.Wrapf(err, "Error writing file: %s", configFile)
 	}
 
 	ms := ManifestSecret{
@@ -80,9 +90,9 @@ func Initialize(organizationId, appName, appID, appAlternateId string) (Manifest
 	if err != nil {
 		return Manifest{}, errors.Wrap(err, "Error encoding JSON")
 	}
-	err = os.WriteFile(ManifestSecretFile, jsonData, 0644)
+	err = os.WriteFile(secretFile, jsonData, 0644)
 	if err != nil {
-		return Manifest{}, errors.Wrapf(err, "Error writing file: %s", ManifestSecretFile)
+		return Manifest{}, errors.Wrapf(err, "Error writing file: %s", secretFile)
 	}
 
 	m := Manifest{
@@ -176,12 +186,12 @@ func Restore() (Manifest, error) {
 	return RestoreFromFile(ManifestConfigFile, ManifestSecretFile)
 }
 
-func Exists() bool {
+func ExistsLocal() bool {
 	_, err := os.Stat(ManifestConfigFile)
 	return !os.IsNotExist(err)
 }
 
-func UpdateOrganizationID(organizationID string) error {
+func UpsertOrganizationID(organizationID string) error {
 	var mconfig ManifestConfig
 	var hasConfig bool
 
@@ -192,7 +202,6 @@ func UpdateOrganizationID(organizationID string) error {
 		mconfig = localConfig
 		hasConfig = true
 	}
-
 	if !hasConfig {
 		globalConfig, globalConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
 		if globalConfigErr == nil {

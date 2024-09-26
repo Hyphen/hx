@@ -5,6 +5,7 @@ import (
 
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
@@ -43,7 +44,7 @@ Example:
 			return
 		}
 
-		envName, err := env.GetEnvronmentID()
+		prjectId, err := flags.GetProjectID()
 		if err != nil {
 			cprint.Error(cmd, err)
 			return
@@ -55,32 +56,32 @@ Example:
 			return
 		}
 
-		if manifest.AppId == nil {
-			cprint.Error(cmd, fmt.Errorf("No app ID found in manifest"))
+		envName, err := env.GetEnvronmentID()
+		if err != nil {
+			cprint.Error(cmd, err)
 			return
 		}
-		appId := *manifest.AppId
 
 		if envName == "" {
-			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, manifest)
+			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, prjectId, manifest.GetSecretKey())
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
 
-			printPullSummary(appId, pulledEnvs)
+			printPullSummary(prjectId, pulledEnvs)
 		} else {
-			err = service.checkForEnvironment(orgId, envName, manifest)
+			err = service.checkForEnvironment(orgId, envName, prjectId)
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
-			if err = service.saveDecryptedEnvIntoFile(orgId, envName, manifest); err != nil {
+			if err = service.saveDecryptedEnvIntoFile(orgId, envName, prjectId, manifest.GetSecretKey()); err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
 
-			printPullSummary(appId, []string{envName})
+			printPullSummary(prjectId, []string{envName})
 		}
 
 	},
@@ -96,8 +97,8 @@ func newService(envService env.EnvServicer) *service {
 	}
 }
 
-func (s *service) checkForEnvironment(orgId, envName string, m manifest.Manifest) error {
-	_, exist, err := s.envService.GetEnvironment(orgId, *m.AppId, envName)
+func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
+	_, exist, err := s.envService.GetEnvironment(orgId, projectId, envName)
 	if !exist && err == nil {
 		return fmt.Errorf("Environment %s not found", envName)
 	}
@@ -108,8 +109,8 @@ func (s *service) checkForEnvironment(orgId, envName string, m manifest.Manifest
 	return nil
 }
 
-func (s *service) saveDecryptedEnvIntoFile(orgId, envName string, m manifest.Manifest) error {
-	e, err := s.envService.GetEnv(orgId, *m.AppId, envName)
+func (s *service) saveDecryptedEnvIntoFile(orgId, envName, projectId string, secretKey *secretkey.SecretKey) error {
+	e, err := s.envService.GetEnv(orgId, projectId, envName)
 	if err != nil {
 		return err
 	}
@@ -119,22 +120,22 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName string, m manifest.Man
 		return err
 	}
 
-	if _, err = e.DecryptVarsAndSaveIntoFile(envFile, m.GetSecretKey()); err != nil {
+	if _, err = e.DecryptVarsAndSaveIntoFile(envFile, secretKey); err != nil {
 		return fmt.Errorf("Failed to save decrypted environment: %s, variables to file: %s", envName, envFile)
 	}
 
 	return nil
 }
 
-func (s *service) getAllEnvsAndDecryptIntoFiles(orgId string, m manifest.Manifest) ([]string, error) {
-	allEnvs, err := s.envService.ListEnvs(orgId, *m.AppId, 100, 1)
+func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, projectId string, secretkey *secretkey.SecretKey) ([]string, error) {
+	allEnvs, err := s.envService.ListEnvs(orgId, projectId, 100, 1)
 	if err != nil {
 		return nil, err
 	}
 	var pulledEnvs []string
 	for _, e := range allEnvs {
 		envName := e.ProjectEnv.AlternateID
-		if err := s.saveDecryptedEnvIntoFile(orgId, envName, m); err != nil {
+		if err := s.saveDecryptedEnvIntoFile(orgId, envName, projectId, secretkey); err != nil {
 			return pulledEnvs, err
 		}
 		pulledEnvs = append(pulledEnvs, envName)
