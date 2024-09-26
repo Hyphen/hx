@@ -5,7 +5,3 @@ type Project struct {
 	AlternateID string  `json:"alternateId"`
 	Name        string  `json:"name"`
 }
-
-type ProjectsListResponse struct {
-	Data []Project `json:"data"`
-}

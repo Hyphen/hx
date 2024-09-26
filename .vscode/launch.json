@@ -12,7 +12,7 @@
     "program": "${workspaceRoot}",
     "env": {},
     "args": [
-      "push"
+      "project", "list"
     ],
     "showLog": true
   }]

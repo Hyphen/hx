@@ -12,34 +12,34 @@ import (
 	"github.com/Hyphen/cli/pkg/httputil"
 )
 
-type ProjectService interface {
+type ProjectServicer interface {
 	ListProjects() ([]Project, error)
 	GetProject(projectID string) (Project, error)
 	CreateProject(project Project) (Project, error)
 }
 
-type projectService struct {
+type ProjectService struct {
 	baseUrl    string
 	httpClient httputil.Client
 }
 
 func NewService(organizationID string) ProjectService {
 	baseUrl := fmt.Sprintf("%s/api/organizations/%s/projects", apiconf.GetBaseApixUrl(), organizationID)
-	return &projectService{
+	return ProjectService{
 		baseUrl:    baseUrl,
 		httpClient: httputil.NewHyphenHTTPClient(),
 	}
 }
 
-func NewTestService(organizationID string, httpClient httputil.Client) ProjectService {
+func NewTestService(organizationID string, httpClient httputil.Client) ProjectServicer {
 	baseUrl := fmt.Sprintf("%s/api/organizations/%s/projects", apiconf.GetBaseApixUrl(), organizationID)
-	return &projectService{
+	return &ProjectService{
 		baseUrl,
 		httpClient,
 	}
 }
 
-func (ps *projectService) ListProjects() ([]Project, error) {
+func (ps *ProjectService) ListProjects() ([]Project, error) {
 	url := fmt.Sprintf("%s/", ps.baseUrl)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -61,8 +61,15 @@ func (ps *projectService) ListProjects() ([]Project, error) {
 		return []Project{}, errors.Wrap(err, "Failed to read response body")
 	}
 
+	type projectsListResponse struct {
+		Data       []Project `json:"data"`
+		TotalCount int       `json:"totalCount"`
+		PageNum    int       `json:"pageNum"`
+		PageSize   int       `json:"pageSize"`
+	}
+
 	// unmarshal the body
-	var projectsResponse ProjectsListResponse
+	var projectsResponse projectsListResponse
 	err = json.Unmarshal(body, &projectsResponse)
 	if err != nil {
 		return []Project{}, errors.Wrap(err, "Failed to unmarshal response body")
@@ -71,7 +78,7 @@ func (ps *projectService) ListProjects() ([]Project, error) {
 	return projectsResponse.Data, nil
 }
 
-func (ps *projectService) GetProject(projectID string) (Project, error) {
+func (ps *ProjectService) GetProject(projectID string) (Project, error) {
 	url := fmt.Sprintf("%s/%s", ps.baseUrl, projectID)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -104,7 +111,7 @@ func (ps *projectService) GetProject(projectID string) (Project, error) {
 	return project, nil
 }
 
-func (ps *projectService) CreateProject(project Project) (Project, error) {
+func (ps *ProjectService) CreateProject(project Project) (Project, error) {
 	url := fmt.Sprintf("%s/", ps.baseUrl)
 
 	body, err := json.Marshal(project)
