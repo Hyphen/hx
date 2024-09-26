@@ -6,6 +6,7 @@ import (
 
 	"github.com/Hyphen/cli/cmd/app"
 	"github.com/Hyphen/cli/cmd/auth"
+	"github.com/Hyphen/cli/cmd/env"
 	"github.com/Hyphen/cli/cmd/initialize"
 	"github.com/Hyphen/cli/cmd/link"
 	"github.com/Hyphen/cli/cmd/project"
@@ -37,6 +38,7 @@ func init() {
 	rootCmd.AddCommand(link.LinkCmd)
 	rootCmd.AddCommand(app.AppCmd)
 	rootCmd.AddCommand(project.ProjectCmd)
+	rootCmd.AddCommand(env.EnvCmd)
 
 	rootCmd.PersistentFlags().StringVarP(&flags.OrganizationFlag, "organization", "o", "", "Organization ID (e.g., org_123)")
 	rootCmd.PersistentFlags().StringVarP(&flags.ProjectFlag, "project", "p", "", "Project ID (e.g., proj_123)")
