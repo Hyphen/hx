@@ -10,10 +10,6 @@ func GetOrganizationID() (string, error) {
 		return OrganizationFlag, nil
 	}
 
-	if OrgFlag != "" {
-		return OrgFlag, nil
-	}
-
 	manifest, err := manifest.Restore()
 	if err != nil {
 		return "", err

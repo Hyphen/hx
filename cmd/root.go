@@ -34,13 +34,8 @@ func init() {
 	rootCmd.AddCommand(link.LinkCmd)
 	rootCmd.AddCommand(project.ProjectCmd)
 
-	rootCmd.PersistentFlags().StringVar(&flags.OrganizationFlag, "organization", "", "Organization ID (e.g., org_123)")
-	rootCmd.PersistentFlags().StringVar(&flags.OrgFlag, "org", "", "Organization ID (e.g., org_123)")
-	rootCmd.PersistentFlags().MarkHidden("org") // hide the shorthand to keep help simpler
-
-	rootCmd.PersistentFlags().StringVar(&flags.ProjectFlag, "project", "", "Project ID (e.g., proj_123)")
-	rootCmd.PersistentFlags().StringVar(&flags.ProjFlag, "proj", "", "Project ID (e.g., proj_123)")
-	rootCmd.PersistentFlags().MarkHidden("proj") // hide the shorthand to keep help simpler
+	rootCmd.PersistentFlags().StringVarP(&flags.OrganizationFlag, "organization", "o", "", "Organization ID (e.g., org_123)")
+	rootCmd.PersistentFlags().StringVarP(&flags.ProjectFlag, "project", "p", "", "Project ID (e.g., proj_123)")
 
 	rootCmd.PersistentFlags().StringVar(&flags.EnvironmentFlag, "env", "", "Project Environment ID (e.g., pevr_12345)")
 	rootCmd.PersistentFlags().BoolVarP(&flags.YesFlag, "yes", "y", false, "Automatically answer yes for prompts")
