@@ -6,7 +6,6 @@ require (
 	dario.cat/mergo v1.0.1
 	github.com/aquasecurity/table v1.8.0
 	github.com/fatih/color v1.17.0
-	github.com/liamg/tml v0.7.0
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.9.0
 )
