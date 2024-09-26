@@ -31,6 +31,14 @@ func NewService(organizationID string) ProjectService {
 	}
 }
 
+func NewTestService(organizationID string, httpClient httputil.Client) ProjectService {
+	baseUrl := fmt.Sprintf("%s/api/organizations/%s/projects", apiconf.GetBaseApixUrl(), organizationID)
+	return &projectService{
+		baseUrl,
+		httpClient,
+	}
+}
+
 func (ps *projectService) ListProjects() ([]Project, error) {
 	url := fmt.Sprintf("%s/", ps.baseUrl)
 
