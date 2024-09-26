@@ -6,8 +6,8 @@ import (
 )
 
 func GetOrganizationID() (string, error) {
-	if OrgFlag != "" {
-		return OrgFlag, nil
+	if OrganizationFlag != "" {
+		return OrganizationFlag, nil
 	}
 
 	manifest, err := manifest.Restore()
