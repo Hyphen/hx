@@ -1,9 +1,11 @@
 package flags
 
 var (
-	OrgFlag         string
-	YesFlag         bool
-	ProjFlag        string
-	EnvironmentFlag string
-	ApiKey          string
+	OrganizationFlag string
+	OrgFlag          string
+	YesFlag          bool
+	ProjectFlag      string
+	ProjFlag         string
+	EnvironmentFlag  string
+	ApiKey           string
 )

@@ -6,6 +6,10 @@ import (
 )
 
 func GetOrganizationID() (string, error) {
+	if OrganizationFlag != "" {
+		return OrganizationFlag, nil
+	}
+
 	if OrgFlag != "" {
 		return OrgFlag, nil
 	}

@@ -192,8 +192,6 @@ func UpdateOrganizationID(organizationID string) error {
 		mconfig = localConfig
 		hasConfig = true
 	}
-	fmt.Println(globalConfigFile)
-	fmt.Println(localConfigFile)
 
 	if !hasConfig {
 		globalConfig, globalConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
