@@ -7,5 +7,5 @@ var (
 	ProjectFlag      string
 	ProjFlag         string
 	EnvironmentFlag  string
-	ApiKey           string
+	ApiKeyFlag       string
 )
