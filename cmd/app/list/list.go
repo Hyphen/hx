@@ -20,7 +20,7 @@ var (
 
 var ListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all applications for a given organization",
+	Short: "List all applications associated with the organization and project",
 	Long:  `Retrieve and display a list of all applications associated with a specified organization ID.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		orgId, err := flags.GetOrganizationID()

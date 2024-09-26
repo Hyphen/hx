@@ -12,7 +12,7 @@ import (
 var GetCmd = &cobra.Command{
 	Use:   "get <app name or id>",
 	Short: "Get an app",
-	Long:  `The 'hyphen get' command retrieves details of an app within your organization.`,
+	Long:  `The 'hyphen app get' command retrieves details of an app within your organization.`,
 	Args:  cobra.ExactArgs(1),
 	Run:   runGet,
 }
@@ -45,6 +45,8 @@ func runGet(cmd *cobra.Command, args []string) {
 
 func printAppDetails(app app.App) {
 	cprint.PrintHeader("--- App Details ---")
+	cprint.PrintDetail("Project ID", app.Project.ID)
+	cprint.PrintDetail("Project Name", app.Project.Name)
 	cprint.PrintDetail("App Name", app.Name)
 	cprint.PrintDetail("App AlternateId", app.AlternateId)
 	cprint.PrintDetail("App ID", app.ID)
