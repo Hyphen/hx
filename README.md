@@ -26,7 +26,7 @@ Available Commands:
   - `auth`: Authenticate with Hyphen
   - `init`: Initialize an app
   - `update`: Update the Hyphen CLI
-  - `use-org`: Set the organization ID
+  - `set-org`: Set the organization ID
   - `version`: Display the version of the Hyphen CLI
 
 ## Authentication Command
@@ -86,12 +86,12 @@ Usage:
 hyphen update
 ```
 
-## Use Organization Command
-`hyphen use-org`
-Set the organization ID.
+## Set Organization Command
+`hyphen set-org`
+Set the organization ID in .hx.
 Usage:
 ```bash
-hyphen use-org <id>
+hyphen set-org <id>
 ```
 
 ## Version Command

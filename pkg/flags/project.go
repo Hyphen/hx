@@ -6,8 +6,8 @@ import (
 )
 
 func GetProjectID() (string, error) {
-	if ProjFlag != "" {
-		return ProjFlag, nil
+	if ProjectFlag != "" {
+		return ProjectFlag, nil
 	}
 
 	manifest, err := manifest.Restore()

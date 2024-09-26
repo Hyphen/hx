@@ -1,4 +1,4 @@
-package useorg
+package setorg
 
 import (
 	"fmt"
@@ -8,10 +8,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var UseOrgCmd = &cobra.Command{
-	Use:   "use-org <id>",
+var SetOrgCmd = &cobra.Command{
+	Use:   "set-org <id>",
 	Short: "Set the organization ID",
-	Long:  `Set the organization ID for the Hyphen CLI.`,
+	Long:  `Set the organization ID for the Hyphen CLI to use.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		orgID := args[0]
