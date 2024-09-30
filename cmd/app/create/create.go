@@ -7,6 +7,7 @@ import (
 	"github.com/Hyphen/cli/internal/app"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
+	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
 )
 
@@ -22,8 +23,8 @@ var CreateCmd = &cobra.Command{
 You need to provide an app name as a positional argument. Optionally, you can specify a custom app ID using the '--id' flag. If no app ID is provided, a default ID will be generated based on the app name.
 
 Example usages:
-  hyphen create MyApp
-  hyphen create MyApp --id custom-app-id
+  hyphen app create MyApp
+  hyphen app create MyApp --id custom-app-id
 
 Flags:
   --id, -i   Specify a custom app ID (optional)`,
@@ -79,11 +80,15 @@ func getAppID(cmd *cobra.Command, appName string) string {
 	if err != nil {
 		suggestedID := strings.TrimSpace(strings.Split(err.Error(), ":")[1])
 		yesFlag, _ := cmd.Flags().GetBool("yes")
+		noFlag, _ := cmd.Flags().GetBool("no")
 		if yesFlag {
 			appAlternateId = suggestedID
 			cprint.Info(fmt.Sprintf("Using suggested app ID: %s", suggestedID))
+		} else if noFlag {
+			cprint.Info("--no provided. Operation cancelled.")
+			return ""
 		} else {
-			if !promptForSuggestedID(suggestedID) {
+			if !prompt.PromptYesNo(cmd, fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]?", suggestedID), true) {
 				cprint.Info("Operation cancelled.")
 				return ""
 			}
@@ -95,21 +100,6 @@ func getAppID(cmd *cobra.Command, appName string) string {
 
 func generateDefaultAppId(appName string) string {
 	return strings.ToLower(strings.ReplaceAll(appName, " ", "-"))
-}
-
-func promptForSuggestedID(suggestedID string) bool {
-	var response string
-	fmt.Printf("Invalid app ID. Do you want to use the suggested ID [%s]? (Y/n): ", suggestedID)
-	fmt.Scanln(&response)
-	switch strings.ToLower(strings.TrimSpace(response)) {
-	case "y", "yes", "":
-		return true
-	case "n", "no":
-		return false
-	default:
-		cprint.Warning("Invalid response. Please enter 'y' or 'n'.")
-		return promptForSuggestedID(suggestedID)
-	}
 }
 
 func printCreationSummary(appName, appAlternateId, appID, orgID string) {
