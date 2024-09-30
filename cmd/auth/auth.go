@@ -3,7 +3,6 @@ package auth
 import (
 	"fmt"
 
-	"github.com/Hyphen/cli/config"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/internal/projects"
@@ -35,7 +34,13 @@ func login() error {
 
 	cprint.Success("OAuth server started successfully")
 
-	if err := config.SaveCredentials(token.AccessToken, token.RefreshToken, token.IDToken, token.ExpiryTime); err != nil {
+	ms := manifest.ManifestSecret{
+		HyphenAccessToken:  token.AccessToken,
+		HyphenRefreshToken: token.RefreshToken,
+		HypenIDToken:       token.IDToken,
+		ExpiryTime:         token.ExpiryTime,
+	}
+	if err := manifest.UpsertGlobalSecret(ms); err != nil {
 		return fmt.Errorf("failed to save credentials: %w", err)
 	}
 
@@ -70,7 +75,7 @@ func login() error {
 		AppAlternateId:     nil,
 	}
 
-	if _, err := manifest.GlobalInitialize(mc); err != nil {
+	if _, err := manifest.GlobalInitialize(mc, ms); err != nil {
 		return err
 	}
 
