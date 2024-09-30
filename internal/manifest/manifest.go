@@ -246,3 +246,62 @@ func UpsertOrganizationID(organizationID string) error {
 
 	return nil
 }
+
+func UpsertProjectID(projectID string) error {
+	var mconfig ManifestConfig
+	var hasConfig bool
+
+	globalConfigFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), ManifestConfigFile)
+	localConfigFile := ManifestConfigFile
+
+	localConfig, localConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](localConfigFile)
+	if localConfigErr == nil {
+		mconfig = localConfig
+		hasConfig = true
+	}
+
+	if !hasConfig {
+		globalConfig, globalConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
+		if globalConfigErr == nil {
+			mconfig = globalConfig
+			hasConfig = true
+		}
+	}
+
+	if !hasConfig {
+		mc := ManifestConfig{
+			ProjectId:      &projectID,
+			AppName:        nil,
+			AppId:          nil,
+			AppAlternateId: nil,
+			OrganizationId: "",
+		}
+		jsonData, err := json.MarshalIndent(mc, "", "  ")
+		if err != nil {
+			return errors.Wrap(err, "Error encoding JSON")
+		}
+		err = os.WriteFile(globalConfigFile, jsonData, 0644)
+		if err != nil {
+			return errors.Wrapf(err, "Error writing file: %s", ManifestConfigFile)
+		}
+		return nil
+	}
+
+	mconfig.ProjectId = &projectID
+
+	configFile := localConfigFile
+	if localConfigErr != nil {
+		configFile = globalConfigFile
+	}
+
+	jsonData, err := json.MarshalIndent(mconfig, "", "  ")
+	if err != nil {
+		return errors.Wrapf(err, "Error encoding JSON for file: %s", configFile)
+	}
+	err = os.WriteFile(configFile, jsonData, 0644)
+	if err != nil {
+		return errors.Wrapf(err, "Error writing file: %s", configFile)
+	}
+
+	return nil
+}

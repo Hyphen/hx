@@ -12,6 +12,7 @@ import (
 	"github.com/Hyphen/cli/cmd/pull"
 	"github.com/Hyphen/cli/cmd/push"
 	"github.com/Hyphen/cli/cmd/setorg"
+	"github.com/Hyphen/cli/cmd/setproject"
 	"github.com/Hyphen/cli/cmd/update"
 	"github.com/Hyphen/cli/cmd/version"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -30,6 +31,7 @@ func init() {
 	rootCmd.AddCommand(initialize.InitCmd)
 	rootCmd.AddCommand(auth.AuthCmd)
 	rootCmd.AddCommand(setorg.SetOrgCmd)
+	rootCmd.AddCommand(setproject.SetProjectCmd)
 	rootCmd.AddCommand(pull.PullCmd)
 	rootCmd.AddCommand(push.PushCmd)
 	rootCmd.AddCommand(link.LinkCmd)
