@@ -4,12 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 
 	"dario.cat/mergo"
-	"github.com/Hyphen/cli/config"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/errors"
+	"github.com/Hyphen/cli/pkg/fsutil"
 )
+
+var FS fsutil.FileSystem = fsutil.NewFileSystem()
 
 type configProvider interface {
 	GetConfigDirectory() string
@@ -17,17 +21,9 @@ type configProvider interface {
 
 type defaultConfigProvider struct{}
 
-func (d *defaultConfigProvider) GetConfigDirectory() string {
-	return config.GetConfigDirectory()
-}
-
-var currentConfigProvider configProvider = &defaultConfigProvider{}
-
-func SetConfigProvider(provider configProvider) {
-	currentConfigProvider = provider
-}
-
 var (
+	WindowsConfigPath  = "Hyphen"
+	UnixConfigPath     = ".hyphen"
 	ManifestConfigFile = ".hx"
 	ManifestSecretFile = ".hxkey"
 )
@@ -40,6 +36,10 @@ type ManifestConfig struct {
 	AppId              *string `json:"app_id,omitempty"`
 	AppAlternateId     *string `json:"app_alternate_id,omitempty"`
 	OrganizationId     string  `json:"organization_id"`
+	HyphenAccessToken  *string `json:"hyphen_access_token"`
+	HyphenRefreshToken *string `json:"hyphen_refresh_token"`
+	HypenIDToken       *string `json:"hyphen_id_token"`
+	ExpiryTime         *int64  `json:"expiry_time"`
 }
 
 type Manifest struct {
@@ -60,12 +60,48 @@ func LocalInitialize(mc ManifestConfig) (Manifest, error) {
 }
 
 func GlobalInitialize(mc ManifestConfig) (Manifest, error) {
-	configDirectory := currentConfigProvider.GetConfigDirectory()
+	configDirectory := GetGlobalDirectory()
 
 	manifestSecretFilePath := fmt.Sprintf("%s/%s", configDirectory, ManifestSecretFile)
 	manifestConfigFilePath := fmt.Sprintf("%s/%s", configDirectory, ManifestConfigFile)
 
 	return Initialize(mc, manifestSecretFilePath, manifestConfigFilePath)
+}
+
+func GetGlobalDirectory() string {
+	switch runtime.GOOS {
+	case "windows":
+		return filepath.Join(os.Getenv("APPDATA"), WindowsConfigPath)
+	default:
+		home, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Println("Error retrieving home directory:", err)
+			return ""
+		}
+		return filepath.Join(home, UnixConfigPath)
+	}
+}
+
+func UpsertGlobalManifest(m Manifest) error {
+	globDir := GetGlobalDirectory()
+
+	if err := FS.MkdirAll(globDir, 0755); err != nil {
+		return errors.Wrap(err, "Failed to create global directory")
+	}
+
+	globManifestFilePath := filepath.Join(globDir, ManifestConfigFile)
+
+	jsonData, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "Failed to marshal manifest to JSON")
+	}
+
+	// WriteFile will create the file if it doesn't exist, or overwrite it if it does
+	if err := FS.WriteFile(globManifestFilePath, jsonData, 0644); err != nil {
+		return errors.Wrap(err, "Failed to save manifest")
+	}
+
+	return nil
 }
 
 func Initialize(mc ManifestConfig, secretFile, configFile string) (Manifest, error) {
@@ -78,19 +114,19 @@ func Initialize(mc ManifestConfig, secretFile, configFile string) (Manifest, err
 	if err != nil {
 		return Manifest{}, errors.Wrap(err, "Error encoding JSON")
 	}
-	err = os.WriteFile(configFile, jsonData, 0644)
+	err = FS.WriteFile(configFile, jsonData, 0644)
 	if err != nil {
 		return Manifest{}, errors.Wrapf(err, "Error writing file: %s", configFile)
 	}
-
 	ms := ManifestSecret{
 		SecretKey: sk.Base64(),
 	}
+
 	jsonData, err = json.MarshalIndent(ms, "", "  ")
 	if err != nil {
 		return Manifest{}, errors.Wrap(err, "Error encoding JSON")
 	}
-	err = os.WriteFile(secretFile, jsonData, 0644)
+	err = FS.WriteFile(secretFile, jsonData, 0644)
 	if err != nil {
 		return Manifest{}, errors.Wrapf(err, "Error writing file: %s", secretFile)
 	}
@@ -109,8 +145,8 @@ func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, e
 	var hasConfig, hasSecret bool
 	var hasOnlyGlobalConfig bool
 
-	globalConfigFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), manifestConfigFile)
-	globalSecretFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), manifestSecretFile)
+	globalConfigFile := fmt.Sprintf("%s/%s", GetGlobalDirectory(), manifestConfigFile)
+	globalSecretFile := fmt.Sprintf("%s/%s", GetGlobalDirectory(), manifestSecretFile)
 
 	globalConfig, err := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
 	if err == nil {
@@ -169,7 +205,7 @@ func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, e
 func readAndUnmarshalConfigJSON[T any](filename string) (T, error) {
 	var result T
 
-	jsonData, err := os.ReadFile(filename)
+	jsonData, err := FS.ReadFile(filename)
 	if err != nil {
 		return result, err
 	}
@@ -187,7 +223,7 @@ func Restore() (Manifest, error) {
 }
 
 func ExistsLocal() bool {
-	_, err := os.Stat(ManifestConfigFile)
+	_, err := FS.Stat(ManifestConfigFile)
 	return !os.IsNotExist(err)
 }
 
@@ -195,7 +231,7 @@ func UpsertOrganizationID(organizationID string) error {
 	var mconfig ManifestConfig
 	var hasConfig bool
 
-	globalConfigFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), ManifestConfigFile)
+	globalConfigFile := fmt.Sprintf("%s/%s", GetGlobalDirectory(), ManifestConfigFile)
 	localConfigFile := ManifestConfigFile
 	localConfig, localConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](localConfigFile)
 	if localConfigErr == nil {
@@ -221,7 +257,7 @@ func UpsertOrganizationID(organizationID string) error {
 		if err != nil {
 			return errors.Wrap(err, "Error encoding JSON")
 		}
-		err = os.WriteFile(globalConfigFile, jsonData, 0644)
+		err = FS.WriteFile(globalConfigFile, jsonData, 0644)
 		if err != nil {
 			return errors.Wrapf(err, "Error writing file: %s", ManifestConfigFile)
 		}
@@ -237,9 +273,9 @@ func UpsertOrganizationID(organizationID string) error {
 
 	jsonData, err := json.MarshalIndent(mconfig, "", "  ")
 	if err != nil {
-		return errors.Wrapf(err, "Error decoding JSON file: %s, error: %v", configFile, err)
+		return errors.Wrapf(err, "Error encoding JSON for file: %s", configFile)
 	}
-	err = os.WriteFile(configFile, jsonData, 0644)
+	err = FS.WriteFile(configFile, jsonData, 0644)
 	if err != nil {
 		return errors.Wrapf(err, "Error writing file: %s", configFile)
 	}
@@ -251,7 +287,7 @@ func UpsertProjectID(projectID string) error {
 	var mconfig ManifestConfig
 	var hasConfig bool
 
-	globalConfigFile := fmt.Sprintf("%s/%s", currentConfigProvider.GetConfigDirectory(), ManifestConfigFile)
+	globalConfigFile := fmt.Sprintf("%s/%s", GetGlobalDirectory(), ManifestConfigFile)
 	localConfigFile := ManifestConfigFile
 
 	localConfig, localConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](localConfigFile)
@@ -280,7 +316,7 @@ func UpsertProjectID(projectID string) error {
 		if err != nil {
 			return errors.Wrap(err, "Error encoding JSON")
 		}
-		err = os.WriteFile(globalConfigFile, jsonData, 0644)
+		err = FS.WriteFile(globalConfigFile, jsonData, 0644)
 		if err != nil {
 			return errors.Wrapf(err, "Error writing file: %s", ManifestConfigFile)
 		}
@@ -298,7 +334,7 @@ func UpsertProjectID(projectID string) error {
 	if err != nil {
 		return errors.Wrapf(err, "Error encoding JSON for file: %s", configFile)
 	}
-	err = os.WriteFile(configFile, jsonData, 0644)
+	err = FS.WriteFile(configFile, jsonData, 0644)
 	if err != nil {
 		return errors.Wrapf(err, "Error writing file: %s", configFile)
 	}
