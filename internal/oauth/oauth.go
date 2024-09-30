@@ -341,25 +341,25 @@ func (s *OAuthService) RefreshToken(refreshToken string) (*TokenResponse, error)
 }
 
 func (s *OAuthService) GetValidToken() (string, error) {
-	ms, err := manifest.RestoreSecret()
+	m, err := manifest.Restore()
 	if err != nil {
 		return "", err
 	}
 
-	if s.IsTokenExpired(ms.ExpiryTime) {
-		tokenResponse, err := s.RefreshToken(ms.HyphenRefreshToken)
+	if s.IsTokenExpired(*m.ExpiryTime) {
+		tokenResponse, err := s.RefreshToken(*m.HyphenRefreshToken)
 		if err != nil {
 			return "", errors.Wrap(err, "Failed to refresh token")
 		}
-		ms.HyphenAccessToken = tokenResponse.AccessToken
-		ms.HyphenRefreshToken = tokenResponse.RefreshToken
-		ms.HypenIDToken = tokenResponse.IDToken
-		ms.ExpiryTime = tokenResponse.ExpiryTime
-		err = manifest.UpsertGlobalSecret(ms)
+		m.HyphenAccessToken = &tokenResponse.AccessToken
+		m.HyphenRefreshToken = &tokenResponse.RefreshToken
+		m.HypenIDToken = &tokenResponse.IDToken
+		m.ExpiryTime = &tokenResponse.ExpiryTime
+		err = manifest.UpsertGlobalManifest(m)
 		if err != nil {
 			return "", errors.Wrap(err, "Failed to save refreshed credentials")
 		}
 		return tokenResponse.AccessToken, nil
 	}
-	return ms.HyphenAccessToken, nil
+	return *m.HyphenAccessToken, nil
 }

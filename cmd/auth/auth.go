@@ -34,13 +34,16 @@ func login() error {
 
 	cprint.Success("OAuth server started successfully")
 
-	ms := manifest.ManifestSecret{
-		HyphenAccessToken:  token.AccessToken,
-		HyphenRefreshToken: token.RefreshToken,
-		HypenIDToken:       token.IDToken,
-		ExpiryTime:         token.ExpiryTime,
+	m := manifest.Manifest{
+		ManifestConfig: manifest.ManifestConfig{
+			HyphenAccessToken:  &token.AccessToken,
+			HyphenRefreshToken: &token.RefreshToken,
+			HypenIDToken:       &token.IDToken,
+			ExpiryTime:         &token.ExpiryTime,
+		},
 	}
-	if err := manifest.UpsertGlobalSecret(ms); err != nil {
+
+	if err := manifest.UpsertGlobalManifest(m); err != nil {
 		return fmt.Errorf("failed to save credentials: %w", err)
 	}
 
@@ -70,12 +73,16 @@ func login() error {
 		ProjectName:        &defaultProject.Name,
 		ProjectAlternateId: &defaultProject.AlternateID,
 		OrganizationId:     organizationID,
+		ExpiryTime:         &token.ExpiryTime,
+		HyphenAccessToken:  &token.AccessToken,
+		HyphenRefreshToken: &token.RefreshToken,
+		HypenIDToken:       &token.IDToken,
 		AppId:              nil,
 		AppName:            nil,
 		AppAlternateId:     nil,
 	}
 
-	if _, err := manifest.GlobalInitialize(mc, ms); err != nil {
+	if _, err := manifest.GlobalInitialize(mc); err != nil {
 		return err
 	}
 
