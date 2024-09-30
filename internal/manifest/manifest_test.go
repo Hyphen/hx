@@ -80,8 +80,7 @@ func TestInitialize(t *testing.T) {
 			AppAlternateId: stringPtr("test-app"),
 			OrganizationId: "org1",
 		}
-		ms := ManifestSecret{}
-		m, err := Initialize(mc, ms, ManifestSecretFile, ManifestConfigFile)
+		m, err := Initialize(mc, ManifestSecretFile, ManifestConfigFile)
 		assert.NoError(t, err)
 		assert.NotNil(t, m.AppName)
 		assert.Equal(t, "TestApp", *m.AppName)
