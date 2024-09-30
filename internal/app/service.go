@@ -7,14 +7,14 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/Hyphen/cli/pkg/conf"
+	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
 )
 
 type AppServicer interface {
-	GetListApps(organizationID string, pageSize, pageNum int) ([]App, error)
-	CreateApp(organizationID, alternateID, name string) (App, error)
+	GetListApps(organizationID, projectID string, pageSize, pageNum int) ([]App, error)
+	CreateApp(organizationID, projectID, alternateID, name string) (App, error)
 	GetApp(organizationID, appID string) (App, error)
 	DeleteApp(organizationID, appID string) error
 }
@@ -25,15 +25,15 @@ type AppService struct {
 }
 
 func NewService() *AppService {
-	baseUrl := conf.GetBaseApixUrl()
+	baseUrl := apiconf.GetBaseApixUrl()
 	return &AppService{
 		baseUrl:    baseUrl,
 		httpClient: httputil.NewHyphenHTTPClient(),
 	}
 }
 
-func (ps *AppService) GetListApps(organizationID string, pageSize, pageNum int) ([]App, error) {
-	url := fmt.Sprintf("%s/api/organizations/%s/projects/?pageNum=%d&pageSize=%d", ps.baseUrl, organizationID, pageNum, pageSize)
+func (ps *AppService) GetListApps(organizationID, projectID string, pageSize, pageNum int) ([]App, error) {
+	url := fmt.Sprintf("%s/api/organizations/%s/apps/?pageNum=%d&pageSize=%d&projects=%s", ps.baseUrl, organizationID, pageNum, pageSize, projectID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -70,8 +70,8 @@ func (ps *AppService) GetListApps(organizationID string, pageSize, pageNum int) 
 	return response.Data, nil
 }
 
-func (ps *AppService) CreateApp(organizationID, alternateID, name string) (App, error) {
-	url := fmt.Sprintf("%s/api/organizations/%s/projects/", ps.baseUrl, organizationID)
+func (ps *AppService) CreateApp(organizationID, projectId, alternateID, name string) (App, error) {
+	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/apps", ps.baseUrl, organizationID, projectId)
 
 	payload := struct {
 		AlternateID string `json:"alternateId"`
@@ -116,7 +116,7 @@ func (ps *AppService) CreateApp(organizationID, alternateID, name string) (App, 
 }
 
 func (ps *AppService) GetApp(organizationID, appID string) (App, error) {
-	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/", ps.baseUrl, organizationID, appID)
+	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/", ps.baseUrl, organizationID, appID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -148,7 +148,7 @@ func (ps *AppService) GetApp(organizationID, appID string) (App, error) {
 }
 
 func (ps *AppService) DeleteApp(organizationID, appID string) error {
-	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/", ps.baseUrl, organizationID, appID)
+	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/", ps.baseUrl, organizationID, appID)
 
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {

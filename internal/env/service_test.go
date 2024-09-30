@@ -9,18 +9,10 @@ import (
 	"testing"
 
 	"github.com/Hyphen/cli/internal/secretkey"
+	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
-
-type MockHTTPClient struct {
-	mock.Mock
-}
-
-func (m *MockHTTPClient) Do(req *http.Request) (*http.Response, error) {
-	args := m.Called(req)
-	return args.Get(0).(*http.Response), args.Error(1)
-}
 
 func TestNew(t *testing.T) {
 	// Create a temporary .env file
@@ -148,7 +140,7 @@ func TestGetFileName(t *testing.T) {
 }
 
 func TestEnvService_GetEnvironment(t *testing.T) {
-	mockHTTPClient := new(MockHTTPClient)
+	mockHTTPClient := new(httputil.MockHTTPClient)
 	service := &EnvService{
 		baseUrl:    "https://api.example.com",
 		httpClient: mockHTTPClient,
@@ -173,7 +165,7 @@ func TestEnvService_GetEnvironment(t *testing.T) {
 }
 
 func TestEnvService_PutEnv(t *testing.T) {
-	mockHTTPClient := new(MockHTTPClient)
+	mockHTTPClient := new(httputil.MockHTTPClient)
 	service := &EnvService{
 		baseUrl:    "https://api.example.com",
 		httpClient: mockHTTPClient,
@@ -195,7 +187,7 @@ func TestEnvService_PutEnv(t *testing.T) {
 }
 
 func TestEnvService_GetEnv(t *testing.T) {
-	mockHTTPClient := new(MockHTTPClient)
+	mockHTTPClient := new(httputil.MockHTTPClient)
 	service := &EnvService{
 		baseUrl:    "https://api.example.com",
 		httpClient: mockHTTPClient,
@@ -219,7 +211,7 @@ func TestEnvService_GetEnv(t *testing.T) {
 }
 
 func TestEnvService_ListEnvs(t *testing.T) {
-	mockHTTPClient := new(MockHTTPClient)
+	mockHTTPClient := new(httputil.MockHTTPClient)
 	service := &EnvService{
 		baseUrl:    "https://api.example.com",
 		httpClient: mockHTTPClient,
@@ -258,7 +250,7 @@ func TestEnvService_ListEnvs(t *testing.T) {
 }
 
 func TestEnvService_ListEnvironments(t *testing.T) {
-	mockHTTPClient := new(MockHTTPClient)
+	mockHTTPClient := new(httputil.MockHTTPClient)
 	service := &EnvService{
 		baseUrl:    "https://api.example.com",
 		httpClient: mockHTTPClient,

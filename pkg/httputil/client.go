@@ -6,7 +6,7 @@ import (
 
 	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/pkg/errors"
-	"github.com/Hyphen/cli/pkg/utils"
+	"github.com/Hyphen/cli/pkg/flags"
 )
 
 type Client interface {
@@ -28,14 +28,15 @@ func NewHyphenHTTPClient() *HyphenClient {
 }
 
 func (hc *HyphenClient) Do(req *http.Request) (*http.Response, error) {
-	if utils.ApiKey == "" {
+	apiKey := flags.GetAPIKey()
+	if apiKey == nil {
 		token, err := hc.oauthService.GetValidToken()
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
 		}
 		req.Header.Set("Authorization", "Bearer "+token)
 	} else {
-		req.Header.Set("x-api-key", utils.ApiKey)
+		req.Header.Set("x-api-key", *apiKey)
 	}
 
 	req.Header.Set("Accept", "application/json")

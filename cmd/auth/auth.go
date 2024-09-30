@@ -3,8 +3,9 @@ package auth
 import (
 	"fmt"
 
-	"github.com/Hyphen/cli/config"
+	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/oauth"
+	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/spf13/cobra"
@@ -33,9 +34,16 @@ func login() error {
 
 	cprint.Success("OAuth server started successfully")
 
-	var organizationID string
+	m := manifest.Manifest{
+		ManifestConfig: manifest.ManifestConfig{
+			HyphenAccessToken:  &token.AccessToken,
+			HyphenRefreshToken: &token.RefreshToken,
+			HypenIDToken:       &token.IDToken,
+			ExpiryTime:         &token.ExpiryTime,
+		},
+	}
 
-	if err := config.SaveCredentials(organizationID, token.AccessToken, token.RefreshToken, token.IDToken, token.ExpiryTime); err != nil {
+	if err := manifest.UpsertGlobalManifest(m); err != nil {
 		return fmt.Errorf("failed to save credentials: %w", err)
 	}
 
@@ -46,10 +54,36 @@ func login() error {
 		return fmt.Errorf("failed to get user information: %w", err)
 	}
 
+	var organizationID string
 	organizationID = user.Memberships[0].Organization.ID
 
-	if err := config.UpdateOrganizationID(organizationID); err != nil {
-		return fmt.Errorf("failed to update organization ID: %w", err)
+	projectService := projects.NewService(organizationID)
+	projectList, err := projectService.ListProjects()
+	if err != nil {
+		return err
+	}
+	if len(projectList) == 0 {
+		return fmt.Errorf("No projects found")
+	}
+
+	defaultProject := projectList[0]
+
+	mc := manifest.ManifestConfig{
+		ProjectId:          defaultProject.ID,
+		ProjectName:        &defaultProject.Name,
+		ProjectAlternateId: &defaultProject.AlternateID,
+		OrganizationId:     organizationID,
+		ExpiryTime:         &token.ExpiryTime,
+		HyphenAccessToken:  &token.AccessToken,
+		HyphenRefreshToken: &token.RefreshToken,
+		HypenIDToken:       &token.IDToken,
+		AppId:              nil,
+		AppName:            nil,
+		AppAlternateId:     nil,
+	}
+
+	if _, err := manifest.GlobalInitialize(mc); err != nil {
+		return err
 	}
 
 	printAuthenticationSummary(&user, organizationID)

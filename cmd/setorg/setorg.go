@@ -1,21 +1,21 @@
-package useorg
+package setorg
 
 import (
 	"fmt"
 
-	"github.com/Hyphen/cli/config"
+	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/spf13/cobra"
 )
 
-var UseOrgCmd = &cobra.Command{
-	Use:   "use-org <id>",
+var SetOrgCmd = &cobra.Command{
+	Use:   "set-org <id>",
 	Short: "Set the organization ID",
-	Long:  `Set the organization ID for the Hyphen CLI.`,
+	Long:  `Set the organization ID for the Hyphen CLI to use.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		orgID := args[0]
-		err := config.UpdateOrganizationID(orgID)
+		err := manifest.UpsertOrganizationID(orgID)
 		if err != nil {
 			return fmt.Errorf("failed to update organization ID: %w", err)
 		}

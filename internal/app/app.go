@@ -12,6 +12,13 @@ type App struct {
 	AlternateId  string       `json:"alternateId"`
 	Name         string       `json:"name"`
 	Organization Organization `json:"organization"`
+	Project      *Project     `json:"project,omitempty"`
+}
+
+type Project struct {
+	ID          string `json:"id"`
+	AlternateId string `json:"alternateId"`
+	Name        string `json:"name"`
 }
 
 type Organization struct {

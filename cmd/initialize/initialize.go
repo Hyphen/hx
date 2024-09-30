@@ -1,16 +1,14 @@
 package initialize
 
 import (
-	"bufio"
 	"fmt"
-	"io"
-	"os"
 	"strings"
 
 	"github.com/Hyphen/cli/internal/app"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/cprint"
-	"github.com/Hyphen/cli/pkg/utils"
+	"github.com/Hyphen/cli/pkg/flags"
+	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
 )
 
@@ -42,7 +40,7 @@ func init() {
 
 func runInit(cmd *cobra.Command, args []string) {
 	appService := app.NewService()
-	orgID, err := utils.GetOrganizationID()
+	orgID, err := flags.GetOrganizationID()
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
@@ -59,18 +57,39 @@ func runInit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	if manifest.Exists() && !shouldOverwrite(cmd) {
+	if manifest.ExistsLocal() && !prompt.PromptYesNo(cmd, "Config file exists. Do you want to overwrite it?", false) {
 		cprint.Info("Operation cancelled.")
 		return
 	}
 
-	newApp, err := appService.CreateApp(orgID, appAlternateId, appName)
+	m, err := manifest.Restore()
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
 	}
 
-	_, err = manifest.Initialize(orgID, newApp.Name, newApp.ID, newApp.AlternateId)
+	if m.ProjectId == nil {
+		cprint.Error(cmd, fmt.Errorf("no project found in Manifest"))
+		return
+	}
+
+	newApp, err := appService.CreateApp(orgID, *m.ProjectId, appAlternateId, appName)
+	if err != nil {
+		cprint.Error(cmd, err)
+		return
+	}
+
+	mcl := manifest.ManifestConfig{
+		ProjectId:          m.ProjectId,
+		ProjectAlternateId: m.ProjectAlternateId,
+		ProjectName:        m.ProjectName,
+		OrganizationId:     m.OrganizationId,
+		AppName:            &newApp.Name,
+		AppAlternateId:     &newApp.AlternateId,
+		AppId:              &newApp.ID,
+	}
+
+	_, err = manifest.LocalInitialize(mcl)
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
@@ -78,7 +97,7 @@ func runInit(cmd *cobra.Command, args []string) {
 
 	printInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
 
-	if err := ensureGitignore(manifest.ManifestConfigFile); err != nil {
+	if err := ensureGitignore(manifest.ManifestSecretFile); err != nil {
 		cprint.Error(cmd, fmt.Errorf("error checking/updating .gitignore: %w", err))
 		return
 	}
@@ -95,11 +114,14 @@ func getAppID(cmd *cobra.Command, appName string) string {
 	if err != nil {
 		suggestedID := strings.TrimSpace(strings.Split(err.Error(), ":")[1])
 		yesFlag, _ := cmd.Flags().GetBool("yes")
+		noFlag, _ := cmd.Flags().GetBool("no")
 		if yesFlag {
 			appAlternateId = suggestedID
 			cprint.Info(fmt.Sprintf("Using suggested app ID: %s", suggestedID))
+		} else if noFlag {
+			cprint.Info("--no provided. Operation cancelled.")
 		} else {
-			if !promptForSuggestedID(os.Stdin, suggestedID) {
+			if !prompt.PromptYesNo(cmd, fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]?", suggestedID), true) {
 				cprint.Info("Operation cancelled.")
 				return ""
 			}
@@ -109,58 +131,8 @@ func getAppID(cmd *cobra.Command, appName string) string {
 	return appAlternateId
 }
 
-func shouldOverwrite(cmd *cobra.Command) bool {
-	yesFlag, _ := cmd.Flags().GetBool("yes")
-	if yesFlag {
-		return true
-	}
-	return promptForOverwrite(os.Stdin)
-}
-
 func generateDefaultAppId(appName string) string {
 	return strings.ToLower(strings.ReplaceAll(appName, " ", "-"))
-}
-
-func promptForOverwrite(reader io.Reader) bool {
-	r := bufio.NewReader(reader)
-	for {
-		cprint.Prompt("Manifest file exists. Do you want to overwrite it? (y/N): ")
-		response, err := r.ReadString('\n')
-		if err != nil {
-			cprint.Error(nil, fmt.Errorf("Error reading input: %s", err))
-			os.Exit(1)
-		}
-		response = strings.TrimSpace(response)
-		switch strings.ToLower(response) {
-		case "y", "yes":
-			return true
-		case "n", "no", "":
-			return false
-		default:
-			cprint.Warning("Invalid response. Please enter 'y' or 'n'.")
-		}
-	}
-}
-
-func promptForSuggestedID(reader io.Reader, suggestedID string) bool {
-	r := bufio.NewReader(reader)
-	for {
-		cprint.Prompt(fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]? (Y/n): ", suggestedID))
-		response, err := r.ReadString('\n')
-		if err != nil {
-			cprint.Error(nil, fmt.Errorf("Error reading input: %s", err))
-			os.Exit(1)
-		}
-		response = strings.TrimSpace(response)
-		switch strings.ToLower(response) {
-		case "y", "yes", "":
-			return true
-		case "n", "no":
-			return false
-		default:
-			cprint.Warning("Invalid response. Please enter 'y' or 'n'.")
-		}
-	}
 }
 
 func printInitializationSummary(appName, appAlternateId, appID, orgID string) {

@@ -14,8 +14,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/Hyphen/cli/config"
-	"github.com/Hyphen/cli/pkg/conf"
+	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
@@ -76,7 +76,7 @@ func DefaultOAuthService() *OAuthService {
 }
 
 func NewOAuthService(httpClient HTTPClient, timeProvider TimeProvider, browserOpener BrowserOpener) *OAuthService {
-	baseUrl := conf.GetBaseAuthUrl()
+	baseUrl := apiconf.GetBaseAuthUrl()
 
 	return &OAuthService{
 		baseUrl:       baseUrl,
@@ -341,21 +341,25 @@ func (s *OAuthService) RefreshToken(refreshToken string) (*TokenResponse, error)
 }
 
 func (s *OAuthService) GetValidToken() (string, error) {
-	credentials, err := config.LoadCredentials()
+	m, err := manifest.Restore()
 	if err != nil {
-		return "", errors.Wrap(err, "Failed to load credentials")
+		return "", err
 	}
 
-	if s.IsTokenExpired(credentials.Default.ExpiryTime) {
-		tokenResponse, err := s.RefreshToken(credentials.Default.HyphenRefreshToken)
+	if s.IsTokenExpired(*m.ExpiryTime) {
+		tokenResponse, err := s.RefreshToken(*m.HyphenRefreshToken)
 		if err != nil {
 			return "", errors.Wrap(err, "Failed to refresh token")
 		}
-		err = config.SaveCredentials(credentials.Default.OrganizationId, tokenResponse.AccessToken, tokenResponse.RefreshToken, tokenResponse.IDToken, tokenResponse.ExpiryTime)
+		m.HyphenAccessToken = &tokenResponse.AccessToken
+		m.HyphenRefreshToken = &tokenResponse.RefreshToken
+		m.HypenIDToken = &tokenResponse.IDToken
+		m.ExpiryTime = &tokenResponse.ExpiryTime
+		err = manifest.UpsertGlobalManifest(m)
 		if err != nil {
 			return "", errors.Wrap(err, "Failed to save refreshed credentials")
 		}
 		return tokenResponse.AccessToken, nil
 	}
-	return credentials.Default.HyphenAccessToken, nil
+	return *m.HyphenAccessToken, nil
 }

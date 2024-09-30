@@ -5,151 +5,235 @@ import (
 	"testing"
 
 	"github.com/Hyphen/cli/internal/secretkey"
+	"github.com/Hyphen/cli/pkg/fsutil"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
+type mockConfigProvider struct {
+	configDir string
+}
+
+func (m *mockConfigProvider) GetConfigDirectory() string {
+	return m.configDir
+}
+
+type mockFileSystem struct {
+	fsutil.FileSystem
+	files map[string][]byte
+}
+
+func newMockFileSystem() *mockFileSystem {
+	return &mockFileSystem{
+		files: make(map[string][]byte),
+	}
+}
+
+func (m *mockFileSystem) ReadFile(filename string) ([]byte, error) {
+	if data, ok := m.files[filename]; ok {
+		return data, nil
+	}
+	return nil, os.ErrNotExist
+}
+
+func (m *mockFileSystem) WriteFile(filename string, data []byte, perm os.FileMode) error {
+	m.files[filename] = data
+	return nil
+}
+
+func (m *mockFileSystem) Create(name string) (*os.File, error) {
+	m.files[name] = []byte{}
+	return nil, nil // Return a proper *os.File if needed
+}
+
+func (m *mockFileSystem) Stat(name string) (os.FileInfo, error) {
+	if _, ok := m.files[name]; ok {
+		return nil, nil // Return a non-nil FileInfo if needed
+	}
+	return nil, os.ErrNotExist
+}
+
+func (m *mockFileSystem) MkdirAll(path string, perm os.FileMode) error {
+	// For simplicity, just pretend the directory was created
+	return nil
+}
+
 func TestInitialize(t *testing.T) {
-	// Temporarily change ManifestConfigFile for testing
+	oldFS := FS
+	mockFS := newMockFileSystem()
+	FS = mockFS
+	defer func() { FS = oldFS }()
+
+	// Temporarily change ManifestConfigFile and ManifestSecretFile for testing
 	oldManifestConfigFile := ManifestConfigFile
-	ManifestConfigFile = ".test-manifest-key"
+	oldManifestSecretFile := ManifestSecretFile
+	ManifestConfigFile = ".test-manifest-key.json"
+	ManifestSecretFile = ".test-manifest-secret-key.json"
 	defer func() {
 		ManifestConfigFile = oldManifestConfigFile
-		os.Remove(".test-manifest-key")
+		ManifestSecretFile = oldManifestSecretFile
 	}()
 
 	t.Run("Successful initialization", func(t *testing.T) {
-		m, err := Initialize("org1", "TestApp", "app1", "test-app")
+		mc := ManifestConfig{
+			AppName:        stringPtr("TestApp"),
+			AppId:          stringPtr("app1"),
+			AppAlternateId: stringPtr("test-app"),
+			OrganizationId: "org1",
+		}
+		m, err := Initialize(mc, ManifestSecretFile, ManifestConfigFile)
 		assert.NoError(t, err)
-		assert.Equal(t, "TestApp", m.AppName)
-		assert.Equal(t, "app1", m.AppId)
-		assert.Equal(t, "test-app", m.AppAlternateId)
+		assert.NotNil(t, m.AppName)
+		assert.Equal(t, "TestApp", *m.AppName)
+		assert.NotNil(t, m.AppId)
+		assert.Equal(t, "app1", *m.AppId)
+		assert.NotNil(t, m.AppAlternateId)
+		assert.Equal(t, "test-app", *m.AppAlternateId)
 		assert.NotEmpty(t, m.SecretKey)
 
-		// Check if file was created
-		_, err = os.Stat(ManifestConfigFile)
+		// Check if files were created
+		_, err = mockFS.Stat(ManifestConfigFile)
 		assert.NoError(t, err)
-	})
-
-	t.Run("Error creating file", func(t *testing.T) {
-		// Set ManifestConfigFile to a path that we can't write to
-		ManifestConfigFile = "/root/.test-manifest-key"
-		defer func() { ManifestConfigFile = ".test-manifest-key" }()
-
-		_, err := Initialize("org1", "TestApp", "app1", "test-app")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Error creating file")
+		_, err = mockFS.Stat(ManifestSecretFile)
+		assert.NoError(t, err)
 	})
 }
 
 func TestRestoreFromFile(t *testing.T) {
-	t.Run("Successful restore", func(t *testing.T) {
-		tempFile, err := os.CreateTemp("", "test-manifest-*.toml")
-		require.NoError(t, err)
-		defer os.Remove(tempFile.Name())
+	oldFS := FS
+	mockFS := newMockFileSystem()
+	FS = mockFS
+	defer func() { FS = oldFS }()
 
-		content := `
-app_name = "TestApp"
-app_id = "app1"
-app_alternate_id = "test-app"
-secret_key = "dGVzdC1zZWNyZXQta2V5"
-`
-		_, err = tempFile.WriteString(content)
-		require.NoError(t, err)
-		tempFile.Close()
+	t.Run("Successful restore with local files", func(t *testing.T) {
+		// Create mock files for testing
+		localConfigFile := ".test-local-config.json"
+		mockFS.WriteFile(localConfigFile, []byte(`{
+			"app_name": "TestApp",
+			"app_id": "app1",
+			"app_alternate_id": "test-app",
+			"organization_id": "org1"
+		}`), 0644)
 
-		m, err := RestoreFromFile(tempFile.Name())
+		localSecretFile := ".test-local-secret.json"
+		mockFS.WriteFile(localSecretFile, []byte(`{
+			"secret_key": "dGVzdC1zZWNyZXQta2V5"
+		}`), 0644)
+
+		m, err := RestoreFromFile(localConfigFile, localSecretFile)
 		assert.NoError(t, err)
-		assert.Equal(t, "TestApp", m.AppName)
-		assert.Equal(t, "app1", m.AppId)
-		assert.Equal(t, "test-app", m.AppAlternateId)
+		assert.NotNil(t, m.AppName)
+		assert.Equal(t, "TestApp", *m.AppName)
+		assert.NotNil(t, m.AppId)
+		assert.Equal(t, "app1", *m.AppId)
+		assert.NotNil(t, m.AppAlternateId)
+		assert.Equal(t, "test-app", *m.AppAlternateId)
+		assert.Equal(t, "org1", m.OrganizationId)
 		assert.Equal(t, "dGVzdC1zZWNyZXQta2V5", m.SecretKey)
 	})
 
-	t.Run("File does not exist", func(t *testing.T) {
-		_, err := RestoreFromFile("non-existent-file")
+	t.Run("No config files exist", func(t *testing.T) {
+		_, err := RestoreFromFile("non-existent-config.json", "non-existent-secret.json")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "You must init the environment with 'env init'")
+		assert.Contains(t, err.Error(), "No valid configuration found")
 	})
 
-	t.Run("Invalid TOML content", func(t *testing.T) {
-		tempFile, err := os.CreateTemp("", "test-manifest-*.toml")
-		require.NoError(t, err)
-		defer os.Remove(tempFile.Name())
+	t.Run("Invalid JSON content", func(t *testing.T) {
+		invalidFile := ".test-invalid.json"
+		mockFS.WriteFile(invalidFile, []byte(`invalid json content`), 0644)
 
-		content := `
-invalid toml content
-`
-		_, err = tempFile.WriteString(content)
-		require.NoError(t, err)
-		tempFile.Close()
-
-		_, err = RestoreFromFile(tempFile.Name())
+		_, err := RestoreFromFile(invalidFile, invalidFile)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Error decoding TOML file")
+		assert.Contains(t, err.Error(), "Error decoding JSON file")
 	})
 }
 
 func TestRestore(t *testing.T) {
+	oldFS := FS
+	mockFS := newMockFileSystem()
+	FS = mockFS
+	defer func() { FS = oldFS }()
+
 	oldManifestConfigFile := ManifestConfigFile
-	ManifestConfigFile = ".test-manifest-key"
+	oldManifestSecretFile := ManifestSecretFile
+	ManifestConfigFile = ".test-manifest-key.json"
+	ManifestSecretFile = ".test-manifest-secret-key.json"
 	defer func() {
 		ManifestConfigFile = oldManifestConfigFile
-		os.Remove(".test-manifest-key")
+		ManifestSecretFile = oldManifestSecretFile
 	}()
 
 	t.Run("Successful restore", func(t *testing.T) {
-		content := `
-app_name = "TestApp"
-app_id = "app1"
-app_alternate_id = "test-app"
-secret_key = "dGVzdC1zZWNyZXQta2V5"
-`
-		err := os.WriteFile(ManifestConfigFile, []byte(content), 0644)
-		require.NoError(t, err)
+		configContent := `{
+			"app_name": "TestApp",
+			"app_id": "app1",
+			"app_alternate_id": "test-app",
+			"organization_id": "org1"
+		}`
+		mockFS.WriteFile(ManifestConfigFile, []byte(configContent), 0644)
+
+		secretContent := `{
+			"secret_key": "dGVzdC1zZWNyZXQta2V5"
+		}`
+		mockFS.WriteFile(ManifestSecretFile, []byte(secretContent), 0644)
 
 		m, err := Restore()
 		assert.NoError(t, err)
-		assert.Equal(t, "TestApp", m.AppName)
-		assert.Equal(t, "app1", m.AppId)
-		assert.Equal(t, "test-app", m.AppAlternateId)
+		assert.NotNil(t, m.AppName)
+		assert.Equal(t, "TestApp", *m.AppName)
+		assert.NotNil(t, m.AppId)
+		assert.Equal(t, "app1", *m.AppId)
+		assert.NotNil(t, m.AppAlternateId)
+		assert.Equal(t, "test-app", *m.AppAlternateId)
+		assert.Equal(t, "org1", m.OrganizationId)
 		assert.Equal(t, "dGVzdC1zZWNyZXQta2V5", m.SecretKey)
 	})
 
-	t.Run("File does not exist", func(t *testing.T) {
-		os.Remove(ManifestConfigFile)
+	t.Run("Files do not exist", func(t *testing.T) {
+		delete(mockFS.files, ManifestConfigFile)
+		delete(mockFS.files, ManifestSecretFile)
 		_, err := Restore()
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "You must init the environment with 'env init'")
+		assert.Contains(t, err.Error(), "No valid configuration found")
 	})
 }
 
-func TestExists(t *testing.T) {
+func TestExistsLocal(t *testing.T) {
+	oldFS := FS
+	mockFS := newMockFileSystem()
+	FS = mockFS
+	defer func() { FS = oldFS }()
+
 	oldManifestConfigFile := ManifestConfigFile
-	ManifestConfigFile = ".test-manifest-key"
+	ManifestConfigFile = ".test-manifest-key.json"
 	defer func() {
 		ManifestConfigFile = oldManifestConfigFile
-		os.Remove(".test-manifest-key")
 	}()
 
 	t.Run("File does not exist", func(t *testing.T) {
-		os.Remove(ManifestConfigFile)
-		assert.False(t, Exists())
+		delete(mockFS.files, ManifestConfigFile)
+		assert.False(t, ExistsLocal())
 	})
 
 	t.Run("File exists", func(t *testing.T) {
-		_, err := os.Create(ManifestConfigFile)
-		require.NoError(t, err)
-		assert.True(t, Exists())
+		mockFS.WriteFile(ManifestConfigFile, []byte("test content"), 0644)
+		assert.True(t, ExistsLocal())
 	})
 }
 
 func TestGetSecretKey(t *testing.T) {
-	m := Manifest{
+	ms := ManifestSecret{
 		SecretKey: "dGVzdC1zZWNyZXQta2V5",
+	}
+	m := Manifest{
+		ManifestConfig: ManifestConfig{},
+		ManifestSecret: ms,
 	}
 
 	sk := m.GetSecretKey()
 	assert.IsType(t, &secretkey.SecretKey{}, sk)
 	assert.Equal(t, "dGVzdC1zZWNyZXQta2V5", sk.Base64())
+}
+
+func stringPtr(s string) *string {
+	return &s
 }
