@@ -82,7 +82,7 @@ Example:
 		if envName == "" || envName == "default" {
 			// TODO
 			// We want to just pull default here, not all.
-			cprint.Error(cmd, fmt.Errorf("not yet implemented"))
+			cprint.Error(cmd, fmt.Errorf("pulling default environment not yet implemented. Please use --all to pull all, or -e [environment] to pull a specific environment"))
 			return
 		} else { // we have a specific env name
 			err = service.checkForEnvironment(orgId, envName, projectId)
