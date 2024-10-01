@@ -147,6 +147,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	// TODO -- we should actually push this up as an empty default as well.
 	err = createGitignoredFile(cmd, ".env")
 	if err != nil {
 		return
@@ -160,9 +161,14 @@ func runInit(cmd *cobra.Command, args []string) {
 }
 
 func createGitignoredFile(cmd *cobra.Command, fileName string) error {
-	if _, err := os.Create(fileName); err != nil {
-		cprint.Error(cmd, fmt.Errorf("error creating %s: %w", fileName, err))
-		return err
+	// check if the file already exists.
+	if _, err := os.Stat(fileName); err == nil {
+		// do not recreate. file exists already.
+	} else {
+		if _, err := os.Create(fileName); err != nil {
+			cprint.Error(cmd, fmt.Errorf("error creating %s: %w", fileName, err))
+			return err
+		}
 	}
 
 	if err := ensureGitignore(fileName); err != nil {
