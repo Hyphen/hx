@@ -19,21 +19,19 @@ var appIDFlag string
 
 var InitCmd = &cobra.Command{
 	Use:   "init <app name>",
-	Short: "Initialize a new app",
-	Long: `The 'hyphen init' command initializes a new app within your organization.
+	Short: "Initializes a new app within your project",
+	Long: `The 'hyphen init' command sets up a new app within your project. 
 
-You need to provide an app name as a positional argument. Optionally, you can specify a custom app ID using the '--id' flag. If no app ID is provided, a default ID will be generated based on the app name.
+You can provide an app name as a positional argument. If you don't, it defaults to the current directory name. Optionally, you can specify a custom app ID using the '--id' flag. If you skip the app ID, one is generated automatically based on the app name. If the provided app ID is invalid, you'll be prompted to use a suggested ID.
 
-If a manifest file already exists, you will be prompted to confirm if you want to overwrite it, unless the '--yes' flag is provided, in which case the manifest file will be overwritten automatically.
+If a manifest file already exists, you'll be prompted to confirm whether to overwrite it unless you pass the '--yes' flag, in which case it will overwrite automatically.
+
+Additionally, empty '.env' files are created for each environment found in your project, added to '.gitignore', and pushed.
 
 Example usages:
-	hyphen init
+  hyphen init
   hyphen init MyApp
-  hyphen init MyApp --id custom-app-id --yes
-
-Flags:
-  --id, -i   Specify a custom app ID (optional)
-  --yes, -y  Automatically confirm prompts and overwrite files if necessary`,
+  hyphen init MyApp --id custom-app-id --yes`,
 	Args: cobra.MaximumNArgs(1),
 	Run:  runInit,
 }
