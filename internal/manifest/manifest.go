@@ -189,7 +189,7 @@ func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, e
 	}
 
 	if !hasConfig {
-		return Manifest{}, errors.New("No valid configuration found (neither global nor local)")
+		return Manifest{}, errors.New("No valid .hx found (neither global nor local). Please authenticate using `hx auth`")
 	}
 
 	if !hasSecret && !hasOnlyGlobalConfig {
