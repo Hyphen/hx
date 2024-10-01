@@ -37,7 +37,6 @@ func NewService() *EnvService {
 }
 
 func (es *EnvService) GetEnvironment(organizationId, projectId, environmentId string) (Environment, bool, error) {
-	fmt.Println("GetEnvironment")
 	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments/%s/", es.baseUrl, organizationId, projectId, environmentId)
 
 	req, err := http.NewRequest("GET", url, nil)

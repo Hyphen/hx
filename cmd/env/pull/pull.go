@@ -50,6 +50,12 @@ Example:
 			return
 		}
 
+		projectId, err := flags.GetProjectID()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
 		manifest, err := manifest.Restore()
 		if err != nil {
 			cprint.Error(cmd, err)
@@ -79,7 +85,7 @@ Example:
 			cprint.Error(cmd, fmt.Errorf("not yet implemented"))
 			return
 		} else { // we have a specific env name
-			err = service.checkForEnvironment(orgId, envName, appId)
+			err = service.checkForEnvironment(orgId, envName, projectId)
 			if err != nil {
 				cprint.Error(cmd, err)
 				return

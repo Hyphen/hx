@@ -59,26 +59,30 @@ and have reviewed the changes before pushing.
 			return
 		}
 
+		manifest, err := manifest.Restore()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
 		envName, err := env.GetEnvironmentID()
 		if err != nil {
 			cmd.PrintErrf("Error: %s\n", err)
 			return
 		}
+
 		var envs []string
 		if envName != "" && envName != "default" {
 			envs = append(envs, envName)
-		} else {
+		} else if flags.AllFlag {
 			envs, err = service.getLocalEnvsNamesFromFiles()
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
-		}
-
-		manifest, err := manifest.Restore()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
+		} else {
+			// We're just handling the one special "default" environment
+			envs = append(envs, "default")
 		}
 
 		if err := service.checkIfLocalEnvsExistAsEnvironments(envs, orgId, prjectId); err != nil {
@@ -98,7 +102,6 @@ and have reviewed the changes before pushing.
 		}
 
 		printPushSummary(orgId, *manifest.AppId, envs)
-
 	},
 }
 

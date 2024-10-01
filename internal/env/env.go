@@ -78,7 +78,6 @@ func (e *Env) DecryptData(key secretkey.SecretKeyer) (string, error) {
 }
 
 func (e *Env) ListDecryptedVars(key secretkey.SecretKeyer) ([]string, error) {
-	fmt.Println("Decrypted Data:", e.Data)
 	decryptedData, err := key.Decrypt(e.Data)
 	if err != nil {
 		fmt.Println("Error:", err)
