@@ -158,15 +158,15 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 }
 
 func printPullSummary(appId string, pulledEnvs []string) {
-	cprint.PrintHeader("--- Pull Summary ---")
 	cprint.Success("Successfully pulled and decrypted environment variables")
+	cprint.Print("")
 	cprint.PrintDetail("Application", appId)
 	cprint.PrintDetail("Environments pulled", fmt.Sprintf("%d", len(pulledEnvs)))
 
 	cprint.Print("")
 	cprint.Print("Pulled environments:")
 	for _, env := range pulledEnvs {
-		cprint.Print(fmt.Sprintf("  - %s", env))
+		cprint.Print(fmt.Sprintf("  - %s -> .env.%s", env, env))
 	}
 
 	cprint.Print("")

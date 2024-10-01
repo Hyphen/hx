@@ -201,8 +201,8 @@ func generateDefaultAppId(appName string) string {
 }
 
 func printInitializationSummary(appName, appAlternateId, appID, orgID string) {
-	cprint.PrintHeader("--- App Initialization Summary ---")
 	cprint.Success("App successfully initialized")
+	cprint.Print("") // Print an empty line for spacing
 	cprint.PrintDetail("App Name", appName)
 	cprint.PrintDetail("App AlternateId", appAlternateId)
 	cprint.PrintDetail("App ID", appID)
