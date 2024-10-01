@@ -13,9 +13,9 @@ import (
 
 var PullCmd = &cobra.Command{
 	Use:   "pull",
-	Short: "Retrieve and decrypt environment variables for a specific environment",
+	Short: "Retrieve and decrypt .env secrets for a specific environment",
 	Long: `
-Pull and decrypt environment variables for a specific application environment.
+Pull and decrypt environment .env secrets for a specific application environment.
 
 This command retrieves the encrypted environment variables from the specified
 environment (e.g., dev, staging, prod) and decrypts them using the application's
@@ -26,7 +26,7 @@ Usage:
   hyphen pull [flags]
 
 Flags:
-  --env string    Specify the environment to pull from (e.g., dev, staging, prod)
+  --environment string    Specify the environment to pull from (e.g., dev, staging, prod)
   --org string    Specify the organization ID (overrides the default from credentials)
 
 If no environment is specified, it defaults to the "default" environment.
@@ -44,12 +44,6 @@ Example:
 			return
 		}
 
-		prjectId, err := flags.GetProjectID()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
 		appId, err := flags.GetApplicationID()
 		if err != nil {
 			cprint.Error(cmd, err)
@@ -62,20 +56,29 @@ Example:
 			return
 		}
 
-		envName, err := env.GetEnvronmentID()
+		envName, err := env.GetEnvironmentID()
 		if err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
-		if envName == "" {
+
+		if flags.AllFlag {
 			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey())
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
 
-			printPullSummary(prjectId, pulledEnvs)
-		} else {
+			printPullSummary(appId, pulledEnvs)
+			return
+		}
+
+		if envName == "" || envName == "default" {
+			// TODO
+			// We want to just pull default here, not all.
+			cprint.Error(cmd, fmt.Errorf("not yet implemented"))
+			return
+		} else { // we have a specific env name
 			err = service.checkForEnvironment(orgId, envName, appId)
 			if err != nil {
 				cprint.Error(cmd, err)
@@ -86,7 +89,7 @@ Example:
 				return
 			}
 
-			printPullSummary(prjectId, []string{envName})
+			printPullSummary(appId, []string{envName})
 		}
 
 	},

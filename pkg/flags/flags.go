@@ -8,4 +8,5 @@ var (
 	EnvironmentFlag  string
 	ApplicationFlag  string
 	ApiKeyFlag       string
+	AllFlag          bool
 )
