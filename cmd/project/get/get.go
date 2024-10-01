@@ -28,7 +28,6 @@ var ProjectGetCmd = &cobra.Command{
 			return
 		}
 
-		cprint.PrintHeader("Project")
 		cprint.PrintDetail("Name", project.Name)
 		cprint.PrintDetail("ID", *project.ID)
 		cprint.PrintDetail("AlternateID", project.AlternateID)

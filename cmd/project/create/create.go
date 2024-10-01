@@ -52,7 +52,6 @@ var ProjectCreateCmd = &cobra.Command{
 
 		cprint.GreenPrint(fmt.Sprintf("Project '%s' created successfully!", name))
 
-		cprint.PrintHeader("Project Details")
 		cprint.PrintDetail("Name", newProject.Name)
 		cprint.PrintDetail("ID", *newProject.ID)
 		cprint.PrintDetail("AlternateID", newProject.AlternateID)
