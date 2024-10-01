@@ -90,7 +90,7 @@ and have reviewed the changes before pushing.
 			return
 		}
 		for _, envName := range envs {
-			e, err := service.getLocalEnv(envName, manifest)
+			e, err := env.GetLocalEnv(envName, manifest)
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
@@ -113,26 +113,6 @@ func newService(envService env.EnvServicer) *service {
 	return &service{
 		envService,
 	}
-}
-
-func (s *service) getLocalEnv(envName string, m manifest.Manifest) (env.Env, error) {
-	envFile, err := env.GetFileName(envName)
-	if err != nil {
-		return env.Env{}, err
-	}
-
-	e, err := env.New(envFile)
-	if err != nil {
-		return env.Env{}, err
-	}
-
-	envEncrytedData, err := e.EncryptData(m.GetSecretKey())
-	if err != nil {
-		return env.Env{}, err
-	}
-	e.Data = envEncrytedData
-
-	return e, nil
 }
 
 func (s *service) putEnv(orgId, envName, appId string, e env.Env) error {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
@@ -123,7 +124,6 @@ func (es *EnvService) GetEnv(organizationId, appId, envName string) (Env, error)
 }
 
 func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]Env, error) {
-
 	url := fmt.Sprintf("%s/organizations/%s/apps/%s/envs?pageSize=%d&pageNum=%d",
 		es.baseUrl, organizationId, appId, size, page)
 
@@ -157,7 +157,6 @@ func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]
 }
 
 func (es *EnvService) ListEnvironments(organizationId, projectId string, size, page int) ([]Environment, error) {
-
 	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments?pageSize=%d&pageNum=%d",
 		es.baseUrl, organizationId, projectId, size, page)
 
@@ -188,4 +187,24 @@ func (es *EnvService) ListEnvironments(organizationId, projectId string, size, p
 	}
 
 	return envsData.Data, nil
+}
+
+func GetLocalEnv(envName string, m manifest.Manifest) (Env, error) {
+	envFile, err := GetFileName(envName)
+	if err != nil {
+		return Env{}, err
+	}
+
+	e, err := New(envFile)
+	if err != nil {
+		return Env{}, err
+	}
+
+	envEncrytedData, err := e.EncryptData(m.GetSecretKey())
+	if err != nil {
+		return Env{}, err
+	}
+	e.Data = envEncrytedData
+
+	return e, nil
 }

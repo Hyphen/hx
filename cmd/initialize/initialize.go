@@ -2,9 +2,12 @@ package initialize
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Hyphen/cli/internal/app"
+	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -16,21 +19,20 @@ var appIDFlag string
 
 var InitCmd = &cobra.Command{
 	Use:   "init <app name>",
-	Short: "Initialize a new app",
-	Long: `The 'hyphen init' command initializes a new app within your organization.
+	Short: "Initializes a new app within your project",
+	Long: `The 'hyphen init' command sets up a new app within your project. 
 
-You need to provide an app name as a positional argument. Optionally, you can specify a custom app ID using the '--id' flag. If no app ID is provided, a default ID will be generated based on the app name.
+You can provide an app name as a positional argument. If you don't, it defaults to the current directory name. Optionally, you can specify a custom app ID using the '--id' flag. If you skip the app ID, one is generated automatically based on the app name. If the provided app ID is invalid, you'll be prompted to use a suggested ID.
 
-If a manifest file already exists, you will be prompted to confirm if you want to overwrite it, unless the '--yes' flag is provided, in which case the manifest file will be overwritten automatically.
+If a manifest file already exists, you'll be prompted to confirm whether to overwrite it unless you pass the '--yes' flag, in which case it will overwrite automatically.
+
+Additionally, empty '.env' files are created for each environment found in your project, added to '.gitignore', and pushed.
 
 Example usages:
+  hyphen init
   hyphen init MyApp
-  hyphen init MyApp --id custom-app-id --yes
-
-Flags:
-  --id, -i   Specify a custom app ID (optional)
-  --yes, -y  Automatically confirm prompts and overwrite files if necessary`,
-	Args: cobra.ExactArgs(1),
+  hyphen init MyApp --id custom-app-id --yes`,
+	Args: cobra.MaximumNArgs(1),
 	Run:  runInit,
 }
 
@@ -40,16 +42,30 @@ func init() {
 
 func runInit(cmd *cobra.Command, args []string) {
 	appService := app.NewService()
+	envService := env.NewService()
+
 	orgID, err := flags.GetOrganizationID()
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
 	}
 
-	appName := args[0]
-	if appName == "" {
-		cprint.Error(cmd, fmt.Errorf("app name is required"))
-		return
+	appName := ""
+	if len(args) == 0 {
+		// get the local directory name and prompt if we wish to use this as the app name
+		cwd, err := os.Getwd()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
+		appName = filepath.Base(cwd)
+		if !prompt.PromptYesNo(cmd, fmt.Sprintf("Use the current directory name '%s' as the app name?", appName), true) {
+			cprint.Info("Operation cancelled.")
+			return
+		}
+	} else {
+		appName = args[0]
 	}
 
 	appAlternateId := getAppID(cmd, appName)
@@ -95,12 +111,70 @@ func runInit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	printInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
-
 	if err := ensureGitignore(manifest.ManifestSecretFile); err != nil {
-		cprint.Error(cmd, fmt.Errorf("error checking/updating .gitignore: %w", err))
+		cprint.Error(cmd, fmt.Errorf("error adding .hxkey to .gitignore: %w. Please do this manually if you wish", err))
+	}
+
+	// List the environments for the project
+	environments, err := envService.ListEnvironments(orgID, *m.ProjectId, 100, 1)
+	if err != nil {
+		cprint.Error(cmd, err)
 		return
 	}
+
+	// Create an empty .env file for each environment, push it up, and add it to .gitignore
+	for _, e := range environments {
+		envName := strings.ToLower(e.Name)
+		envID := e.ID
+		envFileName := fmt.Sprintf(".env.%s", envName)
+		err := createGitignoredFile(cmd, envFileName)
+		if err != nil {
+			return
+		}
+
+		// Build an Env struct from that new empty file
+		envStruct, err := env.GetLocalEnv(envName, m)
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
+		if err := envService.PutEnv(orgID, newApp.ID, envID, envStruct); err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+	}
+
+	// TODO -- we should actually push this up as an empty default as well.
+	err = createGitignoredFile(cmd, ".env")
+	if err != nil {
+		return
+	}
+	err = createGitignoredFile(cmd, ".env.local")
+	if err != nil {
+		return
+	}
+
+	printInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
+}
+
+func createGitignoredFile(cmd *cobra.Command, fileName string) error {
+	// check if the file already exists.
+	if _, err := os.Stat(fileName); err == nil {
+		// do not recreate. file exists already.
+	} else {
+		if _, err := os.Create(fileName); err != nil {
+			cprint.Error(cmd, fmt.Errorf("error creating %s: %w", fileName, err))
+			return err
+		}
+	}
+
+	if err := ensureGitignore(fileName); err != nil {
+		cprint.Error(cmd, fmt.Errorf("error adding %s to .gitignore: %w. Please do this manually if you wish", fileName, err))
+		// don't error here. Keep going.
+	}
+
+	return nil
 }
 
 func getAppID(cmd *cobra.Command, appName string) string {
@@ -113,20 +187,11 @@ func getAppID(cmd *cobra.Command, appName string) string {
 	err := app.CheckAppId(appAlternateId)
 	if err != nil {
 		suggestedID := strings.TrimSpace(strings.Split(err.Error(), ":")[1])
-		yesFlag, _ := cmd.Flags().GetBool("yes")
-		noFlag, _ := cmd.Flags().GetBool("no")
-		if yesFlag {
-			appAlternateId = suggestedID
-			cprint.Info(fmt.Sprintf("Using suggested app ID: %s", suggestedID))
-		} else if noFlag {
-			cprint.Info("--no provided. Operation cancelled.")
-		} else {
-			if !prompt.PromptYesNo(cmd, fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]?", suggestedID), true) {
-				cprint.Info("Operation cancelled.")
-				return ""
-			}
-			appAlternateId = suggestedID
+		if !prompt.PromptYesNo(cmd, fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]?", suggestedID), true) {
+			cprint.Info("Operation cancelled.")
+			return ""
 		}
+		appAlternateId = suggestedID
 	}
 	return appAlternateId
 }
