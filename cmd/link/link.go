@@ -54,21 +54,25 @@ Examples:
 	Run: func(cmd *cobra.Command, args []string) {
 		service := newService(zelda.NewService())
 
-		cprint.PrintHeader("URL Shortening Process")
-
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
 			cprint.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
 			return
 		}
 
-		cprint.Info("Fetching domain information...")
+		if flags.VerboseFlag {
+			cprint.Info("Fetching domain information...")
+		}
+
 		domain, err := service.GetDomain(orgId)
 		if err != nil {
 			cprint.Error(cmd, fmt.Errorf("failed to get domain: %w", err))
 			return
 		}
-		cprint.Success(fmt.Sprintf("Using domain: %s", domain))
+
+		if flags.VerboseFlag {
+			cprint.Success(fmt.Sprintf("Using domain: %s", domain))
+		}
 
 		var codePtr, titlePtr *string
 		if code != "" {
@@ -78,8 +82,14 @@ Examples:
 			titlePtr = &title
 		}
 
+		longURL := args[0]
+		// add https:// if longURL does not have it
+		if longURL[:8] != "https://" {
+			longURL = "https://" + longURL
+		}
+
 		newCode := zelda.Code{
-			LongURL:        args[0],
+			LongURL:        longURL,
 			Domain:         domain,
 			Code:           codePtr,
 			Title:          titlePtr,
@@ -87,47 +97,60 @@ Examples:
 			OrganizationID: orgId,
 		}
 
-		cprint.Info("Generating short code...")
+		if flags.VerboseFlag {
+			cprint.Info("Generating short code...")
+		}
+
 		shortCode, err := service.GenerateShortCode(newCode)
 		if err != nil {
 			cprint.Error(cmd, fmt.Errorf("failed to generate short code: %w", err))
 			return
 		}
-		cprint.Success("Short code generated successfully")
 
 		var qrCodeURL string
 		if qr == true {
-			cprint.Info("Generating QR code...")
+			if flags.VerboseFlag {
+				cprint.Info("Generating QR code...")
+			}
 			qrCode, err := service.GenerateQR(orgId, *shortCode.ID)
 			if err != nil {
 				cprint.Error(cmd, fmt.Errorf("failed to generate QR code: %w", err))
 				return
 			}
-			cprint.Success("QR code generated successfully")
 			qrCodeURL = qrCode.QRLink
+		}
+
+		if flags.VerboseFlag {
+			cprint.Success("Link generation successful")
 		}
 
 		shortURL := fmt.Sprintf("%s/%s", domain, *shortCode.Code)
 
-		cprint.PrintHeader("Result Summary")
-		cprint.PrintDetail("Long URL", args[0])
-		cprint.PrintDetail("Short URL", shortURL)
-		cprint.PrintDetail("Short Code", *shortCode.Code)
-		if shortCode.Title != nil {
-			cprint.PrintDetail("Title", *shortCode.Title)
-		}
-		if len(tags) > 0 {
-			cprint.PrintDetail("Tags", fmt.Sprintf("%v", tags))
-		}
-		if qrCodeURL != "" {
-			cprint.PrintDetail("QR Code URL", qrCodeURL)
-		}
+		if flags.VerboseFlag {
+			cprint.PrintDetail("Long URL", args[0])
+			cprint.PrintDetail("Short URL", shortURL)
+			cprint.PrintDetail("Short Code", *shortCode.Code)
+			if shortCode.Title != nil {
+				cprint.PrintDetail("Title", *shortCode.Title)
+			}
+			if len(tags) > 0 {
+				cprint.PrintDetail("Tags", fmt.Sprintf("%v", tags))
+			}
+			if qrCodeURL != "" {
+				cprint.PrintDetail("QR Code URL", qrCodeURL)
+			}
 
-		cprint.GreenPrint("\nURL shortened successfully!")
+			cprint.GreenPrint("\nURL shortened successfully!")
 
-		if qr == true {
-			cprint.PrintHeader("QR Code")
-			cprint.PrintNorm(shortURL)
+			if qr {
+				cprint.PrintHeader("QR Code")
+				cprint.PrintNorm(shortURL)
+			}
+		} else {
+			cprint.Print(shortURL)
+			if qr {
+				cprint.Print(qrCodeURL)
+			}
 		}
 	},
 }

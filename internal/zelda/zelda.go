@@ -11,7 +11,7 @@ type Code struct {
 	Code           *string  `json:"code,omitempty"`
 	Title          *string  `json:"title,omitempty"`
 	Tags           []string `json:"tags,omitempty"`
-	OrganizationID string   `json:"organization_id,omitempty"`
+	OrganizationID string   `json:"organizationId,omitempty"` // DEVNOTE: The API is inconsistent and expecting organizationId, not organizaiton_id (unfortunately)
 }
 
 //Domain
