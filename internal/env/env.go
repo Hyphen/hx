@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -81,6 +80,7 @@ func (e *Env) DecryptData(key secretkey.SecretKeyer) (string, error) {
 func (e *Env) ListDecryptedVars(key secretkey.SecretKeyer) ([]string, error) {
 	decryptedData, err := key.Decrypt(e.Data)
 	if err != nil {
+		fmt.Println("Error:", err)
 		return nil, errors.Wrap(err, "Failed to decrypt environment variables")
 	}
 	return strings.Split(decryptedData, "\n"), nil
@@ -95,6 +95,7 @@ func (e *Env) DecryptVarsAndSaveIntoFile(fileName string, key secretkey.SecretKe
 
 	decryptedVarList, err := e.ListDecryptedVars(key)
 	if err != nil {
+		fmt.Println("Error:", err)
 		return "", errors.Wrap(err, "Failed to list decrypted variables")
 	}
 
@@ -161,7 +162,7 @@ func GetFileName(env string) (string, error) {
 		return ".env", nil
 	}
 
-	return fmt.Sprintf(".%s.env", name), nil
+	return fmt.Sprintf(".env.%s", name), nil
 
 }
 
@@ -173,24 +174,15 @@ func GetEnvsInDirectory() ([]string, error) {
 
 	var envFiles []string
 
-	err = filepath.Walk(currentDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if !info.IsDir() && strings.HasSuffix(info.Name(), ".env") {
-			relPath, err := filepath.Rel(currentDir, path)
-			if err != nil {
-				return errors.Wrap(err, "Failed to get relative path")
-			}
-			envFiles = append(envFiles, relPath)
-		}
-
-		return nil
-	})
-
+	files, err := os.ReadDir(currentDir)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to walk through directory")
+		return nil, errors.Wrap(err, "Failed to read directory")
+	}
+
+	for _, file := range files {
+		if !file.IsDir() && strings.HasPrefix(file.Name(), ".env") && !strings.HasSuffix(file.Name(), ".local") {
+			envFiles = append(envFiles, file.Name())
+		}
 	}
 
 	return envFiles, nil
@@ -201,19 +193,17 @@ func GetEnvNameFromFile(fileName string) (string, error) {
 		return "default", nil
 	}
 
-	validRegex := regexp.MustCompile(`^\.?[a-z0-9-_]+\.env$`)
+	validRegex := regexp.MustCompile(`^\.env\.?[a-z0-9-_]+$`)
 	if !validRegex.MatchString(fileName) {
-		return "", errors.Wrapf(nil, "Invalid environment file name. A valid env file name can only contain lowercase letters, numbers, hyphens, and underscores")
+		return "", errors.Wrapf(nil, "Invalid .env file name encountered: '%s'. A valid .env file name can only contain lowercase letters, numbers, hyphens, and underscores", fileName)
 	}
 
-	trimmedName := strings.TrimPrefix(fileName, ".")
-
-	envName := strings.TrimSuffix(trimmedName, ".env")
+	envName := strings.TrimPrefix(fileName, ".env.")
 
 	return envName, nil
 }
 
-func GetEnvronmentID() (string, error) {
+func GetEnvironmentID() (string, error) {
 	if flags.EnvironmentFlag != "" {
 		envName, err := GetEnvName(flags.EnvironmentFlag)
 		if err != nil {
@@ -222,6 +212,6 @@ func GetEnvronmentID() (string, error) {
 		return envName, nil
 	}
 
-	return "", nil
+	return "default", nil
 
 }

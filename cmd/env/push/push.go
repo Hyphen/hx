@@ -13,9 +13,9 @@ import (
 
 var PushCmd = &cobra.Command{
 	Use:   "push",
-	Short: "Upload and encrypt environment variables for a specific environment",
+	Short: "Upload and encrypt environment .env secrets for a specific environment",
 	Long: `
-Push and encrypt environment variables for a specific application environment.
+Push and encrypt environment .env secrets for a specific application environment.
 
 This command reads the local .env file corresponding to the specified environment
 (e.g., dev, staging, prod), encrypts the variables using the application's secret key,
@@ -25,7 +25,7 @@ Usage:
   hyphen push [flags]
 
 Flags:
-  --env string    Specify the environment to push to (e.g., dev, staging, prod)
+  --environment string    Specify the environment to push to (e.g., dev, staging, prod)
   --org string    Specify the organization ID (overrides the default from credentials)
 
 If no environment is specified, it defaults to the "default" environment.
@@ -47,20 +47,16 @@ and have reviewed the changes before pushing.
 			return
 		}
 
-		envName, err := env.GetEnvronmentID()
+		prjectId, err := flags.GetProjectID()
 		if err != nil {
-			cmd.PrintErrf("Error: %s\n", err)
+			cprint.Error(cmd, err)
 			return
 		}
-		var envs []string
-		if envName != "" {
-			envs = append(envs, envName)
-		} else {
-			envs, err = service.getLocalEnvsNames()
-			if err != nil {
-				cprint.Error(cmd, err)
-				return
-			}
+
+		appId, err := flags.GetApplicationID()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
 		}
 
 		manifest, err := manifest.Restore()
@@ -68,12 +64,28 @@ and have reviewed the changes before pushing.
 			cprint.Error(cmd, err)
 			return
 		}
-		if manifest.AppId == nil {
-			cprint.Error(cmd, fmt.Errorf("No app ID found in manifest"))
+
+		envName, err := env.GetEnvironmentID()
+		if err != nil {
+			cmd.PrintErrf("Error: %s\n", err)
 			return
 		}
 
-		if err := service.checkIfLocalEnvsExistAsEnvironments(envs, orgId, manifest); err != nil {
+		var envs []string
+		if envName != "" && envName != "default" {
+			envs = append(envs, envName)
+		} else if flags.AllFlag {
+			envs, err = service.getLocalEnvsNamesFromFiles()
+			if err != nil {
+				cprint.Error(cmd, err)
+				return
+			}
+		} else {
+			// We're just handling the one special "default" environment
+			envs = append(envs, "default")
+		}
+
+		if err := service.checkIfLocalEnvsExistAsEnvironments(envs, orgId, prjectId); err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
@@ -83,14 +95,13 @@ and have reviewed the changes before pushing.
 				cprint.Error(cmd, err)
 				return
 			}
-			if err := service.putEnv(orgId, envName, e, manifest); err != nil {
+			if err := service.putEnv(orgId, envName, appId, e); err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
 		}
 
 		printPushSummary(orgId, *manifest.AppId, envs)
-
 	},
 }
 
@@ -124,34 +135,43 @@ func (s *service) getLocalEnv(envName string, m manifest.Manifest) (env.Env, err
 	return e, nil
 }
 
-func (s *service) putEnv(orgId, envName string, e env.Env, m manifest.Manifest) error {
+func (s *service) putEnv(orgId, envName, appId string, e env.Env) error {
+	if envName == "default" {
+		// TODO: This endpoint doesn't yet exist
+		fmt.Print("pushing default not yet implemented")
+		return nil
+	}
 
-	if err := s.envService.PutEnv(orgId, *m.AppId, envName, e); err != nil {
+	if err := s.envService.PutEnv(orgId, appId, envName, e); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *service) checkIfLocalEnvsExistAsEnvironments(envs []string, orgId string, m manifest.Manifest) error {
-	environments, err := s.envService.ListEnvironments(orgId, *m.AppId, 100, 1)
+func (s *service) checkIfLocalEnvsExistAsEnvironments(envs []string, orgId, projectId string) error {
+	environments, err := s.envService.ListEnvironments(orgId, projectId, 100, 1)
 	if err != nil {
 		return err
 	}
 	mapEnvs := make(map[string]bool)
 	for _, env := range environments {
-		mapEnvs[env.Name] = true
+		mapEnvs[env.AlternateID] = true
 	}
-
 	for _, env := range envs {
+		// skip default, it's not an explicit environment but it's always implicit with .env secrets
+		if env == "default" {
+			continue
+		}
+
 		if _, ok := mapEnvs[env]; !ok {
-			return fmt.Errorf("Environment %s not found in App", env)
+			return fmt.Errorf("local .env file '.env.%s' does not map to any known project environment", env)
 		}
 	}
 
 	return nil
 }
 
-func (s *service) getLocalEnvsNames() ([]string, error) {
+func (s *service) getLocalEnvsNamesFromFiles() ([]string, error) {
 	var envs []string
 	envsFiles, err := env.GetEnvsInDirectory()
 	if err != nil {
@@ -181,5 +201,5 @@ func printPushSummary(orgId, appId string, envs []string) {
 
 	cprint.PrintDetail("Total environments pushed", fmt.Sprintf("%d", len(envs)))
 	fmt.Println()
-	cprint.GreenPrint("All environment variables are now securely stored and ready for use.")
+	cprint.GreenPrint("All environment .env secrets are now securely stored.")
 }
