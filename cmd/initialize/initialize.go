@@ -2,9 +2,12 @@ package initialize
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Hyphen/cli/internal/app"
+	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -24,13 +27,14 @@ You need to provide an app name as a positional argument. Optionally, you can sp
 If a manifest file already exists, you will be prompted to confirm if you want to overwrite it, unless the '--yes' flag is provided, in which case the manifest file will be overwritten automatically.
 
 Example usages:
+	hyphen init
   hyphen init MyApp
   hyphen init MyApp --id custom-app-id --yes
 
 Flags:
   --id, -i   Specify a custom app ID (optional)
   --yes, -y  Automatically confirm prompts and overwrite files if necessary`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	Run:  runInit,
 }
 
@@ -40,16 +44,30 @@ func init() {
 
 func runInit(cmd *cobra.Command, args []string) {
 	appService := app.NewService()
+	envService := env.NewService()
+
 	orgID, err := flags.GetOrganizationID()
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
 	}
 
-	appName := args[0]
-	if appName == "" {
-		cprint.Error(cmd, fmt.Errorf("app name is required"))
-		return
+	appName := ""
+	if len(args) == 0 {
+		// get the local directory name and prompt if we wish to use this as the app name
+		cwd, err := os.Getwd()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
+		appName = filepath.Base(cwd)
+		if !prompt.PromptYesNo(cmd, fmt.Sprintf("Use the current directory name '%s' as the app name?", appName), true) {
+			cprint.Info("Operation cancelled.")
+			return
+		}
+	} else {
+		appName = args[0]
 	}
 
 	appAlternateId := getAppID(cmd, appName)
@@ -95,12 +113,64 @@ func runInit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	printInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
-
 	if err := ensureGitignore(manifest.ManifestSecretFile); err != nil {
-		cprint.Error(cmd, fmt.Errorf("error checking/updating .gitignore: %w", err))
+		cprint.Error(cmd, fmt.Errorf("error adding .hxkey to .gitignore: %w. Please do this manually if you wish", err))
+	}
+
+	// List the environments for the project
+	environments, err := envService.ListEnvironments(orgID, *m.ProjectId, 100, 1)
+	if err != nil {
+		cprint.Error(cmd, err)
 		return
 	}
+
+	// Create an empty .env file for each environment, push it up, and add it to .gitignore
+	for _, e := range environments {
+		envName := strings.ToLower(e.Name)
+		envID := e.ID
+		envFileName := fmt.Sprintf(".env.%s", envName)
+		err := createGitignoredFile(cmd, envFileName)
+		if err != nil {
+			return
+		}
+
+		// Build an Env struct from that new empty file
+		envStruct, err := env.GetLocalEnv(envName, m)
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
+		if err := envService.PutEnv(orgID, newApp.ID, envID, envStruct); err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+	}
+
+	err = createGitignoredFile(cmd, ".env")
+	if err != nil {
+		return
+	}
+	err = createGitignoredFile(cmd, ".env.local")
+	if err != nil {
+		return
+	}
+
+	printInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
+}
+
+func createGitignoredFile(cmd *cobra.Command, fileName string) error {
+	if _, err := os.Create(fileName); err != nil {
+		cprint.Error(cmd, fmt.Errorf("error creating %s: %w", fileName, err))
+		return err
+	}
+
+	if err := ensureGitignore(fileName); err != nil {
+		cprint.Error(cmd, fmt.Errorf("error adding %s to .gitignore: %w. Please do this manually if you wish", fileName, err))
+		// don't error here. Keep going.
+	}
+
+	return nil
 }
 
 func getAppID(cmd *cobra.Command, appName string) string {
@@ -113,20 +183,11 @@ func getAppID(cmd *cobra.Command, appName string) string {
 	err := app.CheckAppId(appAlternateId)
 	if err != nil {
 		suggestedID := strings.TrimSpace(strings.Split(err.Error(), ":")[1])
-		yesFlag, _ := cmd.Flags().GetBool("yes")
-		noFlag, _ := cmd.Flags().GetBool("no")
-		if yesFlag {
-			appAlternateId = suggestedID
-			cprint.Info(fmt.Sprintf("Using suggested app ID: %s", suggestedID))
-		} else if noFlag {
-			cprint.Info("--no provided. Operation cancelled.")
-		} else {
-			if !prompt.PromptYesNo(cmd, fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]?", suggestedID), true) {
-				cprint.Info("Operation cancelled.")
-				return ""
-			}
-			appAlternateId = suggestedID
+		if !prompt.PromptYesNo(cmd, fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]?", suggestedID), true) {
+			cprint.Info("Operation cancelled.")
+			return ""
 		}
+		appAlternateId = suggestedID
 	}
 	return appAlternateId
 }

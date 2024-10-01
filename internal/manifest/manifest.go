@@ -35,11 +35,11 @@ type ManifestConfig struct {
 	AppName            *string `json:"app_name,omitempty"`
 	AppId              *string `json:"app_id,omitempty"`
 	AppAlternateId     *string `json:"app_alternate_id,omitempty"`
-	OrganizationId     string  `json:"organization_id"`
-	HyphenAccessToken  *string `json:"hyphen_access_token"`
-	HyphenRefreshToken *string `json:"hyphen_refresh_token"`
-	HypenIDToken       *string `json:"hyphen_id_token"`
-	ExpiryTime         *int64  `json:"expiry_time"`
+	OrganizationId     string  `json:"organization_id,omitempty"`
+	HyphenAccessToken  *string `json:"hyphen_access_token,omitempty"`
+	HyphenRefreshToken *string `json:"hyphen_refresh_token,omitempty"`
+	HypenIDToken       *string `json:"hyphen_id_token,omitempty"`
+	ExpiryTime         *int64  `json:"expiry_time,omitempty"`
 }
 
 type Manifest struct {
