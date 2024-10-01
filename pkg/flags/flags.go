@@ -9,4 +9,5 @@ var (
 	ApplicationFlag  string
 	ApiKeyFlag       string
 	AllFlag          bool
+	VerboseFlag      bool
 )

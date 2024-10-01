@@ -8,6 +8,7 @@ import (
 	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
 
@@ -24,15 +25,15 @@ var AuthCmd = &cobra.Command{
 }
 
 func login() error {
-	cprint.PrintHeader("Hyphen Authentication Process")
-
 	oauthService := oauth.DefaultOAuthService()
 	token, err := oauthService.StartOAuthServer()
 	if err != nil {
 		return fmt.Errorf("failed to start OAuth server: %w", err)
 	}
 
-	cprint.Success("OAuth server started successfully")
+	if flags.VerboseFlag {
+		cprint.Success("OAuth server started successfully")
+	}
 
 	m := manifest.Manifest{
 		ManifestConfig: manifest.ManifestConfig{
@@ -47,15 +48,16 @@ func login() error {
 		return fmt.Errorf("failed to save credentials: %w", err)
 	}
 
-	cprint.Success("Credentials saved successfully")
+	if flags.VerboseFlag {
+		cprint.Success("Credentials saved successfully")
+	}
 
 	user, err := user.NewService().GetUserInformation()
 	if err != nil {
 		return fmt.Errorf("failed to get user information: %w", err)
 	}
 
-	var organizationID string
-	organizationID = user.Memberships[0].Organization.ID
+	organizationID := user.Memberships[0].Organization.ID
 
 	projectService := projects.NewService(organizationID)
 	projectList, err := projectService.ListProjects()
@@ -63,7 +65,7 @@ func login() error {
 		return err
 	}
 	if len(projectList) == 0 {
-		return fmt.Errorf("No projects found")
+		return fmt.Errorf("no projects found")
 	}
 
 	defaultProject := projectList[0]
@@ -86,16 +88,19 @@ func login() error {
 		return err
 	}
 
-	printAuthenticationSummary(&user, organizationID)
+	printAuthenticationSummary(&user, organizationID, *defaultProject.ID)
 	return nil
 }
 
-func printAuthenticationSummary(user *user.UserInfo, organizationID string) {
-	cprint.PrintHeader("Authentication Summary")
-	cprint.Success("Login successful!")
-	cprint.Print("") // Add an empty line for better spacing
-	cprint.PrintDetail("User", user.Memberships[0].Email)
-	cprint.PrintDetail("Organization ID", organizationID)
-	cprint.Print("") // Add an empty line for better spacing
+func printAuthenticationSummary(user *user.UserInfo, organizationID string, projectID string) {
+	if flags.VerboseFlag {
+		cprint.PrintHeader("Authentication Summary")
+		cprint.Success("Login successful!")
+		cprint.Print("") // Add an empty line for better spacing
+		cprint.PrintDetail("User", user.Memberships[0].Email)
+		cprint.PrintDetail("Organization ID", organizationID)
+		cprint.PrintDetail("Default Project ID", projectID)
+		cprint.Print("") // Add an empty line for better spacing
+	}
 	cprint.GreenPrint("You are now authenticated and ready to use Hyphen CLI.")
 }

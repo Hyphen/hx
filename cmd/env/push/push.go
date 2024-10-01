@@ -168,8 +168,8 @@ func (s *service) getLocalEnvsNamesFromFiles() ([]string, error) {
 }
 
 func printPushSummary(orgId, appId string, envs []string) {
-	cprint.PrintHeader("--- Push Summary ---")
 	cprint.Success("Successfully pushed environment variables")
+	cprint.Print("")
 	cprint.PrintDetail("Organization", orgId)
 	cprint.PrintDetail("Application", appId)
 

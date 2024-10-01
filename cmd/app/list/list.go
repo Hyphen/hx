@@ -35,8 +35,6 @@ var ListCmd = &cobra.Command{
 		}
 		service := newService(app.NewService())
 
-		cprint.PrintHeader("Listing Applications")
-
 		apps, err := service.ListApps(orgId, projectId, pageSize, page)
 		if err != nil {
 			cprint.Error(cmd, fmt.Errorf("failed to list apps: %w", err))
@@ -53,8 +51,6 @@ var ListCmd = &cobra.Command{
 		} else {
 			displayList(apps)
 		}
-
-		cprint.Success("Applications listed successfully")
 	},
 }
 
@@ -91,7 +87,6 @@ func displayTable(apps []app.App) {
 
 func displayList(apps []app.App) {
 	for _, app := range apps {
-		cprint.PrintHeader("--- App Details ---")
 		cprint.PrintDetail("App Name", app.Name)
 		cprint.PrintDetail("App AlternateId", app.AlternateId)
 		cprint.PrintDetail("App ID", app.ID)

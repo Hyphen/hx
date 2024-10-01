@@ -44,7 +44,6 @@ func runGet(cmd *cobra.Command, args []string) {
 }
 
 func printAppDetails(app app.App) {
-	cprint.PrintHeader("--- App Details ---")
 	cprint.PrintDetail("Project ID", app.Project.ID)
 	cprint.PrintDetail("Project Name", app.Project.Name)
 	cprint.PrintDetail("App Name", app.Name)

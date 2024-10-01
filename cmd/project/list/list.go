@@ -31,7 +31,6 @@ var ProjectListCmd = &cobra.Command{
 			return
 		}
 
-		cprint.PrintHeader("Projects")
 		for _, project := range projects {
 			cprint.PrintDetail("Name", project.Name)
 			cprint.PrintDetail("ID", *project.ID)

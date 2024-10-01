@@ -22,8 +22,11 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "hyphen",
-	Short: "cli for hyphen",
-	Long:  `hypen is a cli for ...`,
+	Short: "cli for Hyphen",
+	Long: `
+Hyphen CLI
+
+The Hyphen CLI is a command-line interface for managing your Hyphen projects, environments, applications, and more. It provides a set of commands to interact with various resources in your Hyphen account.`,
 }
 
 func init() {
@@ -40,12 +43,22 @@ func init() {
 	rootCmd.AddCommand(project.ProjectCmd)
 	rootCmd.AddCommand(env.EnvCmd)
 
+	// Override the default completion command with a hidden no-op command
+	rootCmd.AddCommand(&cobra.Command{
+		Use:    "completion",
+		Hidden: true,
+		Run: func(cmd *cobra.Command, args []string) {
+			// No-op
+		},
+	})
+
 	rootCmd.PersistentFlags().StringVarP(&flags.OrganizationFlag, "organization", "o", "", "Organization ID (e.g., org_123)")
 	rootCmd.PersistentFlags().StringVarP(&flags.ProjectFlag, "project", "p", "", "Project ID (e.g., proj_123)")
 
 	rootCmd.PersistentFlags().BoolVarP(&flags.YesFlag, "yes", "y", false, "Automatically answer yes for prompts")
 	rootCmd.PersistentFlags().BoolVarP(&flags.NoFlag, "no", "n", false, "Automatically answer no for prompts")
 	rootCmd.PersistentFlags().StringVar(&flags.ApiKeyFlag, "api-key", "", "API Key")
+	rootCmd.PersistentFlags().BoolVarP(&flags.VerboseFlag, "verbose", "v", false, "Enable more verbose output")
 }
 
 func Execute() {
