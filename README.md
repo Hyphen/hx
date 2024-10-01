@@ -1,8 +1,8 @@
 # Hyphen CLI Command Reference
 
 ## Env variables
--  `HYPHEN_CUSTOM_AUTH`: this should be the dev base URL, example: `https://dev-auth.hyphen.ai`
--  `HYPHEN_CUSTOM_APIX`: this should be the dev base URL, example: `https://dev-api.hyphen.ai`
+-   `HYPHEN_CUSTOM_AUTH`: this should be the dev base URL, example: `https://dev-auth.hyphen.ai`
+-   `HYPHEN_CUSTOM_APIX`: this should be the dev base URL, example: `https://dev-api.hyphen.ai`
 
 ## Installation
 **Linux/MacOS**
@@ -26,26 +26,26 @@ hyphen [command]
 ```
 
 Global Flags:
--  `--org`: Organization ID (e.g., org_123)
--  `--proj`: Project ID (e.g., proj_123)
--  `--env`: Environment ID (e.g., env_12345)
--  `--api-key`: API Key (e.g, key_123)
--  `--yes, -y`: Automatically answer yes for prompts
--  `--no`: Automatically answer no for prompts
+-   `--org`: Organization ID (e.g., org_123)
+-   `--proj`: Project ID (e.g., proj_123)
+-   `--env`: Environment ID (e.g., env_12345)
+-   `--api-key`: API Key (e.g, key_123)
+-   `--yes, -y`: Automatically answer yes for prompts
+-   `--no`: Automatically answer no for prompts
 
 Available Commands:
--  `auth`: Authenticate with Hyphen
--  `init`: Initialize an app
--  `update`: Update the Hyphen CLI
--  `set-org`: Set the organization ID
--  `set-project`: Set the project ID
--  `version`: Display the version of the Hyphen CLI
--  `push`: Upload and encrypt environment variables for a specific environment
--  `pull`: Retrieve and decrypt environment variables for a specific environment
--  `link`: Shorten a URL and optionally generate a QR code
--  `app`: Manage applications
--  `project`: Manage projects
--  `env`: Manage environments
+-   `auth`: Authenticate with Hyphen
+-   `init`: Initialize an app
+-   `update`: Update the Hyphen CLI
+-   `set-org`: Set the organization ID
+-   `set-project`: Set the project ID
+-   `version`: Display the version of the Hyphen CLI
+-   `push`: Upload and encrypt environment variables for a specific environment
+-   `pull`: Retrieve and decrypt environment variables for a specific environment
+-   `link`: Shorten a URL and optionally generate a QR code
+-   `app`: Manage applications
+-   `project`: Manage projects
+-   `env`: Manage environments
 
 ## Authentication Command
 ### `hyphen auth`
@@ -77,8 +77,8 @@ hyphen push [flags]
 ```
 
 Flags:
--  `--environment, -e string`: Specify the environment to push to (e.g., dev, staging, prod)
--  `--org string`: Specify the organization ID (overrides the default from credentials)
+-   `--environment, -e string`: Specify the environment to push to (e.g., dev, staging, prod)
+-   `--org string`: Specify the organization ID (overrides the default from credentials)
 
 This command reads the local .env file corresponding to the specified environment, encrypts the variables, and uploads them to the Hyphen platform.
 
@@ -92,8 +92,8 @@ hyphen pull [flags]
 ```
 
 Flags:
--  `--environment, -e string`: Specify the environment to pull from (e.g., dev, staging, prod)
--  `--org string`: Specify the organization ID (overrides the default from credentials)
+-   `--environment, -e string`: Specify the environment to pull from (e.g., dev , staging, prod)
+-   `--org string`: Specify the organization ID (overrides the default from credentials)
 
 This command retrieves the encrypted environment variables from the specified environment, decrypts them, and saves them to a local .env file.
 
@@ -143,20 +143,20 @@ hyphen link <long_url> [flags]
 ```
 
 Flags:
--  `--qr`: Generate a QR code for the shortened URL
--  `--domain string`: Specify a custom domain for the short URL (default: organization's default domain)
--  `--tag strings`: Add tags to the shortened URL (can be used multiple times)
--  `--code string`: Set a custom short code for the URL (if available)
--  `--title string`: Add a title to the shortened URL
+-   `--qr`: Generate a QR code for the shortened URL
+-   `--domain string`: Specify a custom domain for the short URL (default: organization's default domain)
+-   `--tag strings`: Add tags to the shortened URL (can be used multiple times)
+-   `--code string`: Set a custom short code for the URL (if available)
+-   `--title string`: Add a title to the shortened URL
 
 ## App Command
 ### `hyphen app`
 Manage applications.
 
 Available Subcommands:
--  `list`: List all applications associated with the organization and project
--  `create`: Create a new app
--  `get`: Get an app
+-   `list`: List all applications associated with the organization and project
+-   `create`: Create a new app
+-   `get`: Get an app
 
 #### List Command
 ### `hyphen app list`
@@ -177,7 +177,7 @@ hyphen app create <app name> [flags]
 ```
 
 Flags:
--  `--id, -i`: Specify a custom app ID (optional)
+-   `--id, -i`: Specify a custom app ID (optional)
 
 Examples:
 ```bash
@@ -204,9 +204,9 @@ hyphen app get custom-app-id
 Manage projects.
 
 Available Subcommands:
--  `list`: List all projects
--  `create`: Create a new project with the provided name
--  `get`: Get a project by ID
+-   `list`: List all projects
+-   `create`: Create a new project with the provided name
+-   `get`: Get a project by ID
 
 #### List Command
 ### `hyphen project list`
@@ -244,3 +244,43 @@ Examples:
 ```bash
 hyphen project get proj_123
 ```
+
+## Env Command
+### `hyphen env`
+Manage environment .env secrets.
+
+Available Subcommands:
+-   `pull`: Retrieve and decrypt .env secrets for a specific environment
+-   `push`: Upload and encrypt .env secrets for a specific environment
+
+#### Pull Command
+### `hyphen env pull`
+Retrieve and decrypt .env secrets for a specific environment.
+
+Usage:
+```bash
+hyphen env pull [flags]
+```
+
+Flags:
+-   `--environment, -e string`: Specify the environment to pull from (e.g., dev, staging, prod)
+-   `--org string`: Specify the organization ID (overrides the default from credentials)
+-   `--all`: Pull secrets for all environments
+
+This command retrieves the encrypted environment variables from the specified environment, decrypts them, and saves them to a local .env file.
+
+#### Push Command
+### `hyphen env push`
+Upload and encrypt .env secrets for a specific environment.
+
+Usage:
+```bash
+hyphen env push [flags]
+```
+
+Flags:
+-   `--environment, -e string`: Specify the environment to push to (e.g., dev, staging, prod)
+-   `--org string`: Specify the organization ID (overrides the default from credentials)
+-   `--all`: Push secrets for all environments
+
+This command reads the local .env file corresponding to the specified environment, encrypts the variables, and uploads them to the Hyphen platform.
