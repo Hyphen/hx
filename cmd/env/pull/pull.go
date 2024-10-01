@@ -13,9 +13,9 @@ import (
 
 var PullCmd = &cobra.Command{
 	Use:   "pull",
-	Short: "Retrieve and decrypt environment variables for a specific environment",
+	Short: "Retrieve and decrypt .env secrets for a specific environment",
 	Long: `
-Pull and decrypt environment variables for a specific application environment.
+Pull and decrypt environment .env secrets for a specific application environment.
 
 This command retrieves the encrypted environment variables from the specified
 environment (e.g., dev, staging, prod) and decrypts them using the application's
@@ -26,7 +26,7 @@ Usage:
   hyphen pull [flags]
 
 Flags:
-  --env string    Specify the environment to pull from (e.g., dev, staging, prod)
+  --environment string    Specify the environment to pull from (e.g., dev, staging, prod)
   --org string    Specify the organization ID (overrides the default from credentials)
 
 If no environment is specified, it defaults to the "default" environment.
@@ -44,7 +44,13 @@ Example:
 			return
 		}
 
-		prjectId, err := flags.GetProjectID()
+		appId, err := flags.GetApplicationID()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
+		projectId, err := flags.GetProjectID()
 		if err != nil {
 			cprint.Error(cmd, err)
 			return
@@ -56,32 +62,40 @@ Example:
 			return
 		}
 
-		envName, err := env.GetEnvronmentID()
+		envName, err := env.GetEnvironmentID()
 		if err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
 
-		if envName == "" {
-			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, prjectId, manifest.GetSecretKey())
+		if flags.AllFlag {
+			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey())
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
 
-			printPullSummary(prjectId, pulledEnvs)
-		} else {
-			err = service.checkForEnvironment(orgId, envName, prjectId)
+			printPullSummary(appId, pulledEnvs)
+			return
+		}
+
+		if envName == "" || envName == "default" {
+			// TODO
+			// We want to just pull default here, not all.
+			cprint.Error(cmd, fmt.Errorf("pulling default environment not yet implemented. Please use --all to pull all, or -e [environment] to pull a specific environment"))
+			return
+		} else { // we have a specific env name
+			err = service.checkForEnvironment(orgId, envName, projectId)
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
-			if err = service.saveDecryptedEnvIntoFile(orgId, envName, prjectId, manifest.GetSecretKey()); err != nil {
+			if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey()); err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
 
-			printPullSummary(prjectId, []string{envName})
+			printPullSummary(appId, []string{envName})
 		}
 
 	},
@@ -109,8 +123,8 @@ func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
 	return nil
 }
 
-func (s *service) saveDecryptedEnvIntoFile(orgId, envName, projectId string, secretKey *secretkey.SecretKey) error {
-	e, err := s.envService.GetEnv(orgId, projectId, envName)
+func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretKey *secretkey.SecretKey) error {
+	e, err := s.envService.GetEnv(orgId, appId, envName)
 	if err != nil {
 		return err
 	}
@@ -127,15 +141,15 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, projectId string, sec
 	return nil
 }
 
-func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, projectId string, secretkey *secretkey.SecretKey) ([]string, error) {
-	allEnvs, err := s.envService.ListEnvs(orgId, projectId, 100, 1)
+func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *secretkey.SecretKey) ([]string, error) {
+	allEnvs, err := s.envService.ListEnvs(orgId, appId, 100, 1)
 	if err != nil {
 		return nil, err
 	}
 	var pulledEnvs []string
 	for _, e := range allEnvs {
 		envName := e.ProjectEnv.AlternateID
-		if err := s.saveDecryptedEnvIntoFile(orgId, envName, projectId, secretkey); err != nil {
+		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secretkey); err != nil {
 			return pulledEnvs, err
 		}
 		pulledEnvs = append(pulledEnvs, envName)
@@ -149,12 +163,12 @@ func printPullSummary(appId string, pulledEnvs []string) {
 	cprint.PrintDetail("Application", appId)
 	cprint.PrintDetail("Environments pulled", fmt.Sprintf("%d", len(pulledEnvs)))
 
-	cprint.Print("") // Add an empty line for better spacing
+	cprint.Print("")
 	cprint.Print("Pulled environments:")
 	for _, env := range pulledEnvs {
 		cprint.Print(fmt.Sprintf("  - %s", env))
 	}
 
-	cprint.Print("") // Add an empty line for better spacing
+	cprint.Print("")
 	cprint.GreenPrint("All environment variables are now locally available and ready for use.")
 }

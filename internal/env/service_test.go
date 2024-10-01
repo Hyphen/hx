@@ -121,10 +121,10 @@ func TestGetFileName(t *testing.T) {
 		hasError bool
 	}{
 		{"", ".env", false},
-		{"production", ".production.env", false},
-		{"STAGING", ".staging.env", false},
-		{"dev-env", ".dev-env.env", false},
-		{"test_env", ".test_env.env", false},
+		{"production", ".env.production", false},
+		{"STAGING", ".env.staging", false},
+		{"dev-env", ".env.dev-env", false},
+		{"test_env", ".env.test_env", false},
 		{"Invalid Env", "", true},
 	}
 
@@ -302,7 +302,7 @@ func TestGetEnvsInDirectory(t *testing.T) {
 	defer os.Chdir(originalDir)
 
 	// Create some test files
-	testFiles := []string{".env", ".local.env", "config.txt", ".production.env"}
+	testFiles := []string{".env", ".env.local", "config.txt", ".env.production"}
 	for _, file := range testFiles {
 		_, err := os.Create(file)
 		assert.NoError(t, err)
@@ -313,6 +313,6 @@ func TestGetEnvsInDirectory(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Check the results
-	expectedFiles := []string{".env", ".local.env", ".production.env"}
+	expectedFiles := []string{".env", ".env.production"}
 	assert.ElementsMatch(t, expectedFiles, envFiles)
 }
