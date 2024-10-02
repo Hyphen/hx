@@ -20,35 +20,31 @@ var (
 
 var LinkCmd = &cobra.Command{
 	Use:   "link <long_url>",
-	Short: "Shorten a URL and optionally generate a QR code",
+	Short: "Create a shortened URL",
 	Long: `
-Shorten a long URL and optionally generate a QR code for the shortened link.
-
-This command takes a long URL as an argument and creates a shortened version using
-the Hyphen URL shortening service. It allows customization of the short link and
-provides options to add metadata such as tags and a title. Additionally, it can
-generate a QR code for easy sharing of the shortened URL.
+The link command creates a shortened URL for a given long URL.
 
 Usage:
   hyphen link <long_url> [flags]
 
-Arguments:
-  <long_url>    The original long URL to be shortened
+This command allows you to:
+- Generate a short URL for a given long URL
+- Optionally create a QR code for the shortened URL
+- Specify a custom domain, tags, custom short code, and title
+- Retrieve the shortened URL and optional QR code URL
 
-Flags:
-  --qr              Generate a QR code for the shortened URL
-  --domain string   Specify a custom domain for the short URL (default: organization's default domain)
-  --tag strings     Add tags to the shortened URL (can be used multiple times)
-  --code string     Set a custom short code for the URL (if available)
-  --title string    Add a title to the shortened URL
+The command will automatically add 'https://' to the long URL if not present.
 
-The command will display a summary of the shortened URL, including the original long URL,
-the new short URL, and any additional metadata or QR code information if applicable.
+If no custom domain is specified, the command will use the first ready domain 
+associated with your organization.
 
 Examples:
-  hyphen link https://example.com/very/long/url
-  hyphen link https://example.com/page --title "My Page" --tag promo --tag summer2024 --qr
-  hyphen link https://example.com/custom --code mycode --domain custom.com
+  hyphen link example.com
+  hyphen link https://very-long-url.com --qr
+  hyphen link example.com --tag promo --tag summer2023 --code summer-sale
+  hyphen link example.com --title "Summer Sale" --domain custom.short.link
+
+Use 'hyphen link --help' for more information about available flags.
 `,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
