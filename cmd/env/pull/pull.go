@@ -31,12 +31,7 @@ Examples:
 
 After pulling, all environment variables will be locally available and ready for use.
 `,
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) > 1 {
-			return fmt.Errorf("accepts at most 1 arg(s), received %d", len(args))
-		}
-		return nil
-	},
+	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		service := newService(env.NewService())
 
