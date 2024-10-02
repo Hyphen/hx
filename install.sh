@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 set -e
 
@@ -7,7 +7,7 @@ detect_os() {
     case "$(uname -s)" in
         Linux*)     echo "linux";;
         Darwin*)    
-            if [[ "$(uname -m)" == "arm64" ]]; then
+            if [ "$(uname -m)" = "arm64" ]; then
                 echo "macos-arm"
             else
                 echo "macos"
@@ -20,9 +20,9 @@ detect_os() {
 
 # Function to get latest version
 get_latest_version() {
-    local package_name="$1"
-    local api_url="https://api.hyphen.ai/api/downloads/${package_name}/versions?latest=true"
-    local version=$(curl -sSf "$api_url" | grep -o '"version":"[^"]*' | cut -d'"' -f4)
+    package_name="$1"
+    api_url="https://api.hyphen.ai/api/downloads/${package_name}/versions?latest=true"
+    version=$(curl -sSf "$api_url" | sed -n 's/.*"version":"\([^"]*\).*/\1/p')
     if [ -z "$version" ]; then
         printf "Failed to get latest version\n" >&2
         exit 1
@@ -45,10 +45,10 @@ detect_shell() {
 
 # Function to create alias
 create_alias() {
-    local alias_command="alias hx='hyphen'"
-    local shell=$(detect_shell)
-    local config_file
-    local alias_added=false
+    alias_command="alias hx='hyphen'"
+    shell=$(detect_shell)
+    config_file=""
+    alias_added=false
 
     case "$shell" in
         zsh) config_file="$HOME/.zshrc";;
@@ -64,37 +64,37 @@ create_alias() {
         csh|tcsh) config_file="$HOME/.cshrc";;
         *) 
             printf "\nUnsupported shell. Please add the following alias manually to your shell configuration file:\n"
-            printf "  $alias_command\n\n"
-            exit 1
+            printf "  %s\n\n" "$alias_command"
+            return
             ;;
     esac
 
     if [ -f "$config_file" ]; then
         if ! grep -q "$alias_command" "$config_file"; then
-            printf "\nAdding alias 'hx' for hyphen to $config_file\n"
+            printf "\nAdding alias 'hx' for hyphen to %s\n" "$config_file"
             echo "$alias_command" >> "$config_file"
             alias_added=true
         else
-            printf "\nAlias 'hx' already exists in $config_file\n\n"
+            printf "\nAlias 'hx' already exists in %s\n\n" "$config_file"
             return
         fi
     fi
 
     if [ "$alias_added" = true ]; then
         printf "\nAlias added. Please source the configuration file to apply changes:\n"
-        printf "  source $config_file\n\n"
+        printf "  source %s\n\n" "$config_file"
     else
         printf "\nCould not find a suitable configuration file in your home directory.\n"
         printf "Please add the following alias manually to your shell configuration file:\n"
-        printf "  $alias_command\n\n"
+        printf "  %s\n\n" "$alias_command"
     fi
 }
 
 # Main installation function
 install_cli() {
-    local package_name="hyphen-cli"
-    local version="$1"
-    local os=$(detect_os)
+    package_name="hyphen-cli"
+    version="$1"
+    os=$(detect_os)
     if [ "$os" = "unsupported" ]; then
         printf "\nUnsupported operating system\n\n"
         exit 1
@@ -104,17 +104,16 @@ install_cli() {
         version=$(get_latest_version "$package_name")
     fi
 
-    local download_url="https://api.hyphen.ai/api/downloads/${package_name}/${version}?os=${os}"
-    local temp_dir=$(mktemp -d)
-    local binary_name="hyphen"
+    download_url="https://api.hyphen.ai/api/downloads/${package_name}/${version}?os=${os}"
+    temp_dir=$(mktemp -d)
+    binary_name="hyphen"
 
-    printf "\nDownloading ${package_name} version ${version} for ${os}...\n"
+    printf "\nDownloading %s version %s for %s...\n" "$package_name" "$version" "$os"
     curl -sSfL -L "$download_url" -o "${temp_dir}/${binary_name}"
     
     chmod +x "${temp_dir}/${binary_name}"
 
     # Determine install location based on OS
-    local install_dir
     case "$os" in
         linux|macos|macos-arm)
             install_dir="/usr/local/bin"
@@ -125,11 +124,11 @@ install_cli() {
             ;;
     esac
 
-    printf "\nInstalling ${binary_name} to ${install_dir}...\n"
+    printf "\nInstalling %s to %s...\n" "$binary_name" "$install_dir"
     sudo mv "${temp_dir}/${binary_name}" "${install_dir}/"
 
-    printf "\n${binary_name} has been successfully installed!\n"
-    printf "You can now run '${binary_name}' from anywhere in your terminal.\n\n"
+    printf "\n%s has been successfully installed!\n" "$binary_name"
+    printf "You can now run '%s' from anywhere in your terminal.\n\n" "$binary_name"
 
     # Add the alias
     create_alias
