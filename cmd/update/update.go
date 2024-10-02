@@ -80,6 +80,7 @@ var UpdateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Update the Hyphen CLI",
 	Long:  `This command updates the Hyphen CLI to the specified version or the latest version available for your operating system`,
+	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		updater := NewDefaultUpdater(version)
 		updater.Run(cmd, args)
