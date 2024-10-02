@@ -13,9 +13,9 @@ import (
 )
 
 type EnvServicer interface {
-	GetEnvironment(organizationId, projectId, env string) (Environment, bool, error)
-	PutEnv(organizationId, appId, environmentId string, env Env) error
-	GetEnv(organizationId, appId, env string) (Env, error)
+	GetEnvironment(organizationId, projectId, environment string) (Environment, bool, error)
+	PutEnvironmentEnv(organizationId, appId, environmentId string, env Env) error
+	GetEnvironmentEnv(organizationId, appId, env string) (Env, error)
 	ListEnvs(organizationId, appId string, size, page int) ([]Env, error)
 	ListEnvironments(organizationId, projectId string, size, page int) ([]Environment, error)
 }
@@ -65,13 +65,18 @@ func (es *EnvService) GetEnvironment(organizationId, projectId, environmentId st
 	return environment, true, nil
 }
 
-func (es *EnvService) PutEnv(organizationId, appId, environmentId string, env Env) error {
-	envName, err := GetEnvName(environmentId)
-	if err != nil {
-		return errors.Wrap(err, "Failed to get environment name")
-	}
+func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId string, env Env) error {
+	url := ""
+	if environmentId == "default" {
+		url = fmt.Sprintf("%s/api/organizations/%s/apps/%s/env", es.baseUrl, organizationId, appId)
+	} else {
+		envName, err := GetEnvName(environmentId)
+		if err != nil {
+			return errors.Wrap(err, "Failed to get environment name")
+		}
 
-	url := fmt.Sprintf("%s/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, appId, envName)
+		url = fmt.Sprintf("%s/api/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, appId, envName)
+	}
 
 	envJSON, err := json.Marshal(env)
 	if err != nil {
@@ -96,8 +101,18 @@ func (es *EnvService) PutEnv(organizationId, appId, environmentId string, env En
 	return nil
 }
 
-func (es *EnvService) GetEnv(organizationId, appId, envName string) (Env, error) {
-	url := fmt.Sprintf("%s/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, appId, envName)
+func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId string) (Env, error) {
+	url := ""
+	if environmentId == "default" {
+		url = fmt.Sprintf("%s/api/organizations/%s/apps/%s/env", es.baseUrl, organizationId, appId)
+	} else {
+		envName, err := GetEnvName(environmentId)
+		if err != nil {
+			return Env{}, errors.Wrap(err, "Failed to get environment name")
+		}
+
+		url = fmt.Sprintf("%s/api/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, appId, envName)
+	}
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -120,11 +135,10 @@ func (es *EnvService) GetEnv(organizationId, appId, envName string) (Env, error)
 	}
 
 	return envData, nil
-
 }
 
 func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]Env, error) {
-	url := fmt.Sprintf("%s/organizations/%s/apps/%s/envs?pageSize=%d&pageNum=%d",
+	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/envs?pageSize=%d&pageNum=%d",
 		es.baseUrl, organizationId, appId, size, page)
 
 	req, err := http.NewRequest("GET", url, nil)

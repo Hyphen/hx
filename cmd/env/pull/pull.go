@@ -25,8 +25,6 @@ This command allows you to:
 
 The pulled environments will be saved as .env.[environment_name] files in your current directory.
 
-Note: Pulling the default environment is not yet implemented. Use --all to pull all environments or -e [environment] to pull a specific one.
-
 Examples:
   hyphen pull -e production
   hyphen pull --all
@@ -78,10 +76,12 @@ After pulling, all environment variables will be locally available and ready for
 		}
 
 		if envName == "" || envName == "default" {
-			// TODO
-			// We want to just pull default here, not all.
-			cprint.Error(cmd, fmt.Errorf("pulling default environment not yet implemented. Please use --all to pull all, or -e [environment] to pull a specific environment"))
-			return
+			if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey()); err != nil {
+				cprint.Error(cmd, err)
+				return
+			}
+
+			printPullSummary(appId, []string{envName})
 		} else { // we have a specific env name
 			err = service.checkForEnvironment(orgId, envName, projectId)
 			if err != nil {
@@ -122,7 +122,7 @@ func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
 }
 
 func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretKey *secretkey.SecretKey) error {
-	e, err := s.envService.GetEnv(orgId, appId, envName)
+	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName)
 	if err != nil {
 		return err
 	}
@@ -146,7 +146,10 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 	}
 	var pulledEnvs []string
 	for _, e := range allEnvs {
-		envName := e.ProjectEnv.AlternateID
+		envName := "default"
+		if e.ProjectEnv != nil {
+			envName = e.ProjectEnv.AlternateID
+		}
 		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secretkey); err != nil {
 			return pulledEnvs, err
 		}
@@ -164,7 +167,11 @@ func printPullSummary(appId string, pulledEnvs []string) {
 	cprint.Print("")
 	cprint.Print("Pulled environments:")
 	for _, env := range pulledEnvs {
-		cprint.Print(fmt.Sprintf("  - %s -> .env.%s", env, env))
+		if env == "default" {
+			cprint.Print("  - default -> .env")
+		} else {
+			cprint.Print(fmt.Sprintf("  - %s -> .env.%s", env, env))
+		}
 	}
 
 	cprint.Print("")
