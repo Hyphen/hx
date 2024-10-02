@@ -17,17 +17,28 @@ var (
 
 var CreateCmd = &cobra.Command{
 	Use:   "create <app name>",
-	Short: "Create a new app",
-	Long: `The 'hyphen app create' command creates a new app within your organization.
+	Short: "Create a new application in Hyphen",
+	Long: `
+The create command sets up a new application in Hyphen.
 
-You need to provide an app name as a positional argument. Optionally, you can specify a custom app ID using the '--id' flag. If no app ID is provided, a default ID will be generated based on the app name.
+Usage:
+  hyphen create <app name> [flags]
 
-Example usages:
-  hyphen app create MyApp
-  hyphen app create MyApp --id custom-app-id
+This command allows you to:
+- Create a new application with a specified name
+- Optionally provide a custom app ID or use an automatically generated one
+- Associate the new app with your current organization and project
 
-Flags:
-  --id, -i   Specify a custom app ID (optional)`,
+The app ID will be automatically generated based on the app name if not provided. 
+If the generated ID is invalid, you'll be prompted with a suggested valid ID.
+
+Example:
+  hyphen create "app"
+  hyphen create "app" --id my-custom-app-id
+
+After creation, you'll receive a summary of the new application, including its name, 
+ID, and associated organization.
+`,
 	Args: cobra.ExactArgs(1),
 	Run:  runCreate,
 }

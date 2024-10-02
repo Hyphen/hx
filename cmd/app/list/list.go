@@ -20,8 +20,28 @@ var (
 
 var ListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all applications associated with the organization and project",
-	Long:  `Retrieve and display a list of all applications associated with a specified organization ID.`,
+	Short: "List applications in your organization and project",
+	Long: `
+The list command retrieves and displays all applications associated with your organization and project.
+
+This command allows you to:
+- View all applications in your current organization and project
+- Control the number of results per page and which page to view
+- Choose between a detailed list view or a compact table view
+
+The command will display various details about each application, including:
+- Application details (name, alternate ID, and ID)
+- Organization information (ID and name)
+
+Examples:
+  hyphen app list
+  hyphen app list --page-size 20 --page 2
+  hyphen app list --table
+
+If no applications are found, you'll be informed accordingly.
+
+Use 'hyphen app list --help' for more information about available flags.
+`,
 	Run: func(cmd *cobra.Command, args []string) {
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {

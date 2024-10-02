@@ -12,9 +12,29 @@ import (
 var GetCmd = &cobra.Command{
 	Use:   "get <app name or id>",
 	Short: "Get an app",
-	Long:  `The 'hyphen app get' command retrieves details of an app within your organization.`,
-	Args:  cobra.ExactArgs(1),
-	Run:   runGet,
+	Long: `
+The get command retrieves details of an application within your organization.
+
+Usage:
+  hyphen app get <app name or id>
+
+This command allows you to:
+- Fetch detailed information about a specific application
+- Use either the application name or ID as the identifier
+
+The command will display various details about the application, including:
+- Project information (ID and name)
+- Application details (name, alternate ID, and ID)
+- Organization information (ID and name)
+
+Example:
+  hyphen app get my-app
+  hyphen app get app-123456
+
+After execution, you'll see a summary of the application's details.
+`,
+	Args: cobra.ExactArgs(1),
+	Run:  runGet,
 }
 
 func init() {

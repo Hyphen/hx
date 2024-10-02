@@ -13,8 +13,37 @@ import (
 
 var ProjectCreateCmd = &cobra.Command{
 	Use:   "create [name]",
-	Short: "Create a new project with the provided name",
-	Args:  cobra.ExactArgs(1),
+	Short: "Create a new project in your organization",
+	Long: `
+The project create command sets up a new project within your Hyphen organization.
+
+Usage:
+  hyphen project create [name]
+
+This command allows you to:
+- Create a new project with a specified name
+- Automatically generate an alternate ID based on the project name
+
+The project name:
+- Can include spaces and special characters
+- Will be trimmed of leading/trailing spaces and quotes
+
+The alternate ID:
+- Is automatically generated from the project name
+- Contains only alphanumeric characters and hyphens
+- Replaces spaces with hyphens and removes other special characters
+
+After creation, you'll receive a summary of the new project, including its:
+- Name
+- ID (assigned by Hyphen)
+- Alternate ID (generated from the name)
+
+Example:
+  hyphen project create "My New Project"
+
+This will create a project named "My New Project" with an alternate ID like "my-new-project".
+`,
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {

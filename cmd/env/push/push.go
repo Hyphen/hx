@@ -13,30 +13,24 @@ import (
 
 var PushCmd = &cobra.Command{
 	Use:   "push",
-	Short: "Upload and encrypt environment .env secrets for a specific environment",
+	Short: "Push local environment variables to Hyphen",
 	Long: `
-Push and encrypt environment .env secrets for a specific application environment.
+The push command uploads local environment variables from .env files to Hyphen.
 
-This command reads the local .env file corresponding to the specified environment
-(e.g., dev, staging, prod), encrypts the variables using the application's secret key,
-and uploads them to the specified environment in the Hyphen platform.
+This command allows you to:
+- Push a specific environment by name
+- Push all environments found in local .env files
+- Encrypt and securely store your environment variables in Hyphen
 
-Usage:
-  hyphen push [flags]
+The command looks for .env files in the current directory with the naming convention .env.[environment_name].
 
-Flags:
-  --environment string    Specify the environment to push to (e.g., dev, staging, prod)
-  --org string    Specify the organization ID (overrides the default from credentials)
+Note: Pushing the default environment (plain .env file) is not yet implemented.
 
-If no environment is specified, it defaults to the "default" environment.
-The organization ID is taken from the credentials file if not provided via flag.
+Examples:
+  hyphen push -e production
+  hyphen push --all
 
-Example:
-  hyphen push --env production
-
-Note: This command will overwrite existing environment variables in the specified
-environment on the Hyphen platform. Make sure you have the necessary permissions
-and have reviewed the changes before pushing.
+After pushing, all environment variables will be securely stored in Hyphen and available for use across your project.
 `,
 	Run: func(cmd *cobra.Command, args []string) {
 		service := newService(env.NewService())

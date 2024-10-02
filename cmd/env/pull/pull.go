@@ -13,27 +13,25 @@ import (
 
 var PullCmd = &cobra.Command{
 	Use:   "pull",
-	Short: "Retrieve and decrypt .env secrets for a specific environment",
+	Short: "Pull and decrypt environment variables from Hyphen",
 	Long: `
-Pull and decrypt environment .env secrets for a specific application environment.
+The pull command retrieves environment variables from Hyphen and decrypts them into local .env files.
 
-This command retrieves the encrypted environment variables from the specified
-environment (e.g., dev, staging, prod) and decrypts them using the application's
-secret key. The decrypted variables are then saved to a local .env file corresponding
-to the environment name.
+This command allows you to:
+- Pull a specific environment by name
+- Pull all environments for the application
+- Decrypt the pulled variables using your local secret key
+- Save the decrypted variables into corresponding .env files
 
-Usage:
-  hyphen pull [flags]
+The pulled environments will be saved as .env.[environment_name] files in your current directory.
 
-Flags:
-  --environment string    Specify the environment to pull from (e.g., dev, staging, prod)
-  --org string    Specify the organization ID (overrides the default from credentials)
+Note: Pulling the default environment is not yet implemented. Use --all to pull all environments or -e [environment] to pull a specific one.
 
-If no environment is specified, it defaults to the "default" environment.
-The organization ID is taken from the credentials file if not provided via flag.
+Examples:
+  hyphen pull -e production
+  hyphen pull --all
 
-Example:
-  hyphen pull --env staging
+After pulling, all environment variables will be locally available and ready for use.
 `,
 	Run: func(cmd *cobra.Command, args []string) {
 		service := newService(env.NewService())
