@@ -32,7 +32,7 @@ func (hc *HyphenClient) Do(req *http.Request) (*http.Response, error) {
 	if apiKey == nil {
 		token, err := hc.oauthService.GetValidToken()
 		if err != nil {
-			return nil, errors.Wrap(err, "Failed to authenticate. Please check your credentials and try again.")
+			return nil, errors.Wrap(err, "Failed to authenticate. Please authenticate with `auth` and try again.")
 		}
 		req.Header.Set("Authorization", "Bearer "+token)
 	} else {

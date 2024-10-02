@@ -131,7 +131,7 @@ func TestErrorHandling(t *testing.T) {
 		expectedErrMsg string
 	}{
 		{"BadRequest", http.StatusBadRequest, "Invalid input", "bad request: Invalid input"},
-		{"Unauthorized", http.StatusUnauthorized, "", "unauthorized: please check your credentials"},
+		{"Unauthorized", http.StatusUnauthorized, "", "unauthorized: please authenticate with `auth` and try again"},
 		{"Forbidden", http.StatusForbidden, "", "forbidden: you don't have permission to perform this action"},
 		{"NotFound", http.StatusNotFound, "", "not found: the requested resource does not exist"},
 		{"Conflict", http.StatusConflict, "Resource already exists", "conflict: Resource already exists"},

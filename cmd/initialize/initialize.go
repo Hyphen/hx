@@ -140,36 +140,50 @@ func runInit(cmd *cobra.Command, args []string) {
 	for _, e := range environments {
 		envName := strings.ToLower(e.Name)
 		envID := e.ID
-		envFileName := fmt.Sprintf(".env.%s", envName)
-		err := createGitignoredFile(cmd, envFileName)
+		err = createAndPushEmptyEnvFile(cmd, envService, m, orgID, newApp.ID, envID, envName)
 		if err != nil {
-			return
-		}
-
-		// Build an Env struct from that new empty file
-		envStruct, err := env.GetLocalEnv(envName, m)
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		if err := envService.PutEnvironmentEnv(orgID, newApp.ID, envID, envStruct); err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
 	}
 
-	// TODO -- we should actually push this up as an empty default as well.
-	err = createGitignoredFile(cmd, ".env")
+	err = createAndPushEmptyEnvFile(cmd, envService, m, orgID, newApp.ID, "default", "default")
 	if err != nil {
+		cprint.Error(cmd, err)
 		return
 	}
+
 	err = createGitignoredFile(cmd, ".env.local")
 	if err != nil {
 		return
 	}
 
 	printInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
+}
+
+func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, manifest manifest.Manifest, orgID, appID, envID, envName string) error {
+	envFileName := fmt.Sprintf(".env.%s", envName)
+
+	if envName == "default" {
+		envFileName = ".env"
+	}
+
+	err := createGitignoredFile(cmd, envFileName)
+	if err != nil {
+		return err
+	}
+
+	// Build an Env struct from that new empty file
+	envStruct, err := env.GetLocalEnv(envName, manifest)
+	if err != nil {
+		return err
+	}
+
+	if err := envService.PutEnvironmentEnv(orgID, appID, envID, envStruct); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func createGitignoredFile(cmd *cobra.Command, fileName string) error {

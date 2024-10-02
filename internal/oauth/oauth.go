@@ -35,7 +35,7 @@ type TokenResponse struct {
 
 var errorMessages = map[int]string{
 	http.StatusBadRequest:          "Bad request. Please check the request parameters and try again.",
-	http.StatusUnauthorized:        "Unauthorized. Please check your credentials and try again.",
+	http.StatusUnauthorized:        "Unauthorized. Please authenticate with `auth` and try again.",
 	http.StatusInternalServerError: "Internal server error. Please try again later.",
 }
 
