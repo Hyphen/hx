@@ -24,8 +24,6 @@ This command allows you to:
 
 The command looks for .env files in the current directory with the naming convention .env.[environment_name].
 
-Note: Pushing the default environment (plain .env file) is not yet implemented.
-
 Examples:
   hyphen push -e production
   hyphen push --all
@@ -110,13 +108,7 @@ func newService(envService env.EnvServicer) *service {
 }
 
 func (s *service) putEnv(orgId, envName, appId string, e env.Env) error {
-	if envName == "default" {
-		// TODO: This endpoint doesn't yet exist
-		fmt.Print("pushing default not yet implemented")
-		return nil
-	}
-
-	if err := s.envService.PutEnv(orgId, appId, envName, e); err != nil {
+	if err := s.envService.PutEnvironmentEnv(orgId, appId, envName, e); err != nil {
 		return err
 	}
 	return nil

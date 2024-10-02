@@ -180,7 +180,7 @@ func TestEnvService_PutEnv(t *testing.T) {
 
 	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
 
-	err := service.PutEnv("org1", "app1", "env1", env)
+	err := service.PutEnvironmentEnv("org1", "app1", "env1", env)
 	assert.NoError(t, err)
 
 	mockHTTPClient.AssertExpectations(t)
@@ -203,7 +203,7 @@ func TestEnvService_GetEnv(t *testing.T) {
 
 	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
 
-	env, err := service.GetEnv("org1", "app1", "env1")
+	env, err := service.GetEnvironmentEnv("org1", "app1", "env1")
 	assert.NoError(t, err)
 	assert.Equal(t, expectedEnv, env)
 

@@ -153,7 +153,7 @@ func runInit(cmd *cobra.Command, args []string) {
 			return
 		}
 
-		if err := envService.PutEnv(orgID, newApp.ID, envID, envStruct); err != nil {
+		if err := envService.PutEnvironmentEnv(orgID, newApp.ID, envID, envStruct); err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
