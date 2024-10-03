@@ -283,6 +283,46 @@ func UpsertOrganizationID(organizationID string) error {
 	return nil
 }
 
+func UpsertGlobalOrganizationId(organizationID string) error {
+	globalDir := GetGlobalDirectory()
+	globalConfigFile := filepath.Join(globalDir, ManifestConfigFile)
+
+	var mconfig ManifestConfig
+
+	// Try to read existing global config
+	existingConfig, err := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
+	if err != nil && !os.IsNotExist(err) {
+		return errors.Wrap(err, "Error reading global config file")
+	}
+
+	// If config exists, use it; otherwise, create a new one
+	if err == nil {
+		mconfig = existingConfig
+	}
+
+	// Update or set the OrganizationId
+	mconfig.OrganizationId = organizationID
+
+	// Ensure the global directory exists
+	if err := FS.MkdirAll(globalDir, 0755); err != nil {
+		return errors.Wrap(err, "Failed to create global directory")
+	}
+
+	// Marshal the updated config to JSON
+	jsonData, err := json.MarshalIndent(mconfig, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "Error encoding JSON")
+	}
+
+	// Write the updated config to the global file
+	err = FS.WriteFile(globalConfigFile, jsonData, 0644)
+	if err != nil {
+		return errors.Wrapf(err, "Error writing file: %s", globalConfigFile)
+	}
+
+	return nil
+}
+
 func UpsertProjectID(projectID string) error {
 	var mconfig ManifestConfig
 	var hasConfig bool
@@ -337,6 +377,46 @@ func UpsertProjectID(projectID string) error {
 	err = FS.WriteFile(configFile, jsonData, 0644)
 	if err != nil {
 		return errors.Wrapf(err, "Error writing file: %s", configFile)
+	}
+
+	return nil
+}
+
+func UpsertGlobalProjectId(projectID string) error {
+	globalDir := GetGlobalDirectory()
+	globalConfigFile := filepath.Join(globalDir, ManifestConfigFile)
+
+	var mconfig ManifestConfig
+
+	// Try to read existing global config
+	existingConfig, err := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
+	if err != nil && !os.IsNotExist(err) {
+		return errors.Wrap(err, "Error reading global config file")
+	}
+
+	// If config exists, use it; otherwise, create a new one
+	if err == nil {
+		mconfig = existingConfig
+	}
+
+	// Update or set the ProjectId
+	mconfig.ProjectId = &projectID
+
+	// Ensure the global directory exists
+	if err := FS.MkdirAll(globalDir, 0755); err != nil {
+		return errors.Wrap(err, "Failed to create global directory")
+	}
+
+	// Marshal the updated config to JSON
+	jsonData, err := json.MarshalIndent(mconfig, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "Error encoding JSON")
+	}
+
+	// Write the updated config to the global file
+	err = FS.WriteFile(globalConfigFile, jsonData, 0644)
+	if err != nil {
+		return errors.Wrapf(err, "Error writing file: %s", globalConfigFile)
 	}
 
 	return nil
