@@ -96,14 +96,16 @@ func runInit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	response := prompt.PromptYesNo(cmd, "Config file exists. Do you want to overwrite it?", false)
-	if manifest.ExistsLocal() && !response.Confirmed {
-		if response.IsFlag {
-			cprint.Info("Operation cancelled due to --no flag.")
-		} else {
-			cprint.Info("Operation cancelled.")
+	if manifest.ExistsLocal() {
+		response := prompt.PromptYesNo(cmd, "Config file exists. Do you want to overwrite it?", false)
+		if !response.Confirmed {
+			if response.IsFlag {
+				cprint.Info("Operation cancelled due to --no flag.")
+			} else {
+				cprint.Info("Operation cancelled.")
+			}
+			return
 		}
-		return
 	}
 
 	m, err := manifest.Restore()
