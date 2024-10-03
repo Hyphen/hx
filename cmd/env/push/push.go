@@ -12,7 +12,7 @@ import (
 )
 
 var PushCmd = &cobra.Command{
-	Use:   "push",
+	Use:   "push [environment]",
 	Short: "Push local environment variables to Hyphen",
 	Long: `
 The push command uploads local environment variables from .env files to Hyphen.
@@ -25,11 +25,12 @@ This command allows you to:
 The command looks for .env files in the current directory with the naming convention .env.[environment_name].
 
 Examples:
-  hyphen push -e production
+  hyphen push production
   hyphen push --all
 
 After pushing, all environment variables will be securely stored in Hyphen and available for use across your project.
 `,
+	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		service := newService(env.NewService())
 
@@ -57,15 +58,9 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 			return
 		}
 
-		envName, err := env.GetEnvironmentID()
-		if err != nil {
-			cmd.PrintErrf("Error: %s\n", err)
-			return
-		}
-
 		var envs []string
-		if envName != "" && envName != "default" {
-			envs = append(envs, envName)
+		if len(args) == 1 && args[0] != "default" {
+			envs = append(envs, args[0])
 		} else if flags.AllFlag {
 			envs, err = service.getLocalEnvsNamesFromFiles()
 			if err != nil {

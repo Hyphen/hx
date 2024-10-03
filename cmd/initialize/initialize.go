@@ -43,8 +43,6 @@ Examples:
   hyphen init
   hyphen init "My New App"
   hyphen init "My New App" --id my-custom-app-id
-
-Use 'hyphen init --help' for more information about available flags.
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run:  runInit,
@@ -74,9 +72,20 @@ func runInit(cmd *cobra.Command, args []string) {
 		}
 
 		appName = filepath.Base(cwd)
-		if !prompt.PromptYesNo(cmd, fmt.Sprintf("Use the current directory name '%s' as the app name?", appName), true) {
-			cprint.Info("Operation cancelled.")
-			return
+		response := prompt.PromptYesNo(cmd, fmt.Sprintf("Use the current directory name '%s' as the app name?", appName), true)
+		if !response.Confirmed {
+			if response.IsFlag {
+				cprint.Info("Operation cancelled due to --no flag.")
+				return
+			} else {
+				// Prompt for a new app name
+				fmt.Print("What would you like the app name to be? ")
+				fmt.Scanln(&appName)
+				if appName == "" {
+					cprint.Info("No app name provided. Operation cancelled.")
+					return
+				}
+			}
 		}
 	} else {
 		appName = args[0]
@@ -87,8 +96,13 @@ func runInit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	if manifest.ExistsLocal() && !prompt.PromptYesNo(cmd, "Config file exists. Do you want to overwrite it?", false) {
-		cprint.Info("Operation cancelled.")
+	response := prompt.PromptYesNo(cmd, "Config file exists. Do you want to overwrite it?", false)
+	if manifest.ExistsLocal() && !response.Confirmed {
+		if response.IsFlag {
+			cprint.Info("Operation cancelled due to --no flag.")
+		} else {
+			cprint.Info("Operation cancelled.")
+		}
 		return
 	}
 
@@ -215,11 +229,27 @@ func getAppID(cmd *cobra.Command, appName string) string {
 	err := app.CheckAppId(appAlternateId)
 	if err != nil {
 		suggestedID := strings.TrimSpace(strings.Split(err.Error(), ":")[1])
-		if !prompt.PromptYesNo(cmd, fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]?", suggestedID), true) {
-			cprint.Info("Operation cancelled.")
-			return ""
+		response := prompt.PromptYesNo(cmd, fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]?", suggestedID), true)
+
+		if !response.Confirmed {
+			if response.IsFlag {
+				cprint.Info("Operation cancelled due to --no flag.")
+				return ""
+			} else {
+				// Prompt for a custom app ID
+				for {
+					fmt.Print("Enter a custom app ID: ")
+					fmt.Scanln(&appAlternateId)
+					err := app.CheckAppId(appAlternateId)
+					if err == nil {
+						return appAlternateId
+					}
+					cprint.Warning("Invalid app ID. Please try again.")
+				}
+			}
+		} else {
+			appAlternateId = suggestedID
 		}
-		appAlternateId = suggestedID
 	}
 	return appAlternateId
 }

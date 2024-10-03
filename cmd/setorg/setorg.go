@@ -4,8 +4,13 @@ import (
 	"fmt"
 
 	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/spf13/cobra"
+)
+
+var (
+	globalFlag bool
 )
 
 var SetOrgCmd = &cobra.Command{
@@ -15,19 +20,57 @@ var SetOrgCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		orgID := args[0]
-		err := manifest.UpsertOrganizationID(orgID)
+		var err error
+
+		projectService := projects.NewService(orgID)
+		projectList, err := projectService.ListProjects()
+		if err != nil {
+			return err
+		}
+		if len(projectList) == 0 {
+			return fmt.Errorf("no projects found")
+		}
+		defaultProject := projectList[0]
+
+		if globalFlag {
+			err = manifest.UpsertGlobalOrganizationID(orgID)
+		} else {
+			err = manifest.UpsertOrganizationID(orgID)
+		}
 		if err != nil {
 			return fmt.Errorf("failed to update organization ID: %w", err)
 		}
-		printOrgUpdateSuccess(orgID)
+
+		if globalFlag {
+			err = manifest.UpsertGlobalProjectID(*defaultProject.ID)
+		} else {
+			err = manifest.UpsertProjectID(*defaultProject.ID)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to update project ID: %w", err)
+		}
+
+		printOrgUpdateSuccess(orgID, globalFlag)
 		return nil
 	},
 }
 
-func printOrgUpdateSuccess(orgID string) {
+func init() {
+	SetOrgCmd.Flags().BoolVar(&globalFlag, "global", false, "Set the organization ID globally")
+}
+
+func printOrgUpdateSuccess(orgID string, isGlobal bool) {
 	cprint.PrintHeader("--- Organization Update ---")
-	cprint.Success("Successfully updated organization ID")
+	if isGlobal {
+		cprint.Success("Successfully updated global organization ID")
+	} else {
+		cprint.Success("Successfully updated organization ID")
+	}
 	cprint.PrintDetail("New Organization ID", orgID)
 	fmt.Println()
-	cprint.GreenPrint("Hyphen CLI is now set to use the new organization.")
+	if isGlobal {
+		cprint.GreenPrint("Hyphen CLI is now set to use the new organization globally.")
+	} else {
+		cprint.GreenPrint("Hyphen CLI is now set to use the new organization.")
+	}
 }

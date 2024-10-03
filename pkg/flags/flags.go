@@ -10,4 +10,5 @@ var (
 	ApiKeyFlag       string
 	AllFlag          bool
 	VerboseFlag      bool
+	DevFlag          bool
 )

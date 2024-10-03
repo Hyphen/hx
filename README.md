@@ -1,8 +1,7 @@
 # Hyphen CLI Command Reference
 
 ## Env variables
--   `HYPHEN_CUSTOM_AUTH`: this should be the dev base URL, example: `https://dev-auth.hyphen.ai`
--   `HYPHEN_CUSTOM_APIX`: this should be the dev base URL, example: `https://dev-api.hyphen.ai`
+- `HYPHEN_DEV`: set to `true` if you wish to interact against the Hyphen dev environment. You can also use `--dev`, but it would be required with each command.
 
 ## Installation
 **Linux/MacOS**

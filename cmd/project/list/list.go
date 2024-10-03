@@ -12,6 +12,7 @@ import (
 var ProjectListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all projects",
+	Args:  cobra.NoArgs,
 	Long: `
 The project list command retrieves and displays all projects associated with your Hyphen organization.
 

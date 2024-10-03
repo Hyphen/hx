@@ -11,6 +11,7 @@ var Version string
 var VersionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of Hyphen",
+	Args:  cobra.NoArgs,
 	Long:  `All software has versions. This is Hyphen's`,
 	Run: func(cmd *cobra.Command, args []string) {
 		printVersionInfo()

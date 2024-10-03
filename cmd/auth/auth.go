@@ -15,6 +15,7 @@ import (
 var AuthCmd = &cobra.Command{
 	Use:   "auth",
 	Short: "Authenticate with Hyphen",
+	Args:  cobra.NoArgs,
 	Long:  `Authenticate and set up credentials for the Hyphen CLI.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := login(); err != nil {

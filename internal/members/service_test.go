@@ -22,11 +22,11 @@ func (m *MockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 func TestNewService(t *testing.T) {
-	os.Setenv("HYPHEN_CUSTOM_APIX", "https://custom-api.example.com")
-	defer os.Unsetenv("HYPHEN_CUSTOM_APIX")
+	os.Setenv("HYPHEN_DEV", "true")
+	defer os.Unsetenv("HYPHEN_DEV")
 
 	service := NewService()
-	assert.Equal(t, "https://custom-api.example.com", service.baseUrl)
+	assert.Equal(t, "https://dev-api.hyphen.ai", service.baseUrl)
 	assert.NotNil(t, service.httpClient)
 }
 

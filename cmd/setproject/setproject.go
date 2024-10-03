@@ -8,6 +8,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	globalFlag bool
+)
+
 var SetProjectCmd = &cobra.Command{
 	Use:   "set-project <id>",
 	Short: "Set the project ID",
@@ -15,19 +19,38 @@ var SetProjectCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectID := args[0]
-		err := manifest.UpsertProjectID(projectID)
+		var err error
+
+		if globalFlag {
+			err = manifest.UpsertGlobalProjectID(projectID)
+		} else {
+			err = manifest.UpsertProjectID(projectID)
+		}
+
 		if err != nil {
 			return fmt.Errorf("failed to update project ID: %w", err)
 		}
-		printProjectUpdateSuccess(projectID)
+		printProjectUpdateSuccess(projectID, globalFlag)
 		return nil
 	},
 }
 
-func printProjectUpdateSuccess(projectID string) {
+func init() {
+	SetProjectCmd.Flags().BoolVar(&globalFlag, "global", false, "Set the project ID globally")
+}
+
+func printProjectUpdateSuccess(projectID string, isGlobal bool) {
 	cprint.PrintHeader("--- Project Update ---")
-	cprint.Success("Successfully updated project ID")
+	if isGlobal {
+		cprint.Success("Successfully updated global project ID")
+	} else {
+		cprint.Success("Successfully updated project ID")
+	}
 	cprint.PrintDetail("New Project ID", projectID)
 	fmt.Println()
-	cprint.GreenPrint("Hyphen CLI is now set to use the new project.")
+	if isGlobal {
+		cprint.GreenPrint("Hyphen CLI is now set to use the new project globally.")
+	} else {
+		cprint.GreenPrint("Hyphen CLI is now set to use the new project.")
+	}
 }
