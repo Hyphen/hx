@@ -22,7 +22,7 @@ var SetProjectCmd = &cobra.Command{
 		var err error
 
 		if globalFlag {
-			err = manifest.UpsertGlobalProjectId(projectID)
+			err = manifest.UpsertGlobalProjectID(projectID)
 		} else {
 			err = manifest.UpsertProjectID(projectID)
 		}
