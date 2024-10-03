@@ -283,7 +283,7 @@ func UpsertOrganizationID(organizationID string) error {
 	return nil
 }
 
-func UpsertGlobalOrganizationId(organizationID string) error {
+func UpsertGlobalOrganizationID(organizationID string) error {
 	globalDir := GetGlobalDirectory()
 	globalConfigFile := filepath.Join(globalDir, ManifestConfigFile)
 
@@ -382,7 +382,7 @@ func UpsertProjectID(projectID string) error {
 	return nil
 }
 
-func UpsertGlobalProjectId(projectID string) error {
+func UpsertGlobalProjectID(projectID string) error {
 	globalDir := GetGlobalDirectory()
 	globalConfigFile := filepath.Join(globalDir, ManifestConfigFile)
 
