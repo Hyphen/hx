@@ -90,9 +90,24 @@ func getAppID(cmd *cobra.Command, appName string) string {
 	err := app.CheckAppId(appAlternateId)
 	if err != nil {
 		suggestedID := strings.TrimSpace(strings.Split(err.Error(), ":")[1])
-		if !prompt.PromptYesNo(cmd, fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]?", suggestedID), true) {
-			cprint.Info("Operation cancelled.")
+		response := prompt.PromptYesNo(cmd, fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]?", suggestedID), true)
+
+		if response.IsFlag && !response.Confirmed {
+			cprint.Info("Operation cancelled due to --no flag.")
 			return ""
+		}
+
+		if !response.Confirmed {
+			var customID string
+			for {
+				fmt.Print("Enter a custom app ID: ")
+				fmt.Scanln(&customID)
+				err := app.CheckAppId(customID)
+				if err == nil {
+					return customID
+				}
+				cprint.Warning("Invalid app ID. Please try again.")
+			}
 		}
 		appAlternateId = suggestedID
 	}
