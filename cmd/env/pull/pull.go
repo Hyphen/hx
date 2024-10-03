@@ -12,7 +12,7 @@ import (
 )
 
 var PullCmd = &cobra.Command{
-	Use:   "pull",
+	Use:   "pull [environment]",
 	Short: "Pull and decrypt environment variables from Hyphen",
 	Long: `
 The pull command retrieves environment variables from Hyphen and decrypts them into local .env files.
@@ -26,11 +26,12 @@ This command allows you to:
 The pulled environments will be saved as .env.[environment_name] files in your current directory.
 
 Examples:
-  hyphen pull -e production
+  hyphen pull production
   hyphen pull --all
 
 After pulling, all environment variables will be locally available and ready for use.
 `,
+	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		service := newService(env.NewService())
 
@@ -58,10 +59,9 @@ After pulling, all environment variables will be locally available and ready for
 			return
 		}
 
-		envName, err := env.GetEnvironmentID()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
+		var envName string
+		if len(args) == 1 {
+			envName = args[0]
 		}
 
 		if flags.AllFlag {
@@ -76,12 +76,12 @@ After pulling, all environment variables will be locally available and ready for
 		}
 
 		if envName == "" || envName == "default" {
-			if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey()); err != nil {
+			if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey()); err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
 
-			printPullSummary(appId, []string{envName})
+			printPullSummary(appId, []string{"default"})
 		} else { // we have a specific env name
 			err = service.checkForEnvironment(orgId, envName, projectId)
 			if err != nil {
@@ -95,7 +95,6 @@ After pulling, all environment variables will be locally available and ready for
 
 			printPullSummary(appId, []string{envName})
 		}
-
 	},
 }
 
