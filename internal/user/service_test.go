@@ -91,29 +91,29 @@ func TestUserService_GetUserInformation(t *testing.T) {
 }
 
 func TestNewService(t *testing.T) {
-	originalEnv := os.Getenv("HYPHEN_CUSTOM_APIX")
-	defer os.Setenv("HYPHEN_CUSTOM_APIX", originalEnv)
+	originalDev := os.Getenv("HYPHEN_DEV")
+	defer os.Setenv("HYPHEN_DEV", originalDev)
 
 	tests := []struct {
 		name            string
-		customAPIValue  string
+		customDevValue  string
 		expectedBaseURL string
 	}{
 		{
 			name:            "Default base URL",
-			customAPIValue:  "",
+			customDevValue:  "",
 			expectedBaseURL: "https://api.hyphen.ai",
 		},
 		{
 			name:            "Custom base URL",
-			customAPIValue:  "https://custom-api.hyphen.ai",
-			expectedBaseURL: "https://custom-api.hyphen.ai",
+			customDevValue:  "true",
+			expectedBaseURL: "https://dev-api.hyphen.ai",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("HYPHEN_CUSTOM_APIX", tt.customAPIValue)
+			os.Setenv("HYPHEN_DEV", tt.customDevValue)
 			service := NewService()
 			userService, ok := service.(*UserService)
 			assert.True(t, ok, "Expected *user.UserService")

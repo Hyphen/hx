@@ -20,9 +20,7 @@ import (
 )
 
 var (
-	clientID    = "8d5fb36d-2886-4c53-ab70-e6203e781fbc"
 	redirectURI = "http://localhost:5001/token"
-	secretKey   = "klUG3PV9lmeddshcKJEf5YTDXl"
 )
 
 type TokenResponse struct {
@@ -66,6 +64,7 @@ var _ OAuthServicer = (*OAuthService)(nil)
 
 type OAuthService struct {
 	baseUrl       string
+	clientID      string
 	httpClient    HTTPClient
 	timeProvider  TimeProvider
 	browserOpener BrowserOpener
@@ -77,12 +76,14 @@ func DefaultOAuthService() *OAuthService {
 
 func NewOAuthService(httpClient HTTPClient, timeProvider TimeProvider, browserOpener BrowserOpener) *OAuthService {
 	baseUrl := apiconf.GetBaseAuthUrl()
+	clientID := apiconf.GetAuthClientID()
 
 	return &OAuthService{
-		baseUrl:       baseUrl,
-		httpClient:    httpClient,
-		timeProvider:  timeProvider,
-		browserOpener: browserOpener,
+		baseUrl,
+		clientID,
+		httpClient,
+		timeProvider,
+		browserOpener,
 	}
 }
 
@@ -107,8 +108,8 @@ func (s *OAuthService) exchangeCodeForToken(code, codeVerifier string) (*TokenRe
 
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
-	data.Set("client_id", clientID)
-	data.Set("client_secret", secretKey)
+
+	data.Set("client_id", s.clientID)
 	data.Set("code_verifier", codeVerifier)
 	data.Set("code", code)
 	data.Set("redirect_uri", redirectURI)
@@ -176,12 +177,16 @@ func (s *OAuthService) StartOAuthServer() (*TokenResponse, error) {
 
 	query := authURL.Query()
 	query.Set("response_type", "code")
-	query.Set("client_id", clientID)
+	query.Set("client_id", s.clientID)
 	query.Set("redirect_uri", redirectURI)
 	query.Set("code_challenge", codeChallenge)
 	query.Set("code_challenge_method", "S256")
 	query.Set("scope", "openid offline_access")
-	query.Set("state", "random_state")
+
+	// Generate a random base64-encoded string to be state. It's unused but required.
+	state := make([]byte, 32)
+	_, _ = rand.Read(state)
+	query.Set("state", base64.RawURLEncoding.EncodeToString(state))
 
 	authURL.RawQuery = query.Encode()
 
@@ -308,8 +313,7 @@ func (s *OAuthService) RefreshToken(refreshToken string) (*TokenResponse, error)
 
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
-	data.Set("client_id", clientID)
-	data.Set("client_secret", secretKey)
+	data.Set("client_id", s.clientID)
 	data.Set("refresh_token", refreshToken)
 
 	req, err := http.NewRequest("POST", tokenURL, bytes.NewBufferString(data.Encode()))
