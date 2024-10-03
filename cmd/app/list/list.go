@@ -42,6 +42,7 @@ If no applications are found, you'll be informed accordingly.
 
 Use 'hyphen app list --help' for more information about available flags.
 `,
+	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
