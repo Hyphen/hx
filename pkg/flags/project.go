@@ -16,7 +16,7 @@ func GetProjectID() (string, error) {
 	}
 
 	if manifest.ProjectId == nil {
-		return "", errors.New("No Project ID provided and no default found in manifest")
+		return "", errors.New("No Project ID provided and no default found in .hx file")
 	}
 
 	return *manifest.ProjectId, nil

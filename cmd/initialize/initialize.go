@@ -115,7 +115,7 @@ func runInit(cmd *cobra.Command, args []string) {
 	}
 
 	if m.ProjectId == nil {
-		cprint.Error(cmd, fmt.Errorf("no project found in Manifest"))
+		cprint.Error(cmd, fmt.Errorf("No project found in .hx file"))
 		return
 	}
 
