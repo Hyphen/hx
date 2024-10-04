@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"dario.cat/mergo"
 	"github.com/Hyphen/cli/internal/secretkey"
@@ -15,15 +14,7 @@ import (
 
 var FS fsutil.FileSystem = fsutil.NewFileSystem()
 
-type configProvider interface {
-	GetConfigDirectory() string
-}
-
-type defaultConfigProvider struct{}
-
 var (
-	WindowsConfigPath  = "Hyphen"
-	UnixConfigPath     = ".hyphen"
 	ManifestConfigFile = ".hx"
 	ManifestSecretFile = ".hxkey"
 )
@@ -69,17 +60,12 @@ func GlobalInitialize(mc ManifestConfig) (Manifest, error) {
 }
 
 func GetGlobalDirectory() string {
-	switch runtime.GOOS {
-	case "windows":
-		return filepath.Join(os.Getenv("APPDATA"), WindowsConfigPath)
-	default:
-		home, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Println("Error retrieving home directory:", err)
-			return ""
-		}
-		return filepath.Join(home, UnixConfigPath)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Println("Error retrieving home directory:", err)
+		return ""
 	}
+	return home
 }
 
 func UpsertGlobalManifest(m Manifest) error {
