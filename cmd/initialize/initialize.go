@@ -135,7 +135,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		AppId:              &newApp.ID,
 	}
 
-	_, err = manifest.LocalInitialize(mcl)
+	m, err = manifest.LocalInitialize(mcl)
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
@@ -204,14 +204,11 @@ func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 
 func createGitignoredFile(cmd *cobra.Command, fileName string) error {
 	// check if the file already exists.
-	if _, err := os.Stat(fileName); err == nil {
-		// do not recreate. file exists already.
-	} else {
-		if _, err := os.Create(fileName); err != nil {
-			cprint.Error(cmd, fmt.Errorf("error creating %s: %w", fileName, err))
-			return err
-		}
+	e := env.Env{
+		Data: "EXAMPLE=Test",
 	}
+
+	e.SaveToFile(fileName)
 
 	if err := ensureGitignore(fileName); err != nil {
 		cprint.Error(cmd, fmt.Errorf("error adding %s to .gitignore: %w. Please do this manually if you wish", fileName, err))
