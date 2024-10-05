@@ -66,6 +66,7 @@ func (es *EnvService) GetEnvironment(organizationId, projectId, environmentId st
 }
 
 func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId string, env Env) error {
+	env.Version = nil
 	url := ""
 	if environmentId == "default" {
 		url = fmt.Sprintf("%s/api/organizations/%s/apps/%s/env", es.baseUrl, organizationId, appId)

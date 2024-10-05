@@ -40,7 +40,7 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 			return
 		}
 
-		prjectId, err := flags.GetProjectID()
+		projectId, err := flags.GetProjectID()
 		if err != nil {
 			cprint.Error(cmd, err)
 			return
@@ -58,6 +58,8 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 			return
 		}
 
+		key := manifest.GetSecretKey()
+
 		var envs []string
 		if len(args) == 1 && args[0] != "default" {
 			envs = append(envs, args[0])
@@ -72,20 +74,49 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 			envs = append(envs, "default")
 		}
 
-		if err := service.checkIfLocalEnvsExistAsEnvironments(envs, orgId, prjectId); err != nil {
+		if err := service.checkIfLocalEnvsExistAsEnvironments(envs, orgId, projectId); err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
+
 		for _, envName := range envs {
-			e, err := env.GetLocalEnv(envName, manifest)
+			localEnv, err := env.GetLocalEnv(envName, manifest)
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
-			if err := service.putEnv(orgId, envName, appId, e); err != nil {
+
+			remoteEnv, err := service.envService.GetEnvironmentEnv(orgId, appId, envName)
+			if err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
+
+			if remoteEnv.Version != nil && localEnv.Version != nil && *remoteEnv.Version > *localEnv.Version {
+				cprint.Warning(fmt.Sprintf("Local version (%d) of environment '%s' is older than the remote version (%d). Please pull the latest changes before pushing.", *localEnv.Version, envName, *remoteEnv.Version))
+				cprint.Print("Use 'hyphen pull' to update your local environment.")
+				return
+			}
+
+			localEnv.IncrementVersion()
+
+			if err := service.putEnv(orgId, envName, appId, localEnv); err != nil {
+				cprint.Error(cmd, err)
+				return
+			}
+
+			// Save the updated version locally
+			fileName, err := env.GetFileName(envName)
+			if err != nil {
+				cprint.Error(cmd, err)
+				return
+			}
+			if _, err := localEnv.DecryptVarsAndSaveIntoFile(fileName, key); err != nil {
+				cprint.Error(cmd, err)
+				return
+			}
+
+			fmt.Printf("Saved environment %s with version: %d\n", envName, *localEnv.Version)
 		}
 
 		printPushSummary(orgId, *manifest.AppId, envs)
