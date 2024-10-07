@@ -150,8 +150,12 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 	}
 
 	currentLocalSecret, exists := s.db.GetSecret(envName)
-	if exists && currentLocalSecret.Hash != currentLocal.HashData() && !force {
-		return fmt.Errorf("Local environment %s has been modified. Use --force to overwrite", envName) //TODO check if this should be a error
+	if exists {
+		actual := currentLocal.HashData()
+		expectedHash := currentLocalSecret.Hash
+		if actual != expectedHash && !force {
+			return fmt.Errorf("Local environment \"%s\" has been modified. Use --force to overwrite", envName) //TODO check if this should be a error
+		}
 	}
 
 	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName)
