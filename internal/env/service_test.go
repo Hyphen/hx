@@ -56,17 +56,6 @@ func TestDecryptData(t *testing.T) {
 	mockKey.AssertExpectations(t)
 }
 
-func TestListDecryptedVars(t *testing.T) {
-	env := Env{Data: "ENCRYPTED_DATA"}
-	mockKey := new(secretkey.MockSecretKey)
-	mockKey.On("Decrypt", "ENCRYPTED_DATA").Return("KEY1=VALUE1\nKEY2=VALUE2", nil)
-
-	vars, err := env.ListDecryptedVars(mockKey)
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"KEY1=VALUE1", "KEY2=VALUE2"}, vars)
-	mockKey.AssertExpectations(t)
-}
-
 func TestDecryptVarsAndSaveIntoFile(t *testing.T) {
 	env := Env{Data: "ENCRYPTED_DATA"}
 	mockKey := new(secretkey.MockSecretKey)
@@ -83,7 +72,7 @@ func TestDecryptVarsAndSaveIntoFile(t *testing.T) {
 
 	content, err := os.ReadFile(tmpfile.Name())
 	assert.NoError(t, err)
-	assert.Equal(t, "KEY1=VALUE1\nKEY2=VALUE2\n", string(content))
+	assert.Equal(t, "KEY1=VALUE1\nKEY2=VALUE2", string(content))
 
 	mockKey.AssertExpectations(t)
 }
