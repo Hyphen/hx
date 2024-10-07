@@ -12,6 +12,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	forceFlag bool
+)
+
 var PullCmd = &cobra.Command{
 	Use:   "pull [environment]",
 	Short: "Pull and decrypt environment variables from Hyphen",
@@ -41,13 +45,13 @@ After pulling, all environment variables will be locally available and ready for
 			return
 		}
 
-		database, err := database.Restore()
+		db, err := database.Restore()
 		if err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
 
-		service := newService(env.NewService(), database)
+		service := newService(env.NewService(), db)
 
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
@@ -73,7 +77,7 @@ After pulling, all environment variables will be locally available and ready for
 		}
 
 		if flags.AllFlag {
-			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey())
+			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey(), forceFlag)
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
@@ -84,7 +88,7 @@ After pulling, all environment variables will be locally available and ready for
 		}
 
 		if envName == "" || envName == "default" {
-			if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey()); err != nil {
+			if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey(), forceFlag); err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
@@ -96,7 +100,7 @@ After pulling, all environment variables will be locally available and ready for
 				cprint.Error(cmd, err)
 				return
 			}
-			if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey()); err != nil {
+			if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey(), forceFlag); err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
@@ -104,6 +108,10 @@ After pulling, all environment variables will be locally available and ready for
 			printPullSummary(appId, []string{envName})
 		}
 	},
+}
+
+func init() {
+	PullCmd.Flags().BoolVar(&forceFlag, "force", false, "Force overwrite of locally modified environment files")
 }
 
 type service struct {
@@ -130,20 +138,33 @@ func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
 	return nil
 }
 
-func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretKey *secretkey.SecretKey) error {
+func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretKey *secretkey.SecretKey, force bool) error {
+	envFile, err := env.GetFileName(envName)
+	if err != nil {
+		return err
+	}
+
+	currentLocal, err := env.New(envFile)
+	if err != nil {
+		return err
+	}
+
+	currentLocalSecret, exists := s.db.GetSecret(envName)
+	if exists && currentLocalSecret.Hash != currentLocal.HashData() && !force {
+		return fmt.Errorf("Local environment %s has been modified. Use --force to overwrite", envName) //TODO check if this should be a error
+	}
+
 	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName)
 	if err != nil {
 		return err
 	}
 
-	if err := s.db.SaveSecret(envName, e.Data, *e.Version); err != nil {
+	envDataDecrypted, err := e.DecryptData(secretKey)
+	if err != nil {
 		return err
 	}
 
-	//TODO: Add has logic and so on
-
-	envFile, err := env.GetFileName(envName)
-	if err != nil {
+	if err := s.db.SaveSecret(envName, envDataDecrypted, *e.Version); err != nil {
 		return err
 	}
 
@@ -154,7 +175,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 	return nil
 }
 
-func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *secretkey.SecretKey) ([]string, error) {
+func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *secretkey.SecretKey, force bool) ([]string, error) {
 	allEnvs, err := s.envService.ListEnvs(orgId, appId, 100, 1)
 	if err != nil {
 		return nil, err
@@ -165,7 +186,7 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 		if e.ProjectEnv != nil {
 			envName = e.ProjectEnv.AlternateID
 		}
-		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secretkey); err != nil {
+		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secretkey, force); err != nil {
 			return pulledEnvs, err
 		}
 		pulledEnvs = append(pulledEnvs, envName)

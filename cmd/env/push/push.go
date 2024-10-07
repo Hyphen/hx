@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
@@ -32,7 +34,19 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		service := newService(env.NewService())
+		manifest, err := manifest.Restore()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
+		db, err := database.Restore()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
+		service := newService(env.NewService(), db)
 
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
@@ -47,12 +61,6 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 		}
 
 		appId, err := flags.GetApplicationID()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		manifest, err := manifest.Restore()
 		if err != nil {
 			cprint.Error(cmd, err)
 			return
@@ -82,7 +90,7 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 				cprint.Error(cmd, err)
 				return
 			}
-			if err := service.putEnv(orgId, envName, appId, e); err != nil {
+			if err := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey()); err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
@@ -94,17 +102,64 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 
 type service struct {
 	envService env.EnvServicer
+	db         database.Database
 }
 
-func newService(envService env.EnvServicer) *service {
+func newService(envService env.EnvServicer, db database.Database) *service {
 	return &service{
 		envService,
+		db,
 	}
 }
 
-func (s *service) putEnv(orgId, envName, appId string, e env.Env) error {
-	if err := s.envService.PutEnvironmentEnv(orgId, appId, envName, e); err != nil {
+func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secretkey.SecretKeyer) error {
+	// Fetch current cloud environment
+	currentCloudEnv, err := s.envService.GetEnvironmentEnv(orgID, appID, envName)
+	if err != nil {
+		return fmt.Errorf("failed to get cloud environment: %w", err)
+	}
+
+	// Check local environment
+	currentLocalEnv, exists := s.db.GetSecret(envName)
+	if exists {
+		if err := s.validateLocalEnv(&currentLocalEnv, &currentCloudEnv, &e, secretKey); err != nil {
+			return err
+		}
+	}
+
+	// Update cloud environment
+	if err := s.envService.PutEnvironmentEnv(orgID, appID, envName, e); err != nil {
+		return fmt.Errorf("failed to update cloud environment: %w", err)
+	}
+
+	// Update local environment
+
+	newEnvDcrypted, err := e.DecryptData(secretKey)
+	if err != nil {
 		return err
+	}
+	if err := s.db.SaveSecret(envName, newEnvDcrypted, currentLocalEnv.Version+1); err != nil {
+		return fmt.Errorf("failed to save local environment: %w", err) // TODO: check if this should be and error
+	}
+
+	return nil
+}
+
+func (s *service) validateLocalEnv(local *database.Secret, cloud *env.Env, new *env.Env, secretKey secretkey.SecretKeyer) error {
+	//TODO: Check all this error messages
+	if local.Version > *cloud.Version {
+		return fmt.Errorf("local environment version (%d) is higher than cloud version (%d)", local.Version, *cloud.Version)
+	}
+
+	newEnvDcrypted, err := new.DecryptData(secretKey)
+	if err != nil {
+		return err
+	}
+	if local.Hash == env.HashData(newEnvDcrypted) {
+		return fmt.Errorf("local environment is identical to the new environment")
+	}
+	if local.Version < *cloud.Version {
+		return fmt.Errorf("local environment (version %d) is outdated compared to cloud (version %d)", local.Version, *cloud.Version)
 	}
 	return nil
 }

@@ -2,6 +2,8 @@ package env
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"regexp"
@@ -20,6 +22,19 @@ type Env struct {
 	Version        *int                `json:"version,omitempty"`
 	ProjectEnv     *ProjectEnvironment `json:"projectEnvironment,omitempty"`
 }
+
+// HashData returns the SHA256 hash of the environment data.
+func HashData(data string) string {
+	hash := sha256.New()
+	hash.Write([]byte(data))
+	hashSum := hash.Sum(nil)
+	return hex.EncodeToString(hashSum)
+}
+
+func (e *Env) HashData() string {
+	return HashData(e.Data)
+}
+
 type ProjectEnvironment struct {
 	ID          string `json:"id"`
 	AlternateID string `json:"alternateId"`
@@ -59,6 +74,16 @@ func New(fileName string) (Env, error) {
 	data.ProjectEnv = nil
 
 	return data, nil
+}
+
+func NewWithEncryptedData(fileName string, key secretkey.SecretKeyer) (Env, error) {
+	env, err := New(fileName)
+	if err != nil {
+		return Env{}, err
+	}
+	data, err := env.EncryptData(key)
+	env.Data = data
+	return env, nil
 }
 
 func (e *Env) EncryptData(key secretkey.SecretKeyer) (string, error) {

@@ -4,9 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
-
-	"os"
 
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/errors"
@@ -40,8 +37,9 @@ func (db *Database) GetSecret(env string) (Secret, bool) {
 	return secret, ok
 }
 
+// SaveSecret saves a secret to the Database.
+// Data will be hashed before saving
 func (db *Database) SaveSecret(env, data string, version int) error {
-	fmt.Fprintln(os.Stdout, []any{"Saving secret"}...)
 	if db.Secrets == nil {
 		db.Secrets = make(map[string]Secret)
 	}
