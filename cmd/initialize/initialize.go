@@ -178,13 +178,12 @@ func runInit(cmd *cobra.Command, args []string) {
 }
 
 func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, manifest manifest.Manifest, orgID, appID, envID, envName string) error {
-	envFileName := fmt.Sprintf(".env.%s", envName)
-
-	if envName == "default" {
-		envFileName = ".env"
+	envFileName, err := env.GetFileName(envName)
+	if err != nil {
+		return err
 	}
 
-	err := createGitignoredFile(cmd, envFileName)
+	err = createGitignoredFile(cmd, envFileName)
 	if err != nil {
 		return err
 	}
