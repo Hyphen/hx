@@ -3,6 +3,7 @@ package cprint
 import (
 	"fmt"
 
+	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -17,25 +18,45 @@ var (
 
 // Error prints an error message in red
 func Error(cmd *cobra.Command, err error) {
-	errorDetails := color.New(color.FgWhite).SprintFunc()
-	cmd.PrintErrf("%s %s\n", red("ERROR:"), errorDetails(err.Error()))
+	if flags.VerboseFlag {
+		errorDetails := color.New(color.FgWhite).SprintFunc()
+		cmd.PrintErrf("%s %s\n", red("ERROR:"), errorDetails(err.Error()))
+	} else {
+		fmt.Println("ERROR:", err.Error())
+	}
 }
 
-// Info prints an informational message with a cyan info symbol
+// Info prints an informational message
 func Info(message string) {
-	fmt.Printf("%s %s\n", cyan("ℹ"), white(message))
+	if flags.VerboseFlag {
+		fmt.Printf("%s %s\n", cyan("ℹ"), white(message))
+	} else {
+		fmt.Println(message)
+	}
 }
 
 func YellowPrint(message string) {
-	fmt.Printf("%s\n", yellow(message))
+	if flags.VerboseFlag {
+		fmt.Printf("%s\n", yellow(message))
+	} else {
+		fmt.Println(message)
+	}
 }
 
 func GreenPrint(message string) {
-	fmt.Printf("%s\n", green(message))
+	if flags.VerboseFlag {
+		fmt.Printf("%s\n", green(message))
+	} else {
+		fmt.Println(message)
+	}
 }
 
 func Print(message string) {
-	fmt.Printf("%s\n", white(message))
+	if flags.VerboseFlag {
+		fmt.Printf("%s\n", white(message))
+	} else {
+		fmt.Println(message)
+	}
 }
 
 // PrintNorm prints a normal message without any special formatting or symbols
@@ -43,33 +64,57 @@ func PrintNorm(message string) {
 	fmt.Println(message)
 }
 
-// Success prints a success message with a green checkmark
+// Success prints a success message
 func Success(message string) {
-	fmt.Printf("%s %s\n", green("✅"), white(message))
+	if flags.VerboseFlag {
+		fmt.Printf("%s %s\n", green("✅"), white(message))
+	} else {
+		fmt.Println(message)
+	}
 }
 
-// Warning prints a warning message in yellow
+// Warning prints a warning message
 func Warning(message string) {
-	fmt.Printf("%s %s\n", yellow("⚠"), white(message))
+	if flags.VerboseFlag {
+		fmt.Printf("%s %s\n", yellow("⚠"), white(message))
+	} else {
+		fmt.Println("WARNING:", message)
+	}
 }
 
 // OrganizationInfo prints organization information
 func OrganizationInfo(orgID string) {
-	fmt.Printf("\n%s\n", white("Organization Information:"))
-	fmt.Printf("  %s %s\n", white("ID:"), cyan(orgID))
+	if flags.VerboseFlag {
+		fmt.Printf("\n%s\n", white("Organization Information:"))
+		fmt.Printf("  %s %s\n", white("ID:"), cyan(orgID))
+	} else {
+		fmt.Println("Organization ID:", orgID)
+	}
 }
 
-// Prompt prints a prompt message in yellow
+// Prompt prints a prompt message
 func Prompt(message string) {
-	fmt.Print(yellow(message))
+	if flags.VerboseFlag {
+		fmt.Print(yellow(message))
+	} else {
+		fmt.Print(message)
+	}
 }
 
-// PrintHeader prints a header in yellow
+// PrintHeader prints a header
 func PrintHeader(message string) {
-	fmt.Printf("\n%s\n", yellow(message))
+	if flags.VerboseFlag {
+		fmt.Printf("\n%s\n", yellow(message))
+	} else {
+		fmt.Println(message)
+	}
 }
 
-// PrintDetail prints a detail line with a white label and cyan value
+// PrintDetail prints a detail line
 func PrintDetail(label, value string) {
-	fmt.Printf("   %s %s\n", white(label+":"), cyan(value))
+	if flags.VerboseFlag {
+		fmt.Printf("   %s %s\n", white(label+":"), cyan(value))
+	} else {
+		fmt.Printf("%s: %s\n", label, value)
+	}
 }
