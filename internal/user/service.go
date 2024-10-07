@@ -28,7 +28,7 @@ func NewService() UserServicer {
 }
 
 func (us *UserService) GetUserInformation() (UserInfo, error) {
-
+	// TODO - this needs to switch to useing /api/execution-context instead of /me. Lots of updates to make that happen.
 	req, err := http.NewRequest("GET", us.baseUrl+"/api/me/", nil)
 	if err != nil {
 		return UserInfo{}, errors.Wrap(err, "Failed to prepare the request. Please try again later.")
