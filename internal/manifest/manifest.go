@@ -20,17 +20,18 @@ var (
 )
 
 type ManifestConfig struct {
-	ProjectName        *string `json:"project_name,omitempty"`
-	ProjectId          *string `json:"project_id,omitempty"`
-	ProjectAlternateId *string `json:"project_alternate_id,omitempty"`
-	AppName            *string `json:"app_name,omitempty"`
-	AppId              *string `json:"app_id,omitempty"`
-	AppAlternateId     *string `json:"app_alternate_id,omitempty"`
-	OrganizationId     string  `json:"organization_id,omitempty"`
-	HyphenAccessToken  *string `json:"hyphen_access_token,omitempty"`
-	HyphenRefreshToken *string `json:"hyphen_refresh_token,omitempty"`
-	HypenIDToken       *string `json:"hyphen_id_token,omitempty"`
-	ExpiryTime         *int64  `json:"expiry_time,omitempty"`
+	ProjectName        *string     `json:"project_name,omitempty"`
+	ProjectId          *string     `json:"project_id,omitempty"`
+	ProjectAlternateId *string     `json:"project_alternate_id,omitempty"`
+	AppName            *string     `json:"app_name,omitempty"`
+	AppId              *string     `json:"app_id,omitempty"`
+	AppAlternateId     *string     `json:"app_alternate_id,omitempty"`
+	OrganizationId     string      `json:"organization_id,omitempty"`
+	HyphenAccessToken  *string     `json:"hyphen_access_token,omitempty"`
+	HyphenRefreshToken *string     `json:"hyphen_refresh_token,omitempty"`
+	HypenIDToken       *string     `json:"hyphen_id_token,omitempty"`
+	ExpiryTime         *int64      `json:"expiry_time,omitempty"`
+	Database           interface{} `json:"database,omitempty"`
 }
 
 type Manifest struct {

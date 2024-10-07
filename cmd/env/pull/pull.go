@@ -3,6 +3,7 @@ package pull
 import (
 	"fmt"
 
+	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/secretkey"
@@ -125,6 +126,12 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 	if err != nil {
 		return err
 	}
+
+	db, err := database.Restore()
+	if err != nil {
+		return err
+	}
+	db.SaveSecret(envName)
 
 	envFile, err := env.GetFileName(envName)
 	if err != nil {
