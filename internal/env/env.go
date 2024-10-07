@@ -55,9 +55,10 @@ func New(fileName string) (Env, error) {
 	countVariables := 0
 
 	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, "=") {
-			contentBuilder.WriteString(line + "\n")
+		line := strings.TrimSpace(scanner.Text())
+		contentBuilder.WriteString(line + "\n")
+
+		if isEnvVar(line) {
 			countVariables++
 		}
 	}
@@ -74,6 +75,14 @@ func New(fileName string) (Env, error) {
 	data.ProjectEnv = nil
 
 	return data, nil
+}
+
+func isEnvVar(line string) bool {
+	if line == "" || strings.HasPrefix(line, "#") {
+		return false // Ignore comments and empty lines
+	}
+	// Rough check: "key=value" format
+	return strings.Contains(line, "=")
 }
 
 func NewWithEncryptedData(fileName string, key secretkey.SecretKeyer) (Env, error) {
