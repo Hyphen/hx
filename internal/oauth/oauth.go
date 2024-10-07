@@ -350,6 +350,10 @@ func (s *OAuthService) GetValidToken() (string, error) {
 		return "", err
 	}
 
+	if m.ExpiryTime == nil || m.HyphenRefreshToken == nil {
+		return "", errors.New("You must authenticate. Run `hyphen auth` and try again.")
+	}
+
 	if s.IsTokenExpired(*m.ExpiryTime) {
 		tokenResponse, err := s.RefreshToken(*m.HyphenRefreshToken)
 		if err != nil {

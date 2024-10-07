@@ -134,7 +134,7 @@ func TestRestoreFromFile(t *testing.T) {
 	t.Run("No config files exist", func(t *testing.T) {
 		_, err := RestoreFromFile("non-existent-config.json", "non-existent-secret.json")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "No valid .hx found (neither global nor local). Please authenticate using `hx auth`")
+		assert.Contains(t, err.Error(), "No valid .hx found (neither global nor local). Please authenticate using `hyphen auth`")
 	})
 
 	t.Run("Invalid JSON content", func(t *testing.T) {
@@ -193,7 +193,7 @@ func TestRestore(t *testing.T) {
 		delete(mockFS.files, ManifestSecretFile)
 		_, err := Restore()
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "No valid .hx found (neither global nor local). Please authenticate using `hx auth`")
+		assert.Contains(t, err.Error(), "No valid .hx found (neither global nor local). Please authenticate using `hyphen auth`")
 	})
 }
 
