@@ -3,6 +3,10 @@ package database
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
+
+	"os"
 
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/errors"
@@ -36,10 +40,17 @@ func (db *Database) GetSecret(env string) (Secret, bool) {
 	return secret, ok
 }
 
-func (db *Database) SaveSecret(env, data string, version int) {
+func (db *Database) SaveSecret(env, data string, version int) error {
+	fmt.Fprintln(os.Stdout, []any{"Saving secret"}...)
+	if db.Secrets == nil {
+		db.Secrets = make(map[string]Secret)
+	}
+
 	secret := newSecret(data, version)
+
 	db.Secrets[env] = secret
-	Save(*db)
+
+	return Save(*db)
 }
 
 func Restore() (Database, error) {
@@ -47,20 +58,44 @@ func Restore() (Database, error) {
 	if err != nil {
 		return Database{}, err
 	}
+
+	// Check if the Database field is nil, and initialize if necessary
 	if m.Database == nil {
-		newDB := Database{}
+		// Initialize a new Database with an empty Secrets map
+		newDB := Database{
+			Secrets: make(map[string]Secret),
+		}
+
+		// Save the newly initialized Database back to the manifest
 		if err := Save(newDB); err != nil {
 			return Database{}, err
 		}
+
+		// Assign the new Database to the manifest
 		m.Database = newDB
 	}
 
-	db, ok := (m.Database).(Database)
-	if !ok {
-		return Database{}, errors.New("Unexpected type found in .hx file")
-	}
-	return db, nil
+	// Attempt to convert m.Database to a Database struct
+	var db Database
+	switch v := m.Database.(type) {
+	case Database:
+		db = v
+	case map[string]interface{}:
+		// Convert the map to JSON
+		dbBytes, err := json.Marshal(v)
+		if err != nil {
+			return Database{}, err
+		}
 
+		// Unmarshal the JSON into a Database struct
+		if err := json.Unmarshal(dbBytes, &db); err != nil {
+			return Database{}, err
+		}
+	default:
+		return Database{}, errors.New("unexpected type found in .hx file")
+	}
+
+	return db, nil
 }
 
 func Save(db Database) error {

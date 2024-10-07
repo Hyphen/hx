@@ -34,7 +34,20 @@ After pulling, all environment variables will be locally available and ready for
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		service := newService(env.NewService())
+		fmt.Println("Pulling environment variables...")
+		manifest, err := manifest.Restore()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
+		database, err := database.Restore()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
+		service := newService(env.NewService(), database)
 
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
@@ -49,12 +62,6 @@ After pulling, all environment variables will be locally available and ready for
 		}
 
 		projectId, err := flags.GetProjectID()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		manifest, err := manifest.Restore()
 		if err != nil {
 			cprint.Error(cmd, err)
 			return
@@ -101,11 +108,13 @@ After pulling, all environment variables will be locally available and ready for
 
 type service struct {
 	envService env.EnvServicer
+	db         database.Database
 }
 
-func newService(envService env.EnvServicer) *service {
+func newService(envService env.EnvServicer, db database.Database) *service {
 	return &service{
 		envService,
+		db,
 	}
 }
 
@@ -127,11 +136,9 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		return err
 	}
 
-	db, err := database.Restore()
-	if err != nil {
+	if err := s.db.SaveSecret(envName, e.Data, *e.Version); err != nil {
 		return err
 	}
-	db.SaveSecret(envName)
 
 	envFile, err := env.GetFileName(envName)
 	if err != nil {

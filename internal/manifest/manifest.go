@@ -78,7 +78,7 @@ func UpsertGlobalManifest(m Manifest) error {
 
 	globManifestFilePath := filepath.Join(globDir, ManifestConfigFile)
 
-	jsonData, err := json.MarshalIndent(m, "", "  ")
+	jsonData, err := json.MarshalIndent(m.ManifestConfig, "", "  ")
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal manifest to JSON")
 	}
