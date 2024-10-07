@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/oauth"
@@ -9,6 +10,7 @@ import (
 	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
+	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
 )
 
@@ -25,32 +27,78 @@ var AuthCmd = &cobra.Command{
 	},
 }
 
+func init() {
+	AuthCmd.PersistentFlags().StringVar(&flags.SetApiKeyFlag, "set-api-key", "", "Authenticate using API key provided inline")
+	AuthCmd.PersistentFlags().BoolVar(&flags.UseApiKeyFlag, "use-api-key", false, "Authenticate using an API key provided via prompt or HYPHEN_API_KEY env variable")
+}
+
 func login() error {
-	oauthService := oauth.DefaultOAuthService()
-	token, err := oauthService.StartOAuthServer()
-	if err != nil {
-		return fmt.Errorf("failed to start OAuth server: %w", err)
-	}
+	if !flags.UseApiKeyFlag && flags.SetApiKeyFlag == "" {
+		oauthService := oauth.DefaultOAuthService()
+		token, err := oauthService.StartOAuthServer()
+		if err != nil {
+			return fmt.Errorf("failed to start OAuth server: %w", err)
+		}
 
-	if flags.VerboseFlag {
-		cprint.Success("OAuth server started successfully")
-	}
+		if flags.VerboseFlag {
+			cprint.Success("OAuth server started successfully")
+		}
 
-	m := manifest.Manifest{
-		ManifestConfig: manifest.ManifestConfig{
-			HyphenAccessToken:  &token.AccessToken,
-			HyphenRefreshToken: &token.RefreshToken,
-			HypenIDToken:       &token.IDToken,
-			ExpiryTime:         &token.ExpiryTime,
-		},
-	}
+		m := manifest.Manifest{
+			ManifestConfig: manifest.ManifestConfig{
+				HyphenAccessToken:  &token.AccessToken,
+				HyphenRefreshToken: &token.RefreshToken,
+				HypenIDToken:       &token.IDToken,
+				ExpiryTime:         &token.ExpiryTime,
+			},
+		}
 
-	if err := manifest.UpsertGlobalManifest(m); err != nil {
-		return fmt.Errorf("failed to save credentials: %w", err)
-	}
+		if err := manifest.UpsertGlobalManifest(m); err != nil {
+			return fmt.Errorf("failed to save credentials: %w", err)
+		}
 
-	if flags.VerboseFlag {
-		cprint.Success("Credentials saved successfully")
+		if flags.VerboseFlag {
+			cprint.Success("Credentials saved successfully")
+		}
+	} else {
+		if flags.UseApiKeyFlag {
+			if flags.SetApiKeyFlag != "" {
+				return fmt.Errorf("cannot use both --use-api-key and --set-api-key flags together")
+			}
+		}
+
+		var apiKey string
+		if flags.UseApiKeyFlag {
+			// Check against the env first
+			if os.Getenv("HYPHEN_API_KEY") != "" {
+				apiKey = os.Getenv("HYPHEN_API_KEY")
+			} else {
+				// password prompt
+				var err error
+				apiKey, err = prompt.PromptPassword("Paste in your API key and hit enter: ")
+				if err != nil {
+					return fmt.Errorf("failed to read API key: %w", err)
+				}
+			}
+		}
+
+		if flags.SetApiKeyFlag != "" {
+			apiKey = flags.SetApiKeyFlag
+		}
+
+		m := manifest.Manifest{
+			ManifestConfig: manifest.ManifestConfig{
+				HyphenAccessToken: &apiKey,
+			},
+		}
+
+		if err := manifest.UpsertGlobalManifest(m); err != nil {
+			return fmt.Errorf("failed to save credentials: %w", err)
+		}
+
+		if flags.VerboseFlag {
+			cprint.Success("Credentials saved successfully")
+		}
 	}
 
 	user, err := user.NewService().GetUserInformation()

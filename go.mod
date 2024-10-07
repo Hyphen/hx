@@ -8,6 +8,7 @@ require (
 	github.com/fatih/color v1.17.0
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.9.0
+	golang.org/x/term v0.0.0-20220526004731-065cf7ba2467
 )
 
 require (
@@ -21,6 +22,5 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	golang.org/x/sys v0.18.0 // indirect
-	golang.org/x/term v0.0.0-20220526004731-065cf7ba2467 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

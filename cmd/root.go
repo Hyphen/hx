@@ -57,7 +57,6 @@ func init() {
 
 	rootCmd.PersistentFlags().BoolVarP(&flags.YesFlag, "yes", "y", false, "Automatically answer yes for prompts")
 	rootCmd.PersistentFlags().BoolVarP(&flags.NoFlag, "no", "n", false, "Automatically answer no for prompts")
-	rootCmd.PersistentFlags().StringVar(&flags.ApiKeyFlag, "api-key", "", "API Key")
 	rootCmd.PersistentFlags().BoolVarP(&flags.VerboseFlag, "verbose", "v", false, "Enable more verbose output")
 
 	// Hidden --dev flag for interacting against the Hyphen development environment

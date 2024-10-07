@@ -1,14 +1,15 @@
 package flags
 
 var (
-	OrganizationFlag string
-	YesFlag          bool
-	NoFlag           bool
-	ProjectFlag      string
-	EnvironmentFlag  string
-	ApplicationFlag  string
-	ApiKeyFlag       string
 	AllFlag          bool
-	VerboseFlag      bool
+	ApplicationFlag  string
 	DevFlag          bool
+	EnvironmentFlag  string
+	NoFlag           bool
+	OrganizationFlag string
+	ProjectFlag      string
+	SetApiKeyFlag    string
+	UseApiKeyFlag    bool
+	VerboseFlag      bool
+	YesFlag          bool
 )
