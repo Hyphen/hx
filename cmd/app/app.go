@@ -10,7 +10,7 @@ import (
 var AppCmd = &cobra.Command{
 	Use:   "app",
 	Short: "Manage applications",
-	Long:  `The 'hx app' command allows you to manage applications within your organization. You can list, create, and delete applications using the available subcommands.`,
+	Long:  `The 'hyphen app' command allows you to manage applications within your organization. You can list, create, and delete applications using the available subcommands.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		list.ListCmd.Run(cmd, args)
 	},
