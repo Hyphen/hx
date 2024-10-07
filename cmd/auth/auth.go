@@ -20,7 +20,7 @@ var AuthCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	Long:  `Authenticate and set up credentials for the Hyphen CLI.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := login(); err != nil {
+		if err := login(cmd); err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
@@ -32,7 +32,15 @@ func init() {
 	AuthCmd.PersistentFlags().BoolVar(&flags.UseApiKeyFlag, "use-api-key", false, "Authenticate using an API key provided via prompt or HYPHEN_API_KEY env variable")
 }
 
-func login() error {
+func login(cmd *cobra.Command) error {
+
+	var accessToken *string
+	var refreshToken *string
+	var idToken *string
+	var expiryTime *int64
+	var apiKey *string
+
+	// Check for standard login flow (oauth)
 	if !flags.UseApiKeyFlag && flags.SetApiKeyFlag == "" {
 		oauthService := oauth.DefaultOAuthService()
 		token, err := oauthService.StartOAuthServer()
@@ -44,12 +52,17 @@ func login() error {
 			cprint.Success("OAuth server started successfully")
 		}
 
+		accessToken = &token.AccessToken
+		refreshToken = &token.RefreshToken
+		idToken = &token.IDToken
+		expiryTime = &token.ExpiryTime
+
 		m := manifest.Manifest{
 			ManifestConfig: manifest.ManifestConfig{
-				HyphenAccessToken:  &token.AccessToken,
-				HyphenRefreshToken: &token.RefreshToken,
-				HypenIDToken:       &token.IDToken,
-				ExpiryTime:         &token.ExpiryTime,
+				HyphenAccessToken:  accessToken,
+				HyphenRefreshToken: refreshToken,
+				HypenIDToken:       idToken,
+				ExpiryTime:         expiryTime,
 			},
 		}
 
@@ -60,7 +73,7 @@ func login() error {
 		if flags.VerboseFlag {
 			cprint.Success("Credentials saved successfully")
 		}
-	} else {
+	} else { // API key login flow
 		if flags.UseApiKeyFlag {
 			if flags.SetApiKeyFlag != "" {
 				return fmt.Errorf("cannot use both --use-api-key and --set-api-key flags together")
@@ -75,20 +88,18 @@ func login() error {
 			} else {
 				// password prompt
 				var err error
-				apiKey, err = prompt.PromptPassword("Paste in your API key and hit enter: ")
+				apiKey, err = prompt.PromptPassword(cmd, "Paste in your API key and hit enter: ")
 				if err != nil {
 					return fmt.Errorf("failed to read API key: %w", err)
 				}
 			}
-		}
-
-		if flags.SetApiKeyFlag != "" {
+		} else if flags.SetApiKeyFlag != "" {
 			apiKey = flags.SetApiKeyFlag
 		}
 
 		m := manifest.Manifest{
 			ManifestConfig: manifest.ManifestConfig{
-				HyphenAccessToken: &apiKey,
+				HyphenAPIKey: &apiKey,
 			},
 		}
 
@@ -124,10 +135,11 @@ func login() error {
 		ProjectName:        &defaultProject.Name,
 		ProjectAlternateId: &defaultProject.AlternateID,
 		OrganizationId:     organizationID,
-		ExpiryTime:         &token.ExpiryTime,
-		HyphenAccessToken:  &token.AccessToken,
-		HyphenRefreshToken: &token.RefreshToken,
-		HypenIDToken:       &token.IDToken,
+		ExpiryTime:         expiryTime,
+		HyphenAccessToken:  accessToken,
+		HyphenRefreshToken: refreshToken,
+		HypenIDToken:       idToken,
+		HyphenAPIKey:       apiKey,
 		AppId:              nil,
 		AppName:            nil,
 		AppAlternateId:     nil,

@@ -59,6 +59,7 @@ func PromptPassword(cmd *cobra.Command, prompt string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error reading password: %w", err)
 	}
+	fmt.Println()
 
 	return string(byteKey), nil
 }
