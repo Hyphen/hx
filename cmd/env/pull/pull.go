@@ -140,6 +140,8 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		return err
 	}
 
+	//TODO: Add has logic and so on
+
 	envFile, err := env.GetFileName(envName)
 	if err != nil {
 		return err
