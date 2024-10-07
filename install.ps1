@@ -40,6 +40,21 @@ function Create-Alias {
     }
 }
 
+# Function to add directory to PATH
+function Add-ToPath {
+    param (
+        [string]$dirPath
+    )
+    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    if ($userPath -notlike "*$dirPath*") {
+        [Environment]::SetEnvironmentVariable("PATH", "$userPath;$dirPath", "User")
+        $env:PATH += ";$dirPath"
+        Write-Output "Added $dirPath to PATH. Please restart your PowerShell session to apply changes."
+    } else {
+        Write-Output "$dirPath is already in PATH"
+    }
+}
+
 # Main installation function
 function Install-CLI {
     param (
@@ -65,17 +80,26 @@ function Install-CLI {
         exit 1
     }
 
-    Write-Output "Installing ${binaryName} to C:\Windows\System32..."
-    $installDir = "C:\Windows\System32"
-    $installPath = "$installDir\hyphen.exe"
+    # Create installation directory in user's home
+    $installDir = Join-Path $env:USERPROFILE ".hyphen"
+    if (-not (Test-Path $installDir)) {
+        New-Item -ItemType Directory -Path $installDir | Out-Null
+    }
+
+    $installPath = Join-Path $installDir $binaryName
+    Write-Output "Installing ${binaryName} to $installPath..."
     Move-Item -Path $tempFilePath -Destination $installPath -Force
 
-    Write-Output "${binaryName} has been successfully installed as hyphen.exe!"
-    Write-Output "You can now run 'hyphen' from anywhere in your terminal."
+    Write-Output "${binaryName} has been successfully installed!"
+
+    # Add installation directory to PATH
+    Add-ToPath -dirPath $installDir
 
     # Add the alias
     $aliasCommandHx = "Set-Alias -Name hx -Value `"$installPath`""
     Create-Alias -aliasCommand $aliasCommandHx
+
+    Write-Output "You can now run 'hyphen' or 'hx' from anywhere in your terminal."
 }
 
 # Run the installation
