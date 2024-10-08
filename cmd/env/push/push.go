@@ -20,15 +20,15 @@ var PushCmd = &cobra.Command{
 The push command uploads local environment variables from .env files to Hyphen.
 
 This command allows you to:
+- Push all environments found in local .env files when no environment is specified
 - Push a specific environment by name
-- Push all environments found in local .env files
 - Encrypt and securely store your environment variables in Hyphen
 
 The command looks for .env files in the current directory with the naming convention .env.[environment_name].
 
 Examples:
   hyphen push production
-  hyphen push --all
+  hyphen push
 
 After pushing, all environment variables will be securely stored in Hyphen and available for use across your project.
 `,
@@ -68,17 +68,14 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 
 		var envsToPush []string
 		var envsPushed []string
-		if len(args) == 1 && args[0] != "default" {
+		if len(args) == 1 {
 			envsToPush = append(envsToPush, args[0])
-		} else if flags.AllFlag {
+		} else {
 			envsToPush, err = service.getLocalEnvsNamesFromFiles()
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
-		} else {
-			// We're just handling the one special "default" environment
-			envsToPush = append(envsToPush, "default")
 		}
 
 		if err := service.checkIfLocalEnvsExistAsEnvironments(envsToPush, orgId, prjectId); err != nil {
@@ -91,10 +88,11 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 				cprint.Error(cmd, err)
 				continue
 			}
-			if err := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey(), manifest); err != nil {
+			err, skippable := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey(), manifest)
+			if err != nil {
 				cprint.Error(cmd, err)
 				continue
-			} else {
+			} else if !skippable {
 				envsPushed = append(envsPushed, envName)
 			}
 		}
@@ -115,7 +113,7 @@ func newService(envService env.EnvServicer, db database.Database) *service {
 	}
 }
 
-func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secretkey.SecretKeyer, m manifest.Manifest) error {
+func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secretkey.SecretKeyer, m manifest.Manifest) (err error, skippable bool) {
 	// Check local environment
 	currentLocalEnv, exists := s.db.GetSecret(database.SecretKey{
 		ProjectId: *m.ProjectId,
@@ -123,8 +121,13 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 		EnvName:   envName,
 	})
 	if exists {
-		if err := s.validateLocalEnv(envName, &currentLocalEnv, &e, secretKey); err != nil {
-			return err
+		err, skippable := s.validateLocalEnv(envName, &currentLocalEnv, &e, secretKey)
+		if err != nil {
+			return err, false
+		}
+		if skippable {
+			cprint.Info(fmt.Sprintf("Local %s environment is already up to date - skipping", envName))
+			return nil, true
 		}
 	}
 
@@ -134,35 +137,35 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 
 	// Update cloud environment
 	if err := s.envService.PutEnvironmentEnv(orgID, appID, envName, e); err != nil {
-		return fmt.Errorf("failed to update cloud %s environment. try pulling to get latest before pushing: %w", envName, err)
+		return fmt.Errorf("failed to update cloud %s environment. try pulling to get latest before pushing: %w", envName, err), false
 	}
 
 	// Update local environment
 	newEnvDcrypted, err := e.DecryptData(secretKey)
 	if err != nil {
-		return err
+		return err, false
 	}
 	if err := s.db.SaveSecret(database.SecretKey{
 		ProjectId: *m.ProjectId,
 		AppId:     *m.AppId,
 		EnvName:   envName,
 	}, newEnvDcrypted, currentLocalEnv.Version+1); err != nil {
-		return fmt.Errorf("failed to save local %s environment: %w", envName, err)
+		return fmt.Errorf("failed to save local %s environment: %w", envName, err), false
 	}
 
-	return nil
+	return nil, false
 }
 
-func (s *service) validateLocalEnv(envName string, local *database.Secret, new *env.Env, secretKey secretkey.SecretKeyer) error {
+func (s *service) validateLocalEnv(envName string, local *database.Secret, new *env.Env, secretKey secretkey.SecretKeyer) (err error, skippable bool) {
 	newEnvDcrypted, err := new.DecryptData(secretKey)
 	if err != nil {
-		return err
+		return err, false
 	}
 	if local.Hash == env.HashData(newEnvDcrypted) {
-		return fmt.Errorf("local %s environment is unchanged - skipping", envName)
+		return nil, true
 	}
 
-	return nil
+	return nil, false
 }
 
 func (s *service) checkIfLocalEnvsExistAsEnvironments(envs []string, orgId, projectId string) error {
