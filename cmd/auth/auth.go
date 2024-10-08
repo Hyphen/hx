@@ -80,26 +80,27 @@ func login(cmd *cobra.Command) error {
 			}
 		}
 
-		var apiKey string
 		if flags.UseApiKeyFlag {
 			// Check against the env first
 			if os.Getenv("HYPHEN_API_KEY") != "" {
-				apiKey = os.Getenv("HYPHEN_API_KEY")
+				key := os.Getenv("HYPHEN_API_KEY")
+				apiKey = &key
 			} else {
 				// password prompt
 				var err error
-				apiKey, err = prompt.PromptPassword(cmd, "Paste in your API key and hit enter: ")
+				key, err := prompt.PromptPassword(cmd, "Paste in your API key and hit enter: ")
 				if err != nil {
 					return fmt.Errorf("failed to read API key: %w", err)
 				}
+				apiKey = &key
 			}
 		} else if flags.SetApiKeyFlag != "" {
-			apiKey = flags.SetApiKeyFlag
+			apiKey = &flags.SetApiKeyFlag
 		}
 
 		m := manifest.Manifest{
 			ManifestConfig: manifest.ManifestConfig{
-				HyphenAPIKey: &apiKey,
+				HyphenAPIKey: apiKey,
 			},
 		}
 
@@ -112,12 +113,12 @@ func login(cmd *cobra.Command) error {
 		}
 	}
 
-	user, err := user.NewService().GetUserInformation()
+	executionContext, err := user.NewService().GetExecutionContext()
 	if err != nil {
 		return fmt.Errorf("failed to get user information: %w", err)
 	}
 
-	organizationID := user.Memberships[0].Organization.ID
+	organizationID := executionContext.Member.Organization.ID
 
 	projectService := projects.NewService(organizationID)
 	projectList, err := projectService.ListProjects()
@@ -149,16 +150,16 @@ func login(cmd *cobra.Command) error {
 		return err
 	}
 
-	printAuthenticationSummary(&user, organizationID, *defaultProject.ID)
+	printAuthenticationSummary(&executionContext, organizationID, *defaultProject.ID)
 	return nil
 }
 
-func printAuthenticationSummary(user *user.UserInfo, organizationID string, projectID string) {
+func printAuthenticationSummary(user *user.ExecutionContext, organizationID string, projectID string) {
 	if flags.VerboseFlag {
 		cprint.PrintHeader("Authentication Summary")
 		cprint.Success("Login successful!")
 		cprint.Print("") // Add an empty line for better spacing
-		cprint.PrintDetail("User", user.Memberships[0].Email)
+		cprint.PrintDetail("User", user.User.Name)
 		cprint.PrintDetail("Organization ID", organizationID)
 		cprint.PrintDetail("Default Project ID", projectID)
 		cprint.Print("") // Add an empty line for better spacing
