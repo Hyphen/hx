@@ -90,7 +90,7 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 				cprint.Error(cmd, err)
 				return
 			}
-			if err := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey()); err != nil {
+			if err := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey(), manifest); err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
@@ -112,7 +112,7 @@ func newService(envService env.EnvServicer, db database.Database) *service {
 	}
 }
 
-func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secretkey.SecretKeyer) error {
+func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secretkey.SecretKeyer, m manifest.Manifest) error {
 	// Fetch current cloud environment
 	currentCloudEnv, err := s.envService.GetEnvironmentEnv(orgID, appID, envName)
 	if err != nil {
@@ -120,7 +120,11 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 	}
 
 	// Check local environment
-	currentLocalEnv, exists := s.db.GetSecret(envName)
+	currentLocalEnv, exists := s.db.GetSecret(database.SecretKey{
+		ProjectId: *m.ProjectId,
+		AppId:     *m.AppId,
+		EnvName:   envName,
+	})
 	if exists {
 		if err := s.validateLocalEnv(&currentLocalEnv, &currentCloudEnv, &e, secretKey); err != nil {
 			return err
@@ -138,7 +142,11 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 	if err != nil {
 		return err
 	}
-	if err := s.db.SaveSecret(envName, newEnvDcrypted, currentLocalEnv.Version+1); err != nil {
+	if err := s.db.SaveSecret(database.SecretKey{
+		ProjectId: *m.ProjectId,
+		AppId:     *m.AppId,
+		EnvName:   envName,
+	}, newEnvDcrypted, currentLocalEnv.Version+1); err != nil {
 		return fmt.Errorf("failed to save local environment: %w", err) // TODO: check if this should be and error
 	}
 

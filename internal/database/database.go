@@ -10,7 +10,13 @@ import (
 )
 
 type Database struct {
-	Secrets map[string]Secret `json:"secrets"`
+	Secrets map[string]map[string]map[string]Secret `json:"secrets"`
+}
+
+type SecretKey struct {
+	ProjectId string `json:"project_id"`
+	AppId     string `json:"app_id"`
+	EnvName   string `json:"env_name"`
 }
 
 type Secret struct {
@@ -32,21 +38,29 @@ func newSecret(data string, version int) Secret {
 	}
 }
 
-func (db *Database) GetSecret(env string) (Secret, bool) {
-	secret, ok := db.Secrets[env]
+func (db *Database) GetSecret(key SecretKey) (Secret, bool) {
+	secret, ok := db.Secrets[key.ProjectId][key.AppId][key.EnvName]
 	return secret, ok
 }
 
 // SaveSecret saves a secret to the Database.
 // Data will be hashed before saving
-func (db *Database) SaveSecret(env, data string, version int) error {
+func (db *Database) SaveSecret(key SecretKey, data string, version int) error {
 	if db.Secrets == nil {
-		db.Secrets = make(map[string]Secret)
+		db.Secrets = make(map[string]map[string]map[string]Secret)
+	}
+
+	// Initialize the nested maps if they don't exist
+	if _, ok := db.Secrets[key.ProjectId]; !ok {
+		db.Secrets[key.ProjectId] = make(map[string]map[string]Secret)
+	}
+	if _, ok := db.Secrets[key.ProjectId][key.AppId]; !ok {
+		db.Secrets[key.ProjectId][key.AppId] = make(map[string]Secret)
 	}
 
 	secret := newSecret(data, version)
 
-	db.Secrets[env] = secret
+	db.Secrets[key.ProjectId][key.AppId][key.EnvName] = secret
 
 	return Save(*db)
 }
@@ -61,7 +75,7 @@ func Restore() (Database, error) {
 	if m.Database == nil {
 		// Initialize a new Database with an empty Secrets map
 		newDB := Database{
-			Secrets: make(map[string]Secret),
+			Secrets: make(map[string]map[string]map[string]Secret),
 		}
 
 		// Save the newly initialized Database back to the manifest

@@ -77,7 +77,7 @@ After pulling, all environment variables will be locally available and ready for
 		}
 
 		if flags.AllFlag {
-			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey(), forceFlag)
+			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey(), manifest, forceFlag)
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
@@ -88,7 +88,7 @@ After pulling, all environment variables will be locally available and ready for
 		}
 
 		if envName == "" || envName == "default" {
-			if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey(), forceFlag); err != nil {
+			if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
@@ -100,7 +100,7 @@ After pulling, all environment variables will be locally available and ready for
 				cprint.Error(cmd, err)
 				return
 			}
-			if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey(), forceFlag); err != nil {
+			if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
@@ -138,7 +138,7 @@ func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
 	return nil
 }
 
-func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretKey *secretkey.SecretKey, force bool) error {
+func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretKey *secretkey.SecretKey, m manifest.Manifest, force bool) error {
 	envFile, err := env.GetFileName(envName)
 	if err != nil {
 		return err
@@ -149,7 +149,11 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		return err
 	}
 
-	currentLocalSecret, exists := s.db.GetSecret(envName)
+	currentLocalSecret, exists := s.db.GetSecret(database.SecretKey{
+		ProjectId: *m.ProjectId,
+		AppId:     *m.AppId,
+		EnvName:   envName,
+	})
 	if exists {
 		actual := currentLocal.HashData()
 		expectedHash := currentLocalSecret.Hash
@@ -168,7 +172,13 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		return err
 	}
 
-	if err := s.db.SaveSecret(envName, envDataDecrypted, *e.Version); err != nil {
+	if err := s.db.SaveSecret(
+		database.SecretKey{
+			ProjectId: *m.ProjectId,
+			AppId:     *m.AppId,
+			EnvName:   envName,
+		},
+		envDataDecrypted, *e.Version); err != nil {
 		return err
 	}
 
@@ -179,7 +189,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 	return nil
 }
 
-func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *secretkey.SecretKey, force bool) ([]string, error) {
+func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *secretkey.SecretKey, m manifest.Manifest, force bool) ([]string, error) {
 	allEnvs, err := s.envService.ListEnvs(orgId, appId, 100, 1)
 	if err != nil {
 		return nil, err
@@ -190,7 +200,7 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 		if e.ProjectEnv != nil {
 			envName = e.ProjectEnv.AlternateID
 		}
-		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secretkey, force); err != nil {
+		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secretkey, m, force); err != nil {
 			return pulledEnvs, err
 		}
 		pulledEnvs = append(pulledEnvs, envName)

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Hyphen/cli/internal/app"
+	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/cprint"
@@ -135,7 +136,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		AppId:              &newApp.ID,
 	}
 
-	_, err = manifest.LocalInitialize(mcl)
+	m, err = manifest.LocalInitialize(mcl) //Loading the local hxkey
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
@@ -198,6 +199,26 @@ func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 		return err
 	}
 
+	db, err := database.Restore()
+	if err != nil {
+		return err
+	}
+
+	newEnvDcrypted, err := envStruct.DecryptData(manifest.GetSecretKey())
+	if err != nil {
+		return err
+	}
+
+	secretKey := database.SecretKey{
+		ProjectId: *manifest.ProjectId,
+		AppId:     *manifest.AppId,
+		EnvName:   envName,
+	}
+
+	if err := db.SaveSecret(secretKey, newEnvDcrypted, 1); err != nil {
+		return fmt.Errorf("failed to save local environment: %w", err) // TODO: check if this should be and error
+	}
+
 	return nil
 }
 
@@ -205,11 +226,22 @@ func createGitignoredFile(cmd *cobra.Command, fileName string) error {
 	// check if the file already exists.
 	if _, err := os.Stat(fileName); err == nil {
 		// do not recreate. file exists already.
-	} else {
-		if _, err := os.Create(fileName); err != nil {
-			cprint.Error(cmd, fmt.Errorf("error creating %s: %w", fileName, err))
-			return err
-		}
+		return nil
+	}
+
+	// Create the file
+	file, err := os.Create(fileName)
+	if err != nil {
+		cprint.Error(cmd, fmt.Errorf("error creating %s: %w", fileName, err))
+		return err
+	}
+	defer file.Close()
+
+	// Write 'KEY=Value' to the file
+	_, err = file.WriteString("#Example\nKEY=Value\n")
+	if err != nil {
+		cprint.Error(cmd, fmt.Errorf("error writing to %s: %w", fileName, err))
+		return err
 	}
 
 	if err := ensureGitignore(fileName); err != nil {
