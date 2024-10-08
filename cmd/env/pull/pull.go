@@ -27,7 +27,7 @@ This command allows you to:
 - Pull a specific environment by name
 - Pull all environments for the application
 
-The pulled environments will be decryped and saved as .env.[environment_name] files in your current directory.
+The pulled environments will be decrypted and saved as .env.[environment_name] files in your current directory.
 
 Examples:
   hyphen pull production
