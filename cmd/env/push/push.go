@@ -116,12 +116,6 @@ func newService(envService env.EnvServicer, db database.Database) *service {
 }
 
 func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secretkey.SecretKeyer, m manifest.Manifest) error {
-	// Fetch current cloud environment
-	currentCloudEnv, err := s.envService.GetEnvironmentEnv(orgID, appID, envName)
-	if err != nil {
-		return fmt.Errorf("failed to get cloud %s environment: %w", envName, err)
-	}
-
 	// Check local environment
 	currentLocalEnv, exists := s.db.GetSecret(database.SecretKey{
 		ProjectId: *m.ProjectId,
@@ -129,18 +123,21 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 		EnvName:   envName,
 	})
 	if exists {
-		if err := s.validateLocalEnv(envName, &currentLocalEnv, &currentCloudEnv, &e, secretKey); err != nil {
+		if err := s.validateLocalEnv(envName, &currentLocalEnv, &e, secretKey); err != nil {
 			return err
 		}
 	}
 
+	// try pushing version+1
+	newVersion := currentLocalEnv.Version + 1
+	e.Version = &newVersion
+
 	// Update cloud environment
 	if err := s.envService.PutEnvironmentEnv(orgID, appID, envName, e); err != nil {
-		return fmt.Errorf("failed to update cloud %s environment: %w", envName, err)
+		return fmt.Errorf("failed to update cloud %s environment. try pulling to get latest before pushing: %w", envName, err)
 	}
 
 	// Update local environment
-
 	newEnvDcrypted, err := e.DecryptData(secretKey)
 	if err != nil {
 		return err
@@ -156,12 +153,7 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 	return nil
 }
 
-func (s *service) validateLocalEnv(envName string, local *database.Secret, cloud *env.Env, new *env.Env, secretKey secretkey.SecretKeyer) error {
-	//TODO: Check all this error messages
-	if local.Version > *cloud.Version {
-		return fmt.Errorf("local %s environment version (%d) is higher than cloud version (%d)", envName, local.Version, *cloud.Version)
-	}
-
+func (s *service) validateLocalEnv(envName string, local *database.Secret, new *env.Env, secretKey secretkey.SecretKeyer) error {
 	newEnvDcrypted, err := new.DecryptData(secretKey)
 	if err != nil {
 		return err
@@ -169,9 +161,7 @@ func (s *service) validateLocalEnv(envName string, local *database.Secret, cloud
 	if local.Hash == env.HashData(newEnvDcrypted) {
 		return fmt.Errorf("local %s environment is unchanged - skipping", envName)
 	}
-	if local.Version < *cloud.Version {
-		return fmt.Errorf("local %s environment (version %d) is not latest (version %d). please pull first", envName, local.Version, *cloud.Version)
-	}
+
 	return nil
 }
 
