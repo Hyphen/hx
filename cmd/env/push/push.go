@@ -170,7 +170,7 @@ func (s *service) validateLocalEnv(envName string, local *database.Secret, cloud
 		return fmt.Errorf("local %s environment is unchanged - skipping", envName)
 	}
 	if local.Version < *cloud.Version {
-		return fmt.Errorf("local %s environment (version %d) is outdated compared to cloud (version %d)", envName, local.Version, *cloud.Version)
+		return fmt.Errorf("local %s environment (version %d) is not latest (version %d). please pull first", envName, local.Version, *cloud.Version)
 	}
 	return nil
 }
