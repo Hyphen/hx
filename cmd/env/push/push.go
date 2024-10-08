@@ -89,11 +89,11 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 			e, err := env.GetLocalEnv(envName, manifest)
 			if err != nil {
 				cprint.Error(cmd, err)
-				return
+				continue
 			}
 			if err := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey(), manifest); err != nil {
 				cprint.Error(cmd, err)
-				// Continue on. Don't stop the whole process if one environment fails
+				continue
 			} else {
 				envsPushed = append(envsPushed, envName)
 			}
