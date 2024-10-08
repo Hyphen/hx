@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func TestUserService_GetUserInformation(t *testing.T) {
+func TestUserService_GetExecutionContext(t *testing.T) {
 	tests := []struct {
 		name           string
 		setupMocks     func(*httputil.MockHTTPClient)
@@ -24,12 +24,15 @@ func TestUserService_GetUserInformation(t *testing.T) {
 		{
 			name: "Successful request",
 			setupMocks: func(mhc *httputil.MockHTTPClient) {
-				userInfo := UserInfo{
-					DecodedIdToken: TokenInfo{
-						Sub: "test_user_id",
+				executionContext := ExecutionContext{
+					Member: Member{
+						ID: "test_member_id",
+					},
+					User: User{
+						ID: "test_user_id",
 					},
 				}
-				body, _ := json.Marshal(userInfo)
+				body, _ := json.Marshal(executionContext)
 				mhc.On("Do", mock.Anything).Return(&http.Response{
 					StatusCode: http.StatusOK,
 					Body:       io.NopCloser(bytes.NewReader(body)),
@@ -76,13 +79,13 @@ func TestUserService_GetUserInformation(t *testing.T) {
 				client:  mockHTTP,
 			}
 
-			userInfo, err := us.GetUserInformation()
+			userInfo, err := us.GetExecutionContext()
 
 			if tt.expectedError != "" {
 				assert.EqualError(t, err, tt.expectedError)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedUserID, userInfo.DecodedIdToken.Sub)
+				assert.Equal(t, tt.expectedUserID, userInfo.User.ID)
 			}
 
 			mockHTTP.AssertExpectations(t)

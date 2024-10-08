@@ -31,6 +31,7 @@ type ManifestConfig struct {
 	HyphenRefreshToken *string     `json:"hyphen_refresh_token,omitempty"`
 	HypenIDToken       *string     `json:"hyphen_id_token,omitempty"`
 	ExpiryTime         *int64      `json:"expiry_time,omitempty"`
+	HyphenAPIKey       *string     `json:"hyphen_api_key,omitempty"`
 	Database           interface{} `json:"database,omitempty"`
 }
 

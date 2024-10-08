@@ -11,7 +11,7 @@ import (
 )
 
 type UserServicer interface {
-	GetUserInformation() (UserInfo, error)
+	GetExecutionContext() (ExecutionContext, error)
 }
 
 type UserService struct {
@@ -27,33 +27,32 @@ func NewService() UserServicer {
 	}
 }
 
-func (us *UserService) GetUserInformation() (UserInfo, error) {
-
-	req, err := http.NewRequest("GET", us.baseUrl+"/api/me/", nil)
+func (us *UserService) GetExecutionContext() (ExecutionContext, error) {
+	req, err := http.NewRequest("GET", us.baseUrl+"/api/execution-context/", nil)
 	if err != nil {
-		return UserInfo{}, errors.Wrap(err, "Failed to prepare the request. Please try again later.")
+		return ExecutionContext{}, errors.Wrap(err, "Failed to prepare the request. Please try again later.")
 	}
 
 	resp, err := us.client.Do(req)
 	if err != nil {
-		return UserInfo{}, err
+		return ExecutionContext{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return UserInfo{}, errors.HandleHTTPError(resp)
+		return ExecutionContext{}, errors.HandleHTTPError(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return UserInfo{}, errors.Wrap(err, "Failed to read the server response. Please try again later.")
+		return ExecutionContext{}, errors.Wrap(err, "Failed to read the server response. Please try again later.")
 	}
 
-	var userInfo UserInfo
-	err = json.Unmarshal(body, &userInfo)
+	var executionContext ExecutionContext
+	err = json.Unmarshal(body, &executionContext)
 	if err != nil {
-		return UserInfo{}, errors.Wrap(err, "Failed to process the server response. Please try again later.")
+		return ExecutionContext{}, errors.Wrap(err, "Failed to process the server response. Please try again later.")
 	}
 
-	return userInfo, nil
+	return executionContext, nil
 }

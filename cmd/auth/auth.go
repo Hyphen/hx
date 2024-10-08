@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/oauth"
@@ -9,6 +10,7 @@ import (
 	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
+	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
 )
 
@@ -16,49 +18,119 @@ var AuthCmd = &cobra.Command{
 	Use:   "auth",
 	Short: "Authenticate with Hyphen",
 	Args:  cobra.NoArgs,
-	Long:  `Authenticate and set up credentials for the Hyphen CLI.`,
+	Long: `Authenticate and set up credentials for the Hyphen CLI.
+
+This command allows you to log in to your Hyphen account via OAuth or an API key, and securely store your credentials for future CLI interactions.
+
+The authentication process supports two methods:
+- OAuth Login (default): This method will open a browser window and prompt you to log in using your Hyphen credentials.
+- API Key Login: If you prefer or are required to use an API key, you can authenticate by providing the key either via an environment variable, an inline flag, or interactively via a prompt.
+
+Examples:
+	hyhen auth
+	hyphen auth --use-api-key # This will read check for HYPHEN_API_KEY in the environment and prompt if not found
+	hyphen auth --set-api-key YOURKEY1234
+	`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := login(); err != nil {
+		if err := login(cmd); err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
 	},
 }
 
-func login() error {
-	oauthService := oauth.DefaultOAuthService()
-	token, err := oauthService.StartOAuthServer()
-	if err != nil {
-		return fmt.Errorf("failed to start OAuth server: %w", err)
+func init() {
+	AuthCmd.PersistentFlags().StringVar(&flags.SetApiKeyFlag, "set-api-key", "", "Authenticate using API key provided inline")
+	AuthCmd.PersistentFlags().BoolVar(&flags.UseApiKeyFlag, "use-api-key", false, "Authenticate using an API key provided via prompt or HYPHEN_API_KEY env variable")
+}
+
+func login(cmd *cobra.Command) error {
+
+	var accessToken *string
+	var refreshToken *string
+	var idToken *string
+	var expiryTime *int64
+	var apiKey *string
+
+	// Check for standard login flow (oauth)
+	if !flags.UseApiKeyFlag && flags.SetApiKeyFlag == "" {
+		oauthService := oauth.DefaultOAuthService()
+		token, err := oauthService.StartOAuthServer()
+		if err != nil {
+			return fmt.Errorf("failed to start OAuth server: %w", err)
+		}
+
+		if flags.VerboseFlag {
+			cprint.Success("OAuth server started successfully")
+		}
+
+		accessToken = &token.AccessToken
+		refreshToken = &token.RefreshToken
+		idToken = &token.IDToken
+		expiryTime = &token.ExpiryTime
+
+		m := manifest.Manifest{
+			ManifestConfig: manifest.ManifestConfig{
+				HyphenAccessToken:  accessToken,
+				HyphenRefreshToken: refreshToken,
+				HypenIDToken:       idToken,
+				ExpiryTime:         expiryTime,
+			},
+		}
+
+		if err := manifest.UpsertGlobalManifest(m); err != nil {
+			return fmt.Errorf("failed to save credentials: %w", err)
+		}
+
+		if flags.VerboseFlag {
+			cprint.Success("Credentials saved successfully")
+		}
+	} else { // API key login flow
+		if flags.UseApiKeyFlag {
+			if flags.SetApiKeyFlag != "" {
+				return fmt.Errorf("cannot use both --use-api-key and --set-api-key flags together")
+			}
+		}
+
+		if flags.UseApiKeyFlag {
+			// Check against the env first
+			if os.Getenv("HYPHEN_API_KEY") != "" {
+				key := os.Getenv("HYPHEN_API_KEY")
+				apiKey = &key
+			} else {
+				// password prompt
+				var err error
+				key, err := prompt.PromptPassword(cmd, "Paste in your API key and hit enter: ")
+				if err != nil {
+					return fmt.Errorf("failed to read API key: %w", err)
+				}
+				apiKey = &key
+			}
+		} else if flags.SetApiKeyFlag != "" {
+			apiKey = &flags.SetApiKeyFlag
+		}
+
+		m := manifest.Manifest{
+			ManifestConfig: manifest.ManifestConfig{
+				HyphenAPIKey: apiKey,
+			},
+		}
+
+		if err := manifest.UpsertGlobalManifest(m); err != nil {
+			return fmt.Errorf("failed to save credentials: %w", err)
+		}
+
+		if flags.VerboseFlag {
+			cprint.Success("Credentials saved successfully")
+		}
 	}
 
-	if flags.VerboseFlag {
-		cprint.Success("OAuth server started successfully")
-	}
-
-	m := manifest.Manifest{
-		ManifestConfig: manifest.ManifestConfig{
-			HyphenAccessToken:  &token.AccessToken,
-			HyphenRefreshToken: &token.RefreshToken,
-			HypenIDToken:       &token.IDToken,
-			ExpiryTime:         &token.ExpiryTime,
-		},
-	}
-
-	if err := manifest.UpsertGlobalManifest(m); err != nil {
-		return fmt.Errorf("failed to save credentials: %w", err)
-	}
-
-	if flags.VerboseFlag {
-		cprint.Success("Credentials saved successfully")
-	}
-
-	user, err := user.NewService().GetUserInformation()
+	executionContext, err := user.NewService().GetExecutionContext()
 	if err != nil {
 		return fmt.Errorf("failed to get user information: %w", err)
 	}
 
-	organizationID := user.Memberships[0].Organization.ID
+	organizationID := executionContext.Member.Organization.ID
 
 	projectService := projects.NewService(organizationID)
 	projectList, err := projectService.ListProjects()
@@ -76,10 +148,11 @@ func login() error {
 		ProjectName:        &defaultProject.Name,
 		ProjectAlternateId: &defaultProject.AlternateID,
 		OrganizationId:     organizationID,
-		ExpiryTime:         &token.ExpiryTime,
-		HyphenAccessToken:  &token.AccessToken,
-		HyphenRefreshToken: &token.RefreshToken,
-		HypenIDToken:       &token.IDToken,
+		ExpiryTime:         expiryTime,
+		HyphenAccessToken:  accessToken,
+		HyphenRefreshToken: refreshToken,
+		HypenIDToken:       idToken,
+		HyphenAPIKey:       apiKey,
 		AppId:              nil,
 		AppName:            nil,
 		AppAlternateId:     nil,
@@ -89,16 +162,16 @@ func login() error {
 		return err
 	}
 
-	printAuthenticationSummary(&user, organizationID, *defaultProject.ID)
+	printAuthenticationSummary(&executionContext, organizationID, *defaultProject.ID)
 	return nil
 }
 
-func printAuthenticationSummary(user *user.UserInfo, organizationID string, projectID string) {
+func printAuthenticationSummary(user *user.ExecutionContext, organizationID string, projectID string) {
 	if flags.VerboseFlag {
 		cprint.PrintHeader("Authentication Summary")
 		cprint.Success("Login successful!")
 		cprint.Print("") // Add an empty line for better spacing
-		cprint.PrintDetail("User", user.Memberships[0].Email)
+		cprint.PrintDetail("User", user.User.Name)
 		cprint.PrintDetail("Organization ID", organizationID)
 		cprint.PrintDetail("Default Project ID", projectID)
 		cprint.Print("") // Add an empty line for better spacing

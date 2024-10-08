@@ -3,9 +3,11 @@ package prompt
 import (
 	"fmt"
 	"strings"
+	"syscall"
 
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 type Response struct {
@@ -44,4 +46,20 @@ func PromptYesNo(cmd *cobra.Command, prompt string, defaultValue bool) Response 
 		cprint.Warning("Invalid response. Please enter 'y' or 'n'.")
 		return PromptYesNo(cmd, prompt, defaultValue)
 	}
+}
+
+func PromptPassword(cmd *cobra.Command, prompt string) (string, error) {
+	noFlag, _ := cmd.Flags().GetBool("no")
+	if noFlag {
+		return "", fmt.Errorf("operation cancelled due to --no flag")
+	}
+
+	fmt.Print(prompt)
+	byteKey, err := term.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return "", fmt.Errorf("error reading password: %w", err)
+	}
+	fmt.Println()
+
+	return string(byteKey), nil
 }

@@ -5,8 +5,8 @@ import (
 )
 
 func GetAPIKey() *string {
-	if ApiKeyFlag != "" {
-		return &ApiKeyFlag
+	if SetApiKeyFlag != "" {
+		return &SetApiKeyFlag
 	}
 
 	if envVal, ok := os.LookupEnv("HX_API_KEY"); ok {
