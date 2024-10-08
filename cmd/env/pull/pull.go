@@ -2,13 +2,19 @@ package pull
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
+)
+
+var (
+	forceFlag bool
 )
 
 var PullCmd = &cobra.Command{
@@ -20,10 +26,8 @@ The pull command retrieves environment variables from Hyphen and decrypts them i
 This command allows you to:
 - Pull a specific environment by name
 - Pull all environments for the application
-- Decrypt the pulled variables using your local secret key
-- Save the decrypted variables into corresponding .env files
 
-The pulled environments will be saved as .env.[environment_name] files in your current directory.
+The pulled environments will be decrypted and saved as .env.[environment_name] files in your current directory.
 
 Examples:
   hyphen pull production
@@ -33,7 +37,19 @@ After pulling, all environment variables will be locally available and ready for
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		service := newService(env.NewService())
+		manifest, err := manifest.Restore()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
+		db, err := database.Restore()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
+		service := newService(env.NewService(), db)
 
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
@@ -53,58 +69,58 @@ After pulling, all environment variables will be locally available and ready for
 			return
 		}
 
-		manifest, err := manifest.Restore()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
 		var envName string
 		if len(args) == 1 {
 			envName = args[0]
 		}
 
 		if flags.AllFlag {
-			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey())
+			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey(), manifest, forceFlag)
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
 
-			printPullSummary(appId, pulledEnvs)
+			printPullSummary(pulledEnvs)
 			return
 		}
 
 		if envName == "" || envName == "default" {
-			if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey()); err != nil {
+			if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
 
-			printPullSummary(appId, []string{"default"})
+			printPullSummary([]string{"default"})
 		} else { // we have a specific env name
 			err = service.checkForEnvironment(orgId, envName, projectId)
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
-			if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey()); err != nil {
+			if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
 
-			printPullSummary(appId, []string{envName})
+			printPullSummary([]string{envName})
 		}
 	},
 }
 
-type service struct {
-	envService env.EnvServicer
+func init() {
+	PullCmd.Flags().BoolVar(&forceFlag, "force", false, "Force overwrite of locally modified environment files")
 }
 
-func newService(envService env.EnvServicer) *service {
+type service struct {
+	envService env.EnvServicer
+	db         database.Database
+}
+
+func newService(envService env.EnvServicer, db database.Database) *service {
 	return &service{
 		envService,
+		db,
 	}
 }
 
@@ -120,25 +136,63 @@ func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
 	return nil
 }
 
-func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretKey *secretkey.SecretKey) error {
+func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretKey *secretkey.SecretKey, m manifest.Manifest, force bool) error {
+	envFileName, err := env.GetFileName(envName)
+	if err != nil {
+		return err
+	}
+
+	_, err = os.Stat(envFileName)
+	fileExists := !os.IsNotExist(err)
+
+	if fileExists && !force {
+		currentLocal, err := env.New(envFileName)
+		if err != nil {
+			return err
+		}
+
+		currentLocalSecret, dbSecretExists := s.db.GetSecret(database.SecretKey{
+			ProjectId: *m.ProjectId,
+			AppId:     *m.AppId,
+			EnvName:   envName,
+		})
+		if dbSecretExists {
+			actual := currentLocal.HashData()
+			expectedHash := currentLocalSecret.Hash
+			if actual != expectedHash && !force {
+				return fmt.Errorf("Local \"%s\" environment has been modified. Use --force to overwrite", envName)
+			}
+		}
+	}
+
 	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName)
 	if err != nil {
 		return err
 	}
 
-	envFile, err := env.GetFileName(envName)
+	envDataDecrypted, err := e.DecryptData(secretKey)
 	if err != nil {
 		return err
 	}
 
-	if _, err = e.DecryptVarsAndSaveIntoFile(envFile, secretKey); err != nil {
-		return fmt.Errorf("Failed to save decrypted environment: %s, variables to file: %s", envName, envFile)
+	if err := s.db.SaveSecret(
+		database.SecretKey{
+			ProjectId: *m.ProjectId,
+			AppId:     *m.AppId,
+			EnvName:   envName,
+		},
+		envDataDecrypted, *e.Version); err != nil {
+		return err
+	}
+
+	if _, err = e.DecryptVarsAndSaveIntoFile(envFileName, secretKey); err != nil {
+		return fmt.Errorf("Failed to save decrypted environment: %s, variables to file: %s", envName, envFileName)
 	}
 
 	return nil
 }
 
-func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *secretkey.SecretKey) ([]string, error) {
+func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *secretkey.SecretKey, m manifest.Manifest, force bool) ([]string, error) {
 	allEnvs, err := s.envService.ListEnvs(orgId, appId, 100, 1)
 	if err != nil {
 		return nil, err
@@ -149,7 +203,7 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 		if e.ProjectEnv != nil {
 			envName = e.ProjectEnv.AlternateID
 		}
-		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secretkey); err != nil {
+		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secretkey, m, force); err != nil {
 			return pulledEnvs, err
 		}
 		pulledEnvs = append(pulledEnvs, envName)
@@ -157,13 +211,7 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 	return pulledEnvs, nil
 }
 
-func printPullSummary(appId string, pulledEnvs []string) {
-	cprint.Success("Successfully pulled and decrypted environment variables")
-	cprint.Print("")
-	cprint.PrintDetail("Application", appId)
-	cprint.PrintDetail("Environments pulled", fmt.Sprintf("%d", len(pulledEnvs)))
-
-	cprint.Print("")
+func printPullSummary(pulledEnvs []string) {
 	cprint.Print("Pulled environments:")
 	for _, env := range pulledEnvs {
 		if env == "default" {
@@ -172,7 +220,4 @@ func printPullSummary(appId string, pulledEnvs []string) {
 			cprint.Print(fmt.Sprintf("  - %s -> .env.%s", env, env))
 		}
 	}
-
-	cprint.Print("")
-	cprint.GreenPrint("All environment variables are now locally available and ready for use.")
 }

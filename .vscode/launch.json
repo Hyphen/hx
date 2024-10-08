@@ -10,7 +10,9 @@
     "mode": "debug",
     "host": "127.0.0.1",
     "program": "${workspaceRoot}",
-    "env": {},
+    "env": {
+      "HYPHEN_DEV": "true"
+    },
     "args": [
       "link", "google.com"
     ],

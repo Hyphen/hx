@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
@@ -32,7 +34,19 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		service := newService(env.NewService())
+		manifest, err := manifest.Restore()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
+		db, err := database.Restore()
+		if err != nil {
+			cprint.Error(cmd, err)
+			return
+		}
+
+		service := newService(env.NewService(), db)
 
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
@@ -52,59 +66,111 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 			return
 		}
 
-		manifest, err := manifest.Restore()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		var envs []string
+		var envsToPush []string
+		var envsPushed []string
 		if len(args) == 1 && args[0] != "default" {
-			envs = append(envs, args[0])
+			envsToPush = append(envsToPush, args[0])
 		} else if flags.AllFlag {
-			envs, err = service.getLocalEnvsNamesFromFiles()
+			envsToPush, err = service.getLocalEnvsNamesFromFiles()
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
 		} else {
 			// We're just handling the one special "default" environment
-			envs = append(envs, "default")
+			envsToPush = append(envsToPush, "default")
 		}
 
-		if err := service.checkIfLocalEnvsExistAsEnvironments(envs, orgId, prjectId); err != nil {
+		if err := service.checkIfLocalEnvsExistAsEnvironments(envsToPush, orgId, prjectId); err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
-		for _, envName := range envs {
+		for _, envName := range envsToPush {
 			e, err := env.GetLocalEnv(envName, manifest)
 			if err != nil {
 				cprint.Error(cmd, err)
-				return
+				continue
 			}
-			if err := service.putEnv(orgId, envName, appId, e); err != nil {
+			if err := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey(), manifest); err != nil {
 				cprint.Error(cmd, err)
-				return
+				continue
+			} else {
+				envsPushed = append(envsPushed, envName)
 			}
 		}
 
-		printPushSummary(orgId, *manifest.AppId, envs)
+		printPushSummary(envsToPush, envsPushed)
 	},
 }
 
 type service struct {
 	envService env.EnvServicer
+	db         database.Database
 }
 
-func newService(envService env.EnvServicer) *service {
+func newService(envService env.EnvServicer, db database.Database) *service {
 	return &service{
 		envService,
+		db,
 	}
 }
 
-func (s *service) putEnv(orgId, envName, appId string, e env.Env) error {
-	if err := s.envService.PutEnvironmentEnv(orgId, appId, envName, e); err != nil {
+func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secretkey.SecretKeyer, m manifest.Manifest) error {
+	// Fetch current cloud environment
+	currentCloudEnv, err := s.envService.GetEnvironmentEnv(orgID, appID, envName)
+	if err != nil {
+		return fmt.Errorf("failed to get cloud %s environment: %w", envName, err)
+	}
+
+	// Check local environment
+	currentLocalEnv, exists := s.db.GetSecret(database.SecretKey{
+		ProjectId: *m.ProjectId,
+		AppId:     *m.AppId,
+		EnvName:   envName,
+	})
+	if exists {
+		if err := s.validateLocalEnv(envName, &currentLocalEnv, &currentCloudEnv, &e, secretKey); err != nil {
+			return err
+		}
+	}
+
+	// Update cloud environment
+	if err := s.envService.PutEnvironmentEnv(orgID, appID, envName, e); err != nil {
+		return fmt.Errorf("failed to update cloud %s environment: %w", envName, err)
+	}
+
+	// Update local environment
+
+	newEnvDcrypted, err := e.DecryptData(secretKey)
+	if err != nil {
 		return err
+	}
+	if err := s.db.SaveSecret(database.SecretKey{
+		ProjectId: *m.ProjectId,
+		AppId:     *m.AppId,
+		EnvName:   envName,
+	}, newEnvDcrypted, currentLocalEnv.Version+1); err != nil {
+		return fmt.Errorf("failed to save local %s environment: %w", envName, err)
+	}
+
+	return nil
+}
+
+func (s *service) validateLocalEnv(envName string, local *database.Secret, cloud *env.Env, new *env.Env, secretKey secretkey.SecretKeyer) error {
+	//TODO: Check all this error messages
+	if local.Version > *cloud.Version {
+		return fmt.Errorf("local %s environment version (%d) is higher than cloud version (%d)", envName, local.Version, *cloud.Version)
+	}
+
+	newEnvDcrypted, err := new.DecryptData(secretKey)
+	if err != nil {
+		return err
+	}
+	if local.Hash == env.HashData(newEnvDcrypted) {
+		return fmt.Errorf("local %s environment is unchanged - skipping", envName)
+	}
+	if local.Version < *cloud.Version {
+		return fmt.Errorf("local %s environment (version %d) is not latest (version %d). please pull first", envName, local.Version, *cloud.Version)
 	}
 	return nil
 }
@@ -148,19 +214,17 @@ func (s *service) getLocalEnvsNamesFromFiles() ([]string, error) {
 	return envs, nil
 }
 
-func printPushSummary(orgId, appId string, envs []string) {
-	cprint.Success("Successfully pushed environment variables")
-	cprint.Print("")
-	cprint.PrintDetail("Organization", orgId)
-	cprint.PrintDetail("Application", appId)
-
-	if len(envs) == 1 {
-		cprint.PrintDetail("Environment", envs[0])
+func printPushSummary(envsToPush []string, envsPushed []string) {
+	if len(envsToPush) > 1 {
+		cprint.PrintDetail("Local environments", strings.Join(envsToPush, ", "))
+		if len(envsPushed) > 0 {
+			cprint.PrintDetail("Environments pushed", strings.Join(envsPushed, ", "))
+		} else {
+			cprint.PrintDetail("Environments pushed", "None")
+		}
 	} else {
-		cprint.PrintDetail("Environments", strings.Join(envs, ", "))
+		if len(envsToPush) == 1 && len(envsPushed) == 1 {
+			cprint.Success(fmt.Sprintf("Successfully pushed environment '%s'", envsToPush[0]))
+		}
 	}
-
-	cprint.PrintDetail("Total environments pushed", fmt.Sprintf("%d", len(envs)))
-	fmt.Println()
-	cprint.GreenPrint("All environment .env secrets are now securely stored.")
 }
