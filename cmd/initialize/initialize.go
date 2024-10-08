@@ -237,8 +237,8 @@ func createGitignoredFile(cmd *cobra.Command, fileName string) error {
 	}
 	defer file.Close()
 
-	// Write 'KEY=Value' to the file
-	_, err = file.WriteString("#Example\nKEY=Value\n")
+	// Write '# KEY=Value' to the file
+	_, err = file.WriteString("# Example\n# KEY=Value\n")
 	if err != nil {
 		cprint.Error(cmd, fmt.Errorf("error writing to %s: %w", fileName, err))
 		return err
