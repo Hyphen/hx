@@ -195,6 +195,9 @@ func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 		return err
 	}
 
+	newVersion := 1
+	envStruct.Version = &newVersion
+
 	if err := envService.PutEnvironmentEnv(orgID, appID, envID, envStruct); err != nil {
 		return err
 	}
