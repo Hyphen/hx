@@ -99,7 +99,7 @@ function Install-CLI {
     $aliasCommandHx = "Set-Alias -Name hx -Value `"$installPath`""
     Create-Alias -aliasCommand $aliasCommandHx
 
-    Write-Output "You can now run 'hyphen' or 'hx' from anywhere in your terminal."
+    Write-Output "Please restart your PowerShell session to apply changes to PATH and aliases. Then you can run 'hx' or 'hyphen' to use the CLI."
 }
 
 # Run the installation

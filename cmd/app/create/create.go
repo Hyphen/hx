@@ -100,9 +100,14 @@ func getAppID(cmd *cobra.Command, appName string) string {
 		if !response.Confirmed {
 			var customID string
 			for {
-				fmt.Print("Enter a custom app ID: ")
-				fmt.Scanln(&customID)
-				err := app.CheckAppId(customID)
+				var err error
+				customID, err = prompt.PromptString(cmd, "Enter a custom app ID:")
+				if err != nil {
+					cprint.Error(cmd, err)
+					return ""
+				}
+
+				err = app.CheckAppId(customID)
 				if err == nil {
 					return customID
 				}

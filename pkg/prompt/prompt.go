@@ -1,7 +1,9 @@
 package prompt
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"strings"
 	"syscall"
 
@@ -48,13 +50,37 @@ func PromptYesNo(cmd *cobra.Command, prompt string, defaultValue bool) Response 
 	}
 }
 
-func PromptPassword(cmd *cobra.Command, prompt string) (string, error) {
+func PromptString(cmd *cobra.Command, prompt string) (string, error) {
+	fmt.Printf("%s ", prompt)
+
 	noFlag, _ := cmd.Flags().GetBool("no")
 	if noFlag {
 		return "", fmt.Errorf("operation cancelled due to --no flag")
 	}
 
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+
+	// Trim the newline character at the end
+	response = strings.TrimSpace(response)
+
+	if response == "" {
+		return "", fmt.Errorf("no response provided")
+	}
+
+	return response, nil
+}
+
+func PromptPassword(cmd *cobra.Command, prompt string) (string, error) {
 	fmt.Print(prompt)
+	noFlag, _ := cmd.Flags().GetBool("no")
+	if noFlag {
+		return "", fmt.Errorf("operation cancelled due to --no flag")
+	}
+
 	byteKey, err := term.ReadPassword(int(syscall.Stdin))
 	if err != nil {
 		return "", fmt.Errorf("error reading password: %w", err)

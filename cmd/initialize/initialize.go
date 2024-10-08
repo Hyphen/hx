@@ -80,10 +80,10 @@ func runInit(cmd *cobra.Command, args []string) {
 				return
 			} else {
 				// Prompt for a new app name
-				fmt.Print("What would you like the app name to be? ")
-				fmt.Scanln(&appName)
-				if appName == "" {
-					cprint.Info("No app name provided. Operation cancelled.")
+				var err error
+				appName, err = prompt.PromptString(cmd, "What would you like the app name to be?")
+				if err != nil {
+					cprint.Error(cmd, err)
 					return
 				}
 			}
@@ -274,9 +274,14 @@ func getAppID(cmd *cobra.Command, appName string) string {
 			} else {
 				// Prompt for a custom app ID
 				for {
-					fmt.Print("Enter a custom app ID: ")
-					fmt.Scanln(&appAlternateId)
-					err := app.CheckAppId(appAlternateId)
+					var err error
+					appAlternateId, err = prompt.PromptString(cmd, "Enter a custom app ID:")
+					if err != nil {
+						cprint.Error(cmd, err)
+						return ""
+					}
+
+					err = app.CheckAppId(appAlternateId)
 					if err == nil {
 						return appAlternateId
 					}
