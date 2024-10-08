@@ -66,25 +66,26 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 			return
 		}
 
-		var envs []string
+		var envsToPush []string
+		var envsPushed []string
 		if len(args) == 1 && args[0] != "default" {
-			envs = append(envs, args[0])
+			envsToPush = append(envsToPush, args[0])
 		} else if flags.AllFlag {
-			envs, err = service.getLocalEnvsNamesFromFiles()
+			envsToPush, err = service.getLocalEnvsNamesFromFiles()
 			if err != nil {
 				cprint.Error(cmd, err)
 				return
 			}
 		} else {
 			// We're just handling the one special "default" environment
-			envs = append(envs, "default")
+			envsToPush = append(envsToPush, "default")
 		}
 
-		if err := service.checkIfLocalEnvsExistAsEnvironments(envs, orgId, prjectId); err != nil {
+		if err := service.checkIfLocalEnvsExistAsEnvironments(envsToPush, orgId, prjectId); err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
-		for _, envName := range envs {
+		for _, envName := range envsToPush {
 			e, err := env.GetLocalEnv(envName, manifest)
 			if err != nil {
 				cprint.Error(cmd, err)
@@ -92,11 +93,13 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 			}
 			if err := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey(), manifest); err != nil {
 				cprint.Error(cmd, err)
-				return
+				// Continue on. Don't stop the whole process if one environment fails
+			} else {
+				envsPushed = append(envsPushed, envName)
 			}
 		}
 
-		printPushSummary(orgId, *manifest.AppId, envs)
+		printPushSummary(envsToPush, envsPushed)
 	},
 }
 
@@ -126,7 +129,7 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 		EnvName:   envName,
 	})
 	if exists {
-		if err := s.validateLocalEnv(&currentLocalEnv, &currentCloudEnv, &e, secretKey); err != nil {
+		if err := s.validateLocalEnv(envName, &currentLocalEnv, &currentCloudEnv, &e, secretKey); err != nil {
 			return err
 		}
 	}
@@ -153,10 +156,10 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 	return nil
 }
 
-func (s *service) validateLocalEnv(local *database.Secret, cloud *env.Env, new *env.Env, secretKey secretkey.SecretKeyer) error {
+func (s *service) validateLocalEnv(envName string, local *database.Secret, cloud *env.Env, new *env.Env, secretKey secretkey.SecretKeyer) error {
 	//TODO: Check all this error messages
 	if local.Version > *cloud.Version {
-		return fmt.Errorf("local environment version (%d) is higher than cloud version (%d)", local.Version, *cloud.Version)
+		return fmt.Errorf("local %s environment version (%d) is higher than cloud version (%d)", envName, local.Version, *cloud.Version)
 	}
 
 	newEnvDcrypted, err := new.DecryptData(secretKey)
@@ -164,10 +167,10 @@ func (s *service) validateLocalEnv(local *database.Secret, cloud *env.Env, new *
 		return err
 	}
 	if local.Hash == env.HashData(newEnvDcrypted) {
-		return fmt.Errorf("local environment is identical to the new environment")
+		return fmt.Errorf("local %s environment is unchanged - skipping", envName)
 	}
 	if local.Version < *cloud.Version {
-		return fmt.Errorf("local environment (version %d) is outdated compared to cloud (version %d)", local.Version, *cloud.Version)
+		return fmt.Errorf("local %s environment (version %d) is outdated compared to cloud (version %d)", envName, local.Version, *cloud.Version)
 	}
 	return nil
 }
@@ -211,19 +214,19 @@ func (s *service) getLocalEnvsNamesFromFiles() ([]string, error) {
 	return envs, nil
 }
 
-func printPushSummary(orgId, appId string, envs []string) {
-	cprint.Success("Successfully pushed environment variables")
-	cprint.Print("")
-	cprint.PrintDetail("Organization", orgId)
-	cprint.PrintDetail("Application", appId)
-
-	if len(envs) == 1 {
-		cprint.PrintDetail("Environment", envs[0])
+func printPushSummary(envsToPush []string, envsPushed []string) {
+	if len(envsToPush) > 1 {
+		cprint.PrintDetail("Local environments", strings.Join(envsToPush, ", "))
+		if len(envsPushed) > 0 {
+			cprint.PrintDetail("Environments pushed", strings.Join(envsPushed, ", "))
+		} else {
+			cprint.PrintDetail("Environments pushed", "None")
+		}
 	} else {
-		cprint.PrintDetail("Environments", strings.Join(envs, ", "))
+		if len(envsToPush) == 1 && len(envsPushed) == 1 {
+			cprint.Success(fmt.Sprintf("Successfully pushed environment '%s'", envsToPush[0]))
+		}
 	}
 
-	cprint.PrintDetail("Total environments pushed", fmt.Sprintf("%d", len(envs)))
 	fmt.Println()
-	cprint.GreenPrint("All environment .env secrets are now securely stored.")
 }
