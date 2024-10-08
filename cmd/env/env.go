@@ -15,7 +15,6 @@ var EnvCmd = &cobra.Command{
 
 func init() {
 	EnvCmd.PersistentFlags().StringVarP(&flags.EnvironmentFlag, "environment", "e", "", "Project Environment ID (e.g., pevr_12345)")
-	EnvCmd.PersistentFlags().BoolVar(&flags.AllFlag, "all", false, "push/pull secrets for all environments")
 
 	pull.PullCmd.Flags().AddFlagSet(EnvCmd.PersistentFlags())
 	push.PushCmd.Flags().AddFlagSet(EnvCmd.PersistentFlags())

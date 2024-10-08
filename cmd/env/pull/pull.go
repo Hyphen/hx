@@ -74,7 +74,7 @@ After pulling, all environment variables will be locally available and ready for
 			envName = args[0]
 		}
 
-		if flags.AllFlag {
+		if envName == "" { // ALL
 			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey(), manifest, forceFlag)
 			if err != nil {
 				cprint.Error(cmd, err)
@@ -83,9 +83,7 @@ After pulling, all environment variables will be locally available and ready for
 
 			printPullSummary(pulledEnvs)
 			return
-		}
-
-		if envName == "" || envName == "default" {
+		} else if envName == "default" {
 			if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
 				cprint.Error(cmd, err)
 				return

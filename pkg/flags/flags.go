@@ -1,7 +1,6 @@
 package flags
 
 var (
-	AllFlag          bool
 	ApplicationFlag  string
 	DevFlag          bool
 	EnvironmentFlag  string
