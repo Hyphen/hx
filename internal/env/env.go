@@ -1,7 +1,8 @@
 package env
 
 import (
-	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"regexp"
@@ -20,6 +21,19 @@ type Env struct {
 	Version        *int                `json:"version,omitempty"`
 	ProjectEnv     *ProjectEnvironment `json:"projectEnvironment,omitempty"`
 }
+
+// HashData returns the SHA256 hash of the environment data.
+func HashData(data string) string {
+	hash := sha256.New()
+	hash.Write([]byte(data))
+	hashSum := hash.Sum(nil)
+	return hex.EncodeToString(hashSum)
+}
+
+func (e *Env) HashData() string {
+	return HashData(e.Data)
+}
+
 type ProjectEnvironment struct {
 	ID          string `json:"id"`
 	AlternateID string `json:"alternateId"`
@@ -29,36 +43,48 @@ type ProjectEnvironment struct {
 func New(fileName string) (Env, error) {
 	var data Env
 
-	file, err := os.Open(fileName)
+	content, err := os.ReadFile(fileName)
 	if err != nil {
-		return data, errors.Wrap(err, "Failed to open environment file")
-	}
-	defer file.Close()
-
-	var contentBuilder strings.Builder
-	scanner := bufio.NewScanner(file)
-	countVariables := 0
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, "=") {
-			contentBuilder.WriteString(line + "\n")
-			countVariables++
-		}
+		return data, errors.Wrapf(err, "Failed to open environment file '%s'", fileName)
 	}
 
-	if err := scanner.Err(); err != nil {
-		return data, errors.Wrap(err, "Error scanning environment file")
-	}
+	contentStr := string(content)
 
-	content := contentBuilder.String()
-	data.Size = strconv.Itoa(len(content)) + " bytes"
+	countVariables := countEnvVars(contentStr)
+
+	data.Size = strconv.Itoa(len(contentStr)) + " bytes"
 	data.CountVariables = countVariables
-	data.Data = content
+	data.Data = contentStr
 	data.Version = nil
 	data.ProjectEnv = nil
 
 	return data, nil
+}
+
+func countEnvVars(content string) int {
+	count := 0
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if isEnvVar(line) {
+			count++
+		}
+	}
+	return count
+}
+
+func isEnvVar(line string) bool {
+	return line != "" && !strings.HasPrefix(line, "#") && strings.Contains(line, "=")
+}
+
+func NewWithEncryptedData(fileName string, key secretkey.SecretKeyer) (Env, error) {
+	env, err := New(fileName)
+	if err != nil {
+		return Env{}, err
+	}
+	data, err := env.EncryptData(key)
+	env.Data = data
+	return env, nil
 }
 
 func (e *Env) EncryptData(key secretkey.SecretKeyer) (string, error) {
@@ -77,15 +103,6 @@ func (e *Env) DecryptData(key secretkey.SecretKeyer) (string, error) {
 	return decryptedData, nil
 }
 
-func (e *Env) ListDecryptedVars(key secretkey.SecretKeyer) ([]string, error) {
-	decryptedData, err := key.Decrypt(e.Data)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return nil, errors.Wrap(err, "Failed to decrypt environment variables")
-	}
-	return strings.Split(decryptedData, "\n"), nil
-}
-
 func (e *Env) DecryptVarsAndSaveIntoFile(fileName string, key secretkey.SecretKeyer) (string, error) {
 	file, err := os.Create(fileName)
 	if err != nil {
@@ -93,17 +110,14 @@ func (e *Env) DecryptVarsAndSaveIntoFile(fileName string, key secretkey.SecretKe
 	}
 	defer file.Close()
 
-	decryptedVarList, err := e.ListDecryptedVars(key)
+	decryptedData, err := key.Decrypt(e.Data)
 	if err != nil {
-		fmt.Println("Error:", err)
-		return "", errors.Wrap(err, "Failed to list decrypted variables")
+		return "", errors.Wrap(err, "Failed to decrypt environment data")
 	}
 
-	for _, envVar := range decryptedVarList {
-		_, err := file.WriteString(envVar + "\n")
-		if err != nil {
-			return "", errors.Wrap(err, "Failed to write environment variables to file")
-		}
+	_, err = file.WriteString(decryptedData)
+	if err != nil {
+		return "", errors.Wrap(err, "Failed to write decrypted data to file")
 	}
 
 	return fileName, nil
