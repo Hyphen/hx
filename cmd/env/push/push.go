@@ -119,7 +119,7 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 	// Fetch current cloud environment
 	currentCloudEnv, err := s.envService.GetEnvironmentEnv(orgID, appID, envName)
 	if err != nil {
-		return fmt.Errorf("failed to get cloud environment: %w", err)
+		return fmt.Errorf("failed to get cloud %s environment: %w", envName, err)
 	}
 
 	// Check local environment
@@ -136,7 +136,7 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 
 	// Update cloud environment
 	if err := s.envService.PutEnvironmentEnv(orgID, appID, envName, e); err != nil {
-		return fmt.Errorf("failed to update cloud environment: %w", err)
+		return fmt.Errorf("failed to update cloud %s environment: %w", envName, err)
 	}
 
 	// Update local environment
@@ -150,7 +150,7 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 		AppId:     *m.AppId,
 		EnvName:   envName,
 	}, newEnvDcrypted, currentLocalEnv.Version+1); err != nil {
-		return fmt.Errorf("failed to save local environment: %w", err) // TODO: check if this should be and error
+		return fmt.Errorf("failed to save local %s environment: %w", envName, err)
 	}
 
 	return nil
