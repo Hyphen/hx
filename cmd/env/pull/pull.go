@@ -2,6 +2,7 @@ package pull
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
@@ -25,10 +26,8 @@ The pull command retrieves environment variables from Hyphen and decrypts them i
 This command allows you to:
 - Pull a specific environment by name
 - Pull all environments for the application
-- Decrypt the pulled variables using your local secret key
-- Save the decrypted variables into corresponding .env files
 
-The pulled environments will be saved as .env.[environment_name] files in your current directory.
+The pulled environments will be decryped and saved as .env.[environment_name] files in your current directory.
 
 Examples:
   hyphen pull production
@@ -38,7 +37,6 @@ After pulling, all environment variables will be locally available and ready for
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Pulling environment variables...")
 		manifest, err := manifest.Restore()
 		if err != nil {
 			cprint.Error(cmd, err)
@@ -83,7 +81,7 @@ After pulling, all environment variables will be locally available and ready for
 				return
 			}
 
-			printPullSummary(appId, pulledEnvs)
+			printPullSummary(pulledEnvs)
 			return
 		}
 
@@ -93,7 +91,7 @@ After pulling, all environment variables will be locally available and ready for
 				return
 			}
 
-			printPullSummary(appId, []string{"default"})
+			printPullSummary([]string{"default"})
 		} else { // we have a specific env name
 			err = service.checkForEnvironment(orgId, envName, projectId)
 			if err != nil {
@@ -105,7 +103,7 @@ After pulling, all environment variables will be locally available and ready for
 				return
 			}
 
-			printPullSummary(appId, []string{envName})
+			printPullSummary([]string{envName})
 		}
 	},
 }
@@ -139,26 +137,31 @@ func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
 }
 
 func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretKey *secretkey.SecretKey, m manifest.Manifest, force bool) error {
-	envFile, err := env.GetFileName(envName)
+	envFileName, err := env.GetFileName(envName)
 	if err != nil {
 		return err
 	}
 
-	currentLocal, err := env.New(envFile)
-	if err != nil {
-		return err
-	}
+	_, err = os.Stat(envFileName)
+	fileExists := !os.IsNotExist(err)
 
-	currentLocalSecret, exists := s.db.GetSecret(database.SecretKey{
-		ProjectId: *m.ProjectId,
-		AppId:     *m.AppId,
-		EnvName:   envName,
-	})
-	if exists {
-		actual := currentLocal.HashData()
-		expectedHash := currentLocalSecret.Hash
-		if actual != expectedHash && !force {
-			return fmt.Errorf("Local environment \"%s\" has been modified. Use --force to overwrite", envName) //TODO check if this should be a error
+	if fileExists && !force {
+		currentLocal, err := env.New(envFileName)
+		if err != nil {
+			return err
+		}
+
+		currentLocalSecret, dbSecretExists := s.db.GetSecret(database.SecretKey{
+			ProjectId: *m.ProjectId,
+			AppId:     *m.AppId,
+			EnvName:   envName,
+		})
+		if dbSecretExists {
+			actual := currentLocal.HashData()
+			expectedHash := currentLocalSecret.Hash
+			if actual != expectedHash && !force {
+				return fmt.Errorf("Local \"%s\" environment has been modified. Use --force to overwrite", envName)
+			}
 		}
 	}
 
@@ -182,8 +185,8 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		return err
 	}
 
-	if _, err = e.DecryptVarsAndSaveIntoFile(envFile, secretKey); err != nil {
-		return fmt.Errorf("Failed to save decrypted environment: %s, variables to file: %s", envName, envFile)
+	if _, err = e.DecryptVarsAndSaveIntoFile(envFileName, secretKey); err != nil {
+		return fmt.Errorf("Failed to save decrypted environment: %s, variables to file: %s", envName, envFileName)
 	}
 
 	return nil
@@ -208,13 +211,7 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 	return pulledEnvs, nil
 }
 
-func printPullSummary(appId string, pulledEnvs []string) {
-	cprint.Success("Successfully pulled and decrypted environment variables")
-	cprint.Print("")
-	cprint.PrintDetail("Application", appId)
-	cprint.PrintDetail("Environments pulled", fmt.Sprintf("%d", len(pulledEnvs)))
-
-	cprint.Print("")
+func printPullSummary(pulledEnvs []string) {
 	cprint.Print("Pulled environments:")
 	for _, env := range pulledEnvs {
 		if env == "default" {
@@ -223,7 +220,4 @@ func printPullSummary(appId string, pulledEnvs []string) {
 			cprint.Print(fmt.Sprintf("  - %s -> .env.%s", env, env))
 		}
 	}
-
-	cprint.Print("")
-	cprint.GreenPrint("All environment variables are now locally available and ready for use.")
 }

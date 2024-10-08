@@ -45,7 +45,7 @@ func New(fileName string) (Env, error) {
 
 	content, err := os.ReadFile(fileName)
 	if err != nil {
-		return data, errors.Wrap(err, "Failed to open environment file")
+		return data, errors.Wrapf(err, "Failed to open environment file '%s'", fileName)
 	}
 
 	contentStr := string(content)

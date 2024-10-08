@@ -227,6 +227,4 @@ func printPushSummary(envsToPush []string, envsPushed []string) {
 			cprint.Success(fmt.Sprintf("Successfully pushed environment '%s'", envsToPush[0]))
 		}
 	}
-
-	fmt.Println()
 }
