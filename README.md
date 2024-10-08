@@ -28,7 +28,6 @@ Global Flags:
 -   `--org`: Organization ID (e.g., org_123)
 -   `--proj`: Project ID (e.g., proj_123)
 -   `--env`: Environment ID (e.g., env_12345)
--   `--api-key`: API Key (e.g, key_123)
 -   `--yes, -y`: Automatically answer yes for prompts
 -   `--no`: Automatically answer no for prompts
 
@@ -55,6 +54,25 @@ Usage:
 hyphen auth
 ```
 This command starts the OAuth flow and saves the credentials.
+
+### API Key authentication
+If you are authenticating in a CI/CD environment and need to authenticate using an API key, you can do so in 2 ways:
+
+#### `--use-api-key`
+This will look for the `HYPHEN_API_KEY` environment variable first and if not found it will prompt for the key.
+
+Usage:
+```bash
+hyphen auth --use-api-key
+```
+
+#### `--set-api-key VALUE`
+This will expect an inline value. The risk in using this method is just in exposing the secret in your terminal output, but it's provided for convenience.
+
+Usage:
+```bash
+hyphen auth --set-api-key VALUE
+```
 
 ## Initialization Command
 ### `hyphen init`
