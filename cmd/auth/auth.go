@@ -18,7 +18,19 @@ var AuthCmd = &cobra.Command{
 	Use:   "auth",
 	Short: "Authenticate with Hyphen",
 	Args:  cobra.NoArgs,
-	Long:  `Authenticate and set up credentials for the Hyphen CLI.`,
+	Long: `Authenticate and set up credentials for the Hyphen CLI.
+
+This command allows you to log in to your Hyphen account via OAuth or an API key, and securely store your credentials for future CLI interactions.
+
+The authentication process supports two methods:
+- OAuth Login (default): This method will open a browser window and prompt you to log in using your Hyphen credentials.
+- API Key Login: If you prefer or are required to use an API key, you can authenticate by providing the key either via an environment variable, an inline flag, or interactively via a prompt.
+
+Examples:
+	hyhen auth
+	hyphen auth --use-api-key # This will read check for HYPHEN_API_KEY in the environment and prompt if not found
+	hyphen auth --set-api-key YOURKEY1234
+	`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := login(cmd); err != nil {
 			cprint.Error(cmd, err)
