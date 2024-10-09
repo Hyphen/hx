@@ -103,7 +103,7 @@ func loadAndAppendEnv(envName string, m manifest.Manifest, mergedVars *[]string)
 	scanner := bufio.NewScanner(strings.NewReader(envFile.Data))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if !strings.HasPrefix(line, "#") && strings.Contains(line, "=") {
+		if env.IsEnvVar(line) {
 			*mergedVars = append(*mergedVars, line)
 		}
 	}
