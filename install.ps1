@@ -61,7 +61,7 @@ function Install-CLI {
         [string]$version
     )
     $packageName = "hyphen-cli"
-    $os = "windows" 
+    $os = "windows"  # Hardcoded to windows
 
     if (-not $version) {
         $version = Get-LatestVersion -packageName $packageName
