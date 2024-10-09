@@ -190,7 +190,7 @@ func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 	}
 
 	// Build an Env struct from that new empty file
-	envStruct, err := env.GetLocalEnv(envName, manifest)
+	envStruct, err := env.GetLocalEnv(envName, manifest, true)
 	if err != nil {
 		return err
 	}

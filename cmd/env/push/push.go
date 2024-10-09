@@ -83,7 +83,7 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 			return
 		}
 		for _, envName := range envsToPush {
-			e, err := env.GetLocalEnv(envName, manifest)
+			e, err := env.GetLocalEnv(envName, manifest, true)
 			if err != nil {
 				cprint.Error(cmd, err)
 				continue
@@ -121,7 +121,7 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 		EnvName:   envName,
 	})
 	if exists {
-		err, skippable := s.validateLocalEnv(envName, &currentLocalEnv, &e, secretKey)
+		err, skippable := s.validateLocalEnv(&currentLocalEnv, &e, secretKey)
 		if err != nil {
 			return err, false
 		}
@@ -156,7 +156,7 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 	return nil, false
 }
 
-func (s *service) validateLocalEnv(envName string, local *database.Secret, new *env.Env, secretKey secretkey.SecretKeyer) (err error, skippable bool) {
+func (s *service) validateLocalEnv(local *database.Secret, new *env.Env, secretKey secretkey.SecretKeyer) (err error, skippable bool) {
 	newEnvDcrypted, err := new.DecryptData(secretKey)
 	if err != nil {
 		return err, false

@@ -204,8 +204,7 @@ func (es *EnvService) ListEnvironments(organizationId, projectId string, size, p
 }
 
 // GetLocalEnv returns the local environment variables from the .env file
-// The data in the .env file is encrypted
-func GetLocalEnv(envName string, m manifest.Manifest) (Env, error) {
+func GetLocalEnv(envName string, m manifest.Manifest, encrypt bool) (Env, error) {
 	envFile, err := GetFileName(envName)
 	if err != nil {
 		return Env{}, err
@@ -214,6 +213,10 @@ func GetLocalEnv(envName string, m manifest.Manifest) (Env, error) {
 	e, err := New(envFile)
 	if err != nil {
 		return Env{}, err
+	}
+
+	if !encrypt {
+		return e, nil
 	}
 
 	envEncrytedData, err := e.EncryptData(m.GetSecretKey())
