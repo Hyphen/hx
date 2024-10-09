@@ -64,9 +64,7 @@ func loadAndMergeEnvFiles(envName string, m manifest.Manifest) ([]string, error)
 	mergedVars := make(map[string]string)
 
 	// Load .env file (default)
-	if err := loadAndMergeEnv("default", m, mergedVars, false); err != nil {
-		return nil, err
-	}
+	_ = loadAndMergeEnv("default", m, mergedVars, false) // Ignore error for default
 
 	// Load .env.<environment> file
 	if err := loadAndMergeEnv(envName, m, mergedVars, true); err != nil {
@@ -85,9 +83,12 @@ func loadAndMergeEnvFiles(envName string, m manifest.Manifest) ([]string, error)
 func loadAndMergeEnv(envName string, m manifest.Manifest, mergedVars map[string]string, override bool) error {
 	envFile, err := env.GetLocalEnv(envName, m)
 	if err != nil {
-		if os.IsNotExist(err) && envName == "default" {
-			// It's okay if the default .env file doesn't exist
-			return nil
+		if os.IsNotExist(err) {
+			if envName == "default" {
+				// It's okay if the default .env file doesn't exist
+				return nil
+			}
+			return errors.Wrap(err, fmt.Sprintf("%s env file not found", envName))
 		}
 		return errors.Wrap(err, fmt.Sprintf("Error loading %s env file", envName))
 	}
