@@ -1,12 +1,12 @@
 package run
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
-	"dario.cat/mergo"
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/cprint"
@@ -27,67 +27,74 @@ Usage:
 Examples:
   hyphen env run production -- go run main.go
   hyphen env run staging -- node server.js
+  hyphen env run -- go run main.go (uses default environment)
 `,
-	Args: cobra.MinimumNArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		envName := args[0]
-		childCommand := args[1:]
+	Run: func(cmd *cobra.Command, args []string) {
+		var envName string
+		var childCommand []string
 
-		// Find the index of "--" if it exists
 		separatorIndex := cmd.ArgsLenAtDash()
-		if separatorIndex != -1 {
+
+		if separatorIndex == -1 || separatorIndex == 0 {
+			// No environment specified or "--" is the first argument
+			envName = "default"
+			childCommand = args
+		} else {
+			envName = args[0]
 			childCommand = args[separatorIndex:]
+		}
+
+		if len(childCommand) == 0 {
+			cprint.Error(cmd, errors.New("No command specified"))
+			return
 		}
 
 		manifest, err := manifest.Restore()
 		if err != nil {
-			return errors.Wrap(err, "Failed to restore manifest")
+			cprint.Error(cmd, errors.Wrap(err, "Failed to restore manifest"))
+			return
 		}
 
-		// Load and merge env files
 		mergedEnvVars, err := loadAndMergeEnvFiles(envName, manifest)
 		if err != nil {
-			return err
+			cprint.Error(cmd, err)
+			return
 		}
 
-		// Run the child command with the merged env vars
 		if err := runCommandWithEnv(childCommand, mergedEnvVars); err != nil {
 			cprint.Error(cmd, errors.Wrap(err, "Command execution failed"))
-			return err
+			return
 		}
-
-		return nil
 	},
 }
 
 func loadAndMergeEnvFiles(envName string, m manifest.Manifest) ([]string, error) {
-	mergedVars := make(map[string]string)
+	var mergedVars []string
 
 	// Load .env file (default)
-	_ = loadAndMergeEnv("default", m, mergedVars, false) // Ignore error for default
-
-	// Load .env.<environment> file
-	if err := loadAndMergeEnv(envName, m, mergedVars, true); err != nil {
-		return nil, err
+	if err := loadAndAppendEnv("default", m, &mergedVars); err != nil && envName == "default" {
+		return nil, err // Return error if default is specifically requested and doesn't exist
 	}
 
-	// Convert merged map to slice of strings
-	var result []string
-	for k, v := range mergedVars {
-		result = append(result, fmt.Sprintf("%s=%s", k, v))
+	// Load .env.local file (if exists)
+	if err := loadAndAppendEnv("local", m, &mergedVars); err != nil && envName == "local" {
+		return nil, err // Return error if local is specifically requested and doesn't exist
 	}
 
-	return result, nil
+	// Load .env.<environment> file (if provided)
+	if envName != "default" && envName != "local" {
+		if err := loadAndAppendEnv(envName, m, &mergedVars); err != nil {
+			return nil, err
+		}
+	}
+
+	return mergedVars, nil
 }
 
-func loadAndMergeEnv(envName string, m manifest.Manifest, mergedVars map[string]string, override bool) error {
+func loadAndAppendEnv(envName string, m manifest.Manifest, mergedVars *[]string) error {
 	envFile, err := env.GetLocalEnv(envName, m)
 	if err != nil {
 		if os.IsNotExist(err) {
-			if envName == "default" {
-				// It's okay if the default .env file doesn't exist
-				return nil
-			}
 			return errors.Wrap(err, fmt.Sprintf("%s env file not found", envName))
 		}
 		return errors.Wrap(err, fmt.Sprintf("Error loading %s env file", envName))
@@ -98,36 +105,18 @@ func loadAndMergeEnv(envName string, m manifest.Manifest, mergedVars map[string]
 		return errors.Wrap(err, fmt.Sprintf("Error decrypting %s env", envName))
 	}
 
-	vars := parseEnvString(decrypted)
-	mergeOpt := mergo.WithAppendSlice
-	if override {
-		mergeOpt = mergo.WithOverride
-	}
-	if err := mergo.Merge(&mergedVars, vars, mergeOpt); err != nil {
-		return errors.Wrap(err, fmt.Sprintf("Error merging %s variables", envName))
+	scanner := bufio.NewScanner(strings.NewReader(decrypted))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "#") && strings.Contains(line, "=") {
+			*mergedVars = append(*mergedVars, line)
+		}
 	}
 
 	if flags.VerboseFlag {
-		cprint.Info(fmt.Sprintf("Loaded and merged %s environment", envName))
+		cprint.Info(fmt.Sprintf("Loaded and appended %s environment", envName))
 	}
 	return nil
-}
-
-func parseEnvString(envData string) map[string]string {
-	result := make(map[string]string)
-	lines := strings.Split(envData, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if env.IsEnvVar(line) {
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 {
-				key := strings.TrimSpace(parts[0])
-				value := strings.TrimSpace(parts[1])
-				result[key] = value
-			}
-		}
-	}
-	return result
 }
 
 func runCommandWithEnv(command []string, envVars []string) error {
