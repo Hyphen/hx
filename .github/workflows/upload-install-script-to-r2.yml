@@ -3,7 +3,7 @@ name: Upload Install Scripts to R2
 on:
   push:
     branches:
-      - fix/push_bouth_ps1_sh_installation_#111
+      - main
     paths:
       - 'install.sh'
       - 'install.ps1'
