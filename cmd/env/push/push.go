@@ -137,7 +137,7 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 
 	// Update cloud environment
 	if err := s.envService.PutEnvironmentEnv(orgID, appID, envName, e); err != nil {
-		return fmt.Errorf("failed to update cloud %s environment. try pulling to get latest before pushing: %w", envName, err), false
+		return fmt.Errorf("failed to update cloud %s environment: %w", envName, err), false
 	}
 
 	// Update local environment

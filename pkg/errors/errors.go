@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -62,9 +63,19 @@ func (e *Error) Is(target error) bool {
 
 func HandleHTTPError(resp *http.Response) *Error {
 	body, _ := io.ReadAll(resp.Body)
+	errorMessage := body
+
+	// attempt to decode the response body as key/value JSON to see if we have a message field to use
+	var responseBody map[string]string
+	if err := json.Unmarshal(body, &responseBody); err == nil {
+		if msg, ok := responseBody["message"]; ok {
+			errorMessage = []byte(msg)
+		}
+	}
+
 	switch resp.StatusCode {
 	case http.StatusBadRequest:
-		return Wrapf(New("BadRequest"), "bad request: %s", string(body))
+		return Wrapf(New("BadRequest"), "bad request: %s", errorMessage)
 	case http.StatusUnauthorized:
 		return New("unauthorized: please authenticate with `auth` and try again")
 	case http.StatusForbidden:
@@ -72,12 +83,12 @@ func HandleHTTPError(resp *http.Response) *Error {
 	case http.StatusNotFound:
 		return New("not found: the requested resource does not exist")
 	case http.StatusConflict:
-		return Wrapf(New("Conflict"), "conflict: %s", string(body))
+		return Wrapf(New("Conflict"), "conflict: %s", errorMessage)
 	case http.StatusTooManyRequests:
 		return New("rate limit exceeded: please try again later")
 	case http.StatusInternalServerError:
 		return New("internal server error: please try again later")
 	default:
-		return Wrapf(New("UnexpectedError"), "unexpected error (status code %d): %s", resp.StatusCode, string(body))
+		return Wrapf(New("UnexpectedError"), "unexpected error (status code %d): %s", resp.StatusCode, errorMessage)
 	}
 }
