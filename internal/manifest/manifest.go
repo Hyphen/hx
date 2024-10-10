@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"dario.cat/mergo"
 	"github.com/Hyphen/cli/internal/secretkey"
@@ -41,7 +42,15 @@ type Manifest struct {
 }
 
 type ManifestSecret struct {
+	ID        int64  `json:"id"`
 	SecretKey string `json:"secret_key"`
+}
+
+func newManifestSecret(sk *secretkey.SecretKey) ManifestSecret {
+	return ManifestSecret{
+		ID:        time.Now().Unix(),
+		SecretKey: sk.Base64(),
+	}
 }
 
 func (m *Manifest) GetSecretKey() *secretkey.SecretKey {
@@ -106,9 +115,7 @@ func Initialize(mc ManifestConfig, secretFile, configFile string) (Manifest, err
 	if err != nil {
 		return Manifest{}, errors.Wrapf(err, "Error writing file: %s", configFile)
 	}
-	ms := ManifestSecret{
-		SecretKey: sk.Base64(),
-	}
+	ms := newManifestSecret(sk)
 
 	jsonData, err = json.MarshalIndent(ms, "", "  ")
 	if err != nil {
