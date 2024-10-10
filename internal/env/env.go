@@ -20,6 +20,7 @@ type Env struct {
 	Data           string              `json:"data"`
 	Version        *int                `json:"version,omitempty"`
 	ProjectEnv     *ProjectEnvironment `json:"projectEnvironment,omitempty"`
+	SecretKeyId    *int64              `json:"secretKeyId,omitempty"`
 }
 
 // HashData returns the SHA256 hash of the environment data.

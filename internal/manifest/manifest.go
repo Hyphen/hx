@@ -42,14 +42,14 @@ type Manifest struct {
 }
 
 type ManifestSecret struct {
-	ID        int64  `json:"id"`
-	SecretKey string `json:"secret_key"`
+	SecretKeyId int64  `json:"secret_key_id"`
+	SecretKey   string `json:"secret_key"`
 }
 
-func newManifestSecret(sk *secretkey.SecretKey) ManifestSecret {
+func NewSecret(sk *secretkey.SecretKey) ManifestSecret {
 	return ManifestSecret{
-		ID:        time.Now().Unix(),
-		SecretKey: sk.Base64(),
+		SecretKeyId: time.Now().Unix(),
+		SecretKey:   sk.Base64(),
 	}
 }
 
@@ -115,7 +115,7 @@ func Initialize(mc ManifestConfig, secretFile, configFile string) (Manifest, err
 	if err != nil {
 		return Manifest{}, errors.Wrapf(err, "Error writing file: %s", configFile)
 	}
-	ms := newManifestSecret(sk)
+	ms := NewSecret(sk)
 
 	jsonData, err = json.MarshalIndent(ms, "", "  ")
 	if err != nil {
