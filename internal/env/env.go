@@ -66,14 +66,14 @@ func countEnvVars(content string) int {
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if isEnvVar(line) {
+		if IsEnvVar(line) {
 			count++
 		}
 	}
 	return count
 }
 
-func isEnvVar(line string) bool {
+func IsEnvVar(line string) bool {
 	return line != "" && !strings.HasPrefix(line, "#") && strings.Contains(line, "=")
 }
 

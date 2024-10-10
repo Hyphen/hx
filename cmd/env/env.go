@@ -3,6 +3,7 @@ package env
 import (
 	"github.com/Hyphen/cli/cmd/env/pull"
 	"github.com/Hyphen/cli/cmd/env/push"
+	"github.com/Hyphen/cli/cmd/env/run"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
@@ -21,4 +22,5 @@ func init() {
 
 	EnvCmd.AddCommand(pull.PullCmd)
 	EnvCmd.AddCommand(push.PushCmd)
+	EnvCmd.AddCommand(run.RunCmd)
 }

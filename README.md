@@ -301,3 +301,22 @@ Flags:
 -   `--all`: Push secrets for all environments
 
 This command reads the local .env file corresponding to the specified environment, encrypts the variables, and uploads them to the Hyphen platform.
+
+#### Run Command
+### `hyphen env run production -- yourcommand and command args`
+
+Run a sub-command with the specified environment set as environment variables, merging with defaults.
+
+Usage:
+```bash
+hyphen env run [environment] -- [command]
+```
+
+`environment` is optional. Skipping it will just use the default (`.env`) environment.
+
+When they exist, the files will be loaded and appended to the environment in this order:
+- `.env`
+- `.env.local`
+- `.env.{environment}`
+
+So a variable defined in `.env` that is also defined in `.env.{environment}` will have the `.env.{environment}` value take precedence.
