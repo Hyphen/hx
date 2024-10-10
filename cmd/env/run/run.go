@@ -92,7 +92,7 @@ func loadAndMergeEnvFiles(envName string, m manifest.Manifest) ([]string, error)
 }
 
 func loadAndAppendEnv(envName string, m manifest.Manifest, mergedVars *[]string) error {
-	envFile, err := env.GetLocalEnv(envName, m, false)
+	envContents, err := env.GetLocalEnvContents(envName)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errors.Wrap(err, fmt.Sprintf("%s env file not found", envName))
@@ -100,7 +100,7 @@ func loadAndAppendEnv(envName string, m manifest.Manifest, mergedVars *[]string)
 		return errors.Wrap(err, fmt.Sprintf("Error loading %s env file", envName))
 	}
 
-	scanner := bufio.NewScanner(strings.NewReader(envFile.Data))
+	scanner := bufio.NewScanner(strings.NewReader(envContents))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if env.IsEnvVar(line) {

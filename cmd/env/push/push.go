@@ -83,7 +83,7 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 			return
 		}
 		for _, envName := range envsToPush {
-			e, err := env.GetLocalEnv(envName, manifest, true)
+			e, err := env.GetLocalEncryptedEnv(envName, manifest)
 			if err != nil {
 				cprint.Error(cmd, err)
 				continue
