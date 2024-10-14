@@ -416,3 +416,19 @@ func UpsertGlobalProjectID(projectID string) error {
 
 	return nil
 }
+
+func UpsertLocalManifestSecret(secret ManifestSecret) error {
+	localSecretFile := ManifestSecretFile
+
+	jsonData, err := json.MarshalIndent(secret, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "Error encoding JSON")
+	}
+
+	err = FS.WriteFile(localSecretFile, jsonData, 0644)
+	if err != nil {
+		return errors.Wrapf(err, "Error writing file: %s", localSecretFile)
+	}
+
+	return nil
+}

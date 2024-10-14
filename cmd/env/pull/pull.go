@@ -162,7 +162,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		}
 	}
 
-	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName)
+	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName, m.SecretKeyId)
 	if err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		return err
 	}
 
-	if err := s.db.SaveSecret(
+	if err := s.db.UpsertSecret(
 		database.SecretKey{
 			ProjectId: *m.ProjectId,
 			AppId:     *m.AppId,

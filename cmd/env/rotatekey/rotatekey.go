@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Hyphen/cli/cmd/env/pull"
+	"github.com/Hyphen/cli/cmd/env/push"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
@@ -55,39 +56,24 @@ func runRotateKey(cmd *cobra.Command) error {
 		return err
 	}
 
+	currentManifest, err := manifest.Restore()
+	if err != nil {
+		return fmt.Errorf("failed to restore manifest: %w", err)
+	}
+
 	newManifestSecret, err := getNewManifestSecret()
 	if err != nil {
 		return err
 	}
 
-	m, err := manifest.Restore()
-	if err != nil {
-		return fmt.Errorf("failed to restore manifest: %w", err)
-	}
+	manifest.UpsertLocalManifestSecret(newManifestSecret)
 
-	//KeyRotatePutEnv
-	if err := putWithRotationKey(m, newManifestSecret); err != nil {
-		return err
-	}
-
-	if err := saveNewSecret(m, newManifestSecret); err != nil {
-		return err
-	}
+	push.RunPush([]string{}, currentManifest.SecretKeyId)
 
 	cprint.Success("Key rotation completed successfully.")
 	cprint.Info("New encryption key has been generated and all environments have been updated.")
 	cprint.Info("Please ensure all team members pull the latest changes.")
 
-	return nil
-}
-
-func putWithRotationKey(m manifest.Manifest, newSecret manifest.ManifestSecret) error {
-	//KeyRotatePutEnv
-	return nil
-}
-
-func saveNewSecret(m manifest.Manifest, newSecret manifest.ManifestSecret) error {
-	//KeyRotateSaveSecret
 	return nil
 }
 

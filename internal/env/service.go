@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/apiconf"
@@ -14,8 +16,8 @@ import (
 
 type EnvServicer interface {
 	GetEnvironment(organizationId, projectId, environment string) (Environment, bool, error)
-	PutEnvironmentEnv(organizationId, appId, environmentId string, env Env) error
-	GetEnvironmentEnv(organizationId, appId, env string) (Env, error)
+	PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env Env) error
+	GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64) (Env, error)
 	ListEnvs(organizationId, appId string, size, page int) ([]Env, error)
 	ListEnvironments(organizationId, projectId string, size, page int) ([]Environment, error)
 }
@@ -65,17 +67,18 @@ func (es *EnvService) GetEnvironment(organizationId, projectId, environmentId st
 	return environment, true, nil
 }
 
-func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId string, env Env) error {
-	url := ""
-	if environmentId == "default" {
-		url = fmt.Sprintf("%s/api/organizations/%s/apps/%s/env", es.baseUrl, organizationId, appId)
-	} else {
-		envName, err := GetEnvName(environmentId)
-		if err != nil {
-			return errors.Wrap(err, "Failed to get environment name")
-		}
+// PutEnvironmentEnv updates the environment variables for the given organization, app, and environment.
+// In case of key rotation set the new key in the env.secretKeyId and send the current secretKeyId in the func param
+func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env Env) error {
+	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseUrl, organizationId, appId)
 
-		url = fmt.Sprintf("%s/api/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, appId, envName)
+	var queryParams []string
+	queryParams = append(queryParams, fmt.Sprintf("secretKeyId=%s", strconv.FormatInt(secretKeyId, 10)))
+	if environmentId != "default" {
+		queryParams = append(queryParams, fmt.Sprintf("environmentId=%s", environmentId))
+	}
+	if len(queryParams) > 0 {
+		url = fmt.Sprintf("%s?%s", url, strings.Join(queryParams, "&"))
 	}
 
 	envJSON, err := json.Marshal(env)
@@ -101,17 +104,16 @@ func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId str
 	return nil
 }
 
-func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId string) (Env, error) {
-	url := ""
-	if environmentId == "default" {
-		url = fmt.Sprintf("%s/api/organizations/%s/apps/%s/env", es.baseUrl, organizationId, appId)
-	} else {
-		envName, err := GetEnvName(environmentId)
-		if err != nil {
-			return Env{}, errors.Wrap(err, "Failed to get environment name")
-		}
+func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64) (Env, error) {
+	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseUrl, organizationId, appId)
 
-		url = fmt.Sprintf("%s/api/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, appId, envName)
+	var queryParams []string
+	queryParams = append(queryParams, fmt.Sprintf("secretKeyId=%s", strconv.FormatInt(secretKeyId, 10)))
+	if environmentId != "default" {
+		queryParams = append(queryParams, fmt.Sprintf("environmentId=%s", environmentId))
+	}
+	if len(queryParams) > 0 {
+		url = fmt.Sprintf("%s?%s", url, strings.Join(queryParams, "&"))
 	}
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -138,8 +140,20 @@ func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId str
 }
 
 func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]Env, error) {
-	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/envs?pageSize=%d&pageNum=%d",
-		es.baseUrl, organizationId, appId, size, page)
+	url := fmt.Sprintf("%s/api/organizations/%s/dot-envs", es.baseUrl, organizationId)
+
+	var queryParams []string
+
+	queryParams = append(queryParams, fmt.Sprintf("pageSize=%d", size))
+	queryParams = append(queryParams, fmt.Sprintf("pageNum=%d", page))
+
+	if appId != "" {
+		queryParams = append(queryParams, fmt.Sprintf("appIds=%s", appId))
+	}
+
+	if len(queryParams) > 0 {
+		url = fmt.Sprintf("%s?%s", url, strings.Join(queryParams, "&"))
+	}
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -234,6 +248,7 @@ func GetLocalEncryptedEnv(envName string, m manifest.Manifest) (Env, error) {
 		return Env{}, err
 	}
 	e.Data = envEncrytedData
+	e.SecretKeyId = &m.SecretKeyId
 
 	return e, nil
 }

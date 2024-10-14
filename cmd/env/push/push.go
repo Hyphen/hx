@@ -20,9 +20,9 @@ var PushCmd = &cobra.Command{
 The push command uploads local environment variables from .env files to Hyphen.
 
 This command allows you to:
-- Push all environments found in local .env files when no environment is specified
-- Push a specific environment by name
-- Encrypt and securely store your environment variables in Hyphen
+-  Push all environments found in local .env files when no environment is specified
+-  Push a specific environment by name
+-  Encrypt and securely store your environment variables in Hyphen
 
 The command looks for .env files in the current directory with the naming convention .env.[environment_name].
 
@@ -34,71 +34,75 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		manifest, err := manifest.Restore()
+		m, err := manifest.Restore()
 		if err != nil {
 			cprint.Error(cmd, err)
-			return
 		}
-
-		db, err := database.Restore()
-		if err != nil {
+		if err := RunPush(args, m.SecretKeyId); err != nil {
 			cprint.Error(cmd, err)
-			return
 		}
-
-		service := newService(env.NewService(), db)
-
-		orgId, err := flags.GetOrganizationID()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		prjectId, err := flags.GetProjectID()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		appId, err := flags.GetApplicationID()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		var envsToPush []string
-		var envsPushed []string
-		if len(args) == 1 {
-			envsToPush = append(envsToPush, args[0])
-		} else {
-			envsToPush, err = service.getLocalEnvsNamesFromFiles()
-			if err != nil {
-				cprint.Error(cmd, err)
-				return
-			}
-		}
-
-		if err := service.checkIfLocalEnvsExistAsEnvironments(envsToPush, orgId, prjectId); err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-		for _, envName := range envsToPush {
-			e, err := env.GetLocalEncryptedEnv(envName, manifest)
-			if err != nil {
-				cprint.Error(cmd, err)
-				continue
-			}
-			err, skippable := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey(), manifest)
-			if err != nil {
-				cprint.Error(cmd, err)
-				continue
-			} else if !skippable {
-				envsPushed = append(envsPushed, envName)
-			}
-		}
-
-		printPushSummary(envsToPush, envsPushed)
 	},
+}
+
+func RunPush(args []string, secretKeyId int64) error {
+	manifest, err := manifest.Restore()
+	if err != nil {
+		return err
+	}
+
+	db, err := database.Restore()
+	if err != nil {
+		return err
+	}
+
+	service := newService(env.NewService(), db)
+
+	orgId, err := flags.GetOrganizationID()
+	if err != nil {
+		return err
+	}
+
+	projectId, err := flags.GetProjectID()
+	if err != nil {
+		return err
+	}
+
+	appId, err := flags.GetApplicationID()
+	if err != nil {
+		return err
+	}
+
+	var envsToPush []string
+	var envsPushed []string
+	if len(args) == 1 {
+		envsToPush = append(envsToPush, args[0])
+	} else {
+		envsToPush, err = service.getLocalEnvsNamesFromFiles()
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := service.checkIfLocalEnvsExistAsEnvironments(envsToPush, orgId, projectId); err != nil {
+		return err
+	}
+	for _, envName := range envsToPush {
+		e, err := env.GetLocalEncryptedEnv(envName, manifest)
+		if err != nil {
+			cprint.Error(nil, err)
+			continue
+		}
+		err, skippable := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey(), manifest, secretKeyId)
+		if err != nil {
+			cprint.Error(nil, err)
+			continue
+		} else if !skippable {
+			envsPushed = append(envsPushed, envName)
+		}
+	}
+
+	printPushSummary(envsToPush, envsPushed)
+	return nil
 }
 
 type service struct {
@@ -113,7 +117,7 @@ func newService(envService env.EnvServicer, db database.Database) *service {
 	}
 }
 
-func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secretkey.SecretKeyer, m manifest.Manifest) (err error, skippable bool) {
+func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secretkey.SecretKeyer, m manifest.Manifest, secretKeyId int64) (err error, skippable bool) {
 	// Check local environment
 	currentLocalEnv, exists := s.db.GetSecret(database.SecretKey{
 		ProjectId: *m.ProjectId,
@@ -125,7 +129,7 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 		if err != nil {
 			return err, false
 		}
-		if skippable {
+		if skippable && m.SecretKeyId == secretKeyId {
 			cprint.Info(fmt.Sprintf("Local %s environment is already up to date - skipping", envName))
 			return nil, true
 		}
@@ -136,7 +140,7 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 	e.Version = &newVersion
 
 	// Update cloud environment
-	if err := s.envService.PutEnvironmentEnv(orgID, appID, envName, e); err != nil {
+	if err := s.envService.PutEnvironmentEnv(orgID, appID, envName, secretKeyId, e); err != nil {
 		return fmt.Errorf("failed to update cloud %s environment: %w", envName, err), false
 	}
 
@@ -145,7 +149,7 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 	if err != nil {
 		return err, false
 	}
-	if err := s.db.SaveSecret(database.SecretKey{
+	if err := s.db.UpsertSecret(database.SecretKey{
 		ProjectId: *m.ProjectId,
 		AppId:     *m.AppId,
 		EnvName:   envName,
