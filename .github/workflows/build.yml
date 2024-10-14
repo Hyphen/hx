@@ -63,14 +63,6 @@ jobs:
         if: runner.os == 'Windows'
         run: pwsh -Command 'go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.Version=${{ env.VERSION }}" -o hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe'
 
-      - name: Verify environment variables
-        if: runner.os == 'Windows'
-        run: |
-          if (-not $env:AZURE_CLIENT_ID) { Write-Error "AZURE_CLIENT_ID is not set" }
-          if (-not $env:AZURE_CLIENT_SECRET) { Write-Error "AZURE_CLIENT_SECRET is not set" }
-          if (-not $env:AZURE_TENANT_ID) { Write-Error "AZURE_TENANT_ID is not set" }
-        shell: pwsh
-
       - name: Codesign for Windows
         if: runner.os == 'Windows'
         uses: azure/trusted-signing-action@v0.4.0
