@@ -178,7 +178,7 @@ func runInit(cmd *cobra.Command, args []string) {
 	printInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
 }
 
-func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, manifest manifest.Manifest, orgID, appID, envID, envName string) error {
+func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m manifest.Manifest, orgID, appID, envID, envName string) error {
 	envFileName, err := env.GetFileName(envName)
 	if err != nil {
 		return err
@@ -190,7 +190,7 @@ func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 	}
 
 	// Build an Env struct from that new empty file
-	envStruct, err := env.GetLocalEncryptedEnv(envName, manifest)
+	envStruct, err := env.GetLocalEncryptedEnv(envName, m)
 	if err != nil {
 		return err
 	}
@@ -198,7 +198,7 @@ func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 	newVersion := 1
 	envStruct.Version = &newVersion
 
-	if err := envService.PutEnvironmentEnv(orgID, appID, envID, envStruct); err != nil {
+	if err := envService.PutEnvironmentEnv(orgID, appID, envID, m.SecretKeyId, envStruct); err != nil {
 		return err
 	}
 
@@ -207,18 +207,18 @@ func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 		return err
 	}
 
-	newEnvDcrypted, err := envStruct.DecryptData(manifest.GetSecretKey())
+	newEnvDcrypted, err := envStruct.DecryptData(m.GetSecretKey())
 	if err != nil {
 		return err
 	}
 
 	secretKey := database.SecretKey{
-		ProjectId: *manifest.ProjectId,
-		AppId:     *manifest.AppId,
+		ProjectId: *m.ProjectId,
+		AppId:     *m.AppId,
 		EnvName:   envName,
 	}
 
-	if err := db.SaveSecret(secretKey, newEnvDcrypted, 1); err != nil {
+	if err := db.UpsertSecret(secretKey, newEnvDcrypted, 1); err != nil {
 		return fmt.Errorf("failed to save local environment: %w", err) // TODO: check if this should be and error
 	}
 

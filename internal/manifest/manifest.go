@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"dario.cat/mergo"
 	"github.com/Hyphen/cli/internal/secretkey"
@@ -41,7 +42,15 @@ type Manifest struct {
 }
 
 type ManifestSecret struct {
-	SecretKey string `json:"secret_key"`
+	SecretKeyId int64  `json:"secret_key_id"`
+	SecretKey   string `json:"secret_key"`
+}
+
+func NewSecret(sk *secretkey.SecretKey) ManifestSecret {
+	return ManifestSecret{
+		SecretKeyId: time.Now().Unix(),
+		SecretKey:   sk.Base64(),
+	}
 }
 
 func (m *Manifest) GetSecretKey() *secretkey.SecretKey {
@@ -106,9 +115,7 @@ func Initialize(mc ManifestConfig, secretFile, configFile string) (Manifest, err
 	if err != nil {
 		return Manifest{}, errors.Wrapf(err, "Error writing file: %s", configFile)
 	}
-	ms := ManifestSecret{
-		SecretKey: sk.Base64(),
-	}
+	ms := NewSecret(sk)
 
 	jsonData, err = json.MarshalIndent(ms, "", "  ")
 	if err != nil {
@@ -405,6 +412,22 @@ func UpsertGlobalProjectID(projectID string) error {
 	err = FS.WriteFile(globalConfigFile, jsonData, 0644)
 	if err != nil {
 		return errors.Wrapf(err, "Error writing file: %s", globalConfigFile)
+	}
+
+	return nil
+}
+
+func UpsertLocalManifestSecret(secret ManifestSecret) error {
+	localSecretFile := ManifestSecretFile
+
+	jsonData, err := json.MarshalIndent(secret, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "Error encoding JSON")
+	}
+
+	err = FS.WriteFile(localSecretFile, jsonData, 0644)
+	if err != nil {
+		return errors.Wrapf(err, "Error writing file: %s", localSecretFile)
 	}
 
 	return nil

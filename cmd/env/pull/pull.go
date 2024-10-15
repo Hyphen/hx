@@ -15,6 +15,7 @@ import (
 
 var (
 	forceFlag bool
+	Silent    bool = false
 )
 
 var PullCmd = &cobra.Command{
@@ -31,79 +32,84 @@ The pulled environments will be decrypted and saved as .env.[environment_name] f
 
 Examples:
   hyphen pull production
-  hyphen pull --all
+  hyphen pull
 
 After pulling, all environment variables will be locally available and ready for use.
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		manifest, err := manifest.Restore()
-		if err != nil {
+		if err := RunPull(args, forceFlag); err != nil {
 			cprint.Error(cmd, err)
-			return
-		}
-
-		db, err := database.Restore()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		service := newService(env.NewService(), db)
-
-		orgId, err := flags.GetOrganizationID()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		appId, err := flags.GetApplicationID()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		projectId, err := flags.GetProjectID()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		var envName string
-		if len(args) == 1 {
-			envName = args[0]
-		}
-
-		if envName == "" { // ALL
-			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey(), manifest, forceFlag)
-			if err != nil {
-				cprint.Error(cmd, err)
-				return
-			}
-
-			printPullSummary(pulledEnvs)
-			return
-		} else if envName == "default" {
-			if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
-				cprint.Error(cmd, err)
-				return
-			}
-
-			printPullSummary([]string{"default"})
-		} else { // we have a specific env name
-			err = service.checkForEnvironment(orgId, envName, projectId)
-			if err != nil {
-				cprint.Error(cmd, err)
-				return
-			}
-			if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
-				cprint.Error(cmd, err)
-				return
-			}
-
-			printPullSummary([]string{envName})
 		}
 	},
+}
+
+func RunPull(args []string, forceFlag bool) error {
+	manifest, err := manifest.Restore()
+	if err != nil {
+		return err
+	}
+
+	db, err := database.Restore()
+	if err != nil {
+		return err
+	}
+
+	service := newService(env.NewService(), db)
+
+	orgId, err := flags.GetOrganizationID()
+	if err != nil {
+		return err
+	}
+
+	appId, err := flags.GetApplicationID()
+	if err != nil {
+		return err
+	}
+
+	projectId, err := flags.GetProjectID()
+	if err != nil {
+		return err
+	}
+
+	var envName string
+	if len(args) == 1 {
+		envName = args[0]
+	}
+
+	if envName == "" { // ALL
+		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey(), manifest, forceFlag)
+		if err != nil {
+			return err
+		}
+
+		if !Silent {
+			printPullSummary(pulledEnvs)
+		}
+		return nil
+	} else if envName == "default" {
+		if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
+			return err
+		}
+
+		if !Silent {
+			printPullSummary([]string{"default"})
+		}
+		return nil
+	} else { // we have a specific env name
+		err = service.checkForEnvironment(orgId, envName, projectId)
+		if err != nil {
+			return err
+		}
+		if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
+			return err
+		}
+
+		if !Silent {
+			printPullSummary([]string{envName})
+		}
+		return nil
+	}
 }
 
 func init() {
@@ -163,7 +169,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		}
 	}
 
-	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName)
+	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName, m.SecretKeyId)
 	if err != nil {
 		return err
 	}
@@ -173,7 +179,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		return err
 	}
 
-	if err := s.db.SaveSecret(
+	if err := s.db.UpsertSecret(
 		database.SecretKey{
 			ProjectId: *m.ProjectId,
 			AppId:     *m.AppId,
