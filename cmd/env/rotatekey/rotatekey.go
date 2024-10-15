@@ -35,12 +35,12 @@ func init() {
 func runRotateKey(cmd *cobra.Command) error {
 	// Display warning and prompt for confirmation
 	cprint.Warning("You are about to rotate the encryption key. This action is irreversible and will affect all environments.")
-	cprint.Warning("Make sure you have a backup of your current configuration before proceeding.")
-	cprint.Warning("This action will:")
-	cprint.Warning("  1. Generate a new encryption key")
-	cprint.Warning("  2. Re-encrypt all environment variables with the new key")
-	cprint.Warning("  3. Update the local configuration with the new key")
-	cprint.Warning("\nAre you absolutely sure you want to proceed?")
+	cprint.Info("Make sure you have a backup of your current configuration before proceeding.")
+	cprint.Info("This action will:")
+	cprint.Info("  1. Generate a new encryption key")
+	cprint.Info("  2. Re-encrypt all environment variables with the new key")
+	cprint.Info("  3. Update the local configuration with the new key")
+	cprint.Info("\nAre you absolutely sure you want to proceed?")
 
 	response := prompt.PromptYesNo(cmd, "Rotate encryption key?", false)
 	if !response.Confirmed {
