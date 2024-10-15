@@ -34,7 +34,7 @@ func init() {
 
 func runRotateKey(cmd *cobra.Command) error {
 	// Display warning and prompt for confirmation
-	cprint.Warning("WARNING: You are about to rotate the encryption key. This action is irreversible and will affect all environments.")
+	cprint.Warning("You are about to rotate the encryption key. This action is irreversible and will affect all environments.")
 	cprint.Warning("Make sure you have a backup of your current configuration before proceeding.")
 	cprint.Warning("This action will:")
 	cprint.Warning("  1. Generate a new encryption key")
@@ -52,6 +52,7 @@ func runRotateKey(cmd *cobra.Command) error {
 	cprint.Info("Proceeding with key rotation...")
 
 	//Get all the envs
+	pull.Silent = true
 	if err := pull.RunPull([]string{}, forceFlag); err != nil {
 		return err
 	}
@@ -68,6 +69,7 @@ func runRotateKey(cmd *cobra.Command) error {
 
 	manifest.UpsertLocalManifestSecret(newManifestSecret)
 
+	push.Silent = true
 	push.RunPush([]string{}, currentManifest.SecretKeyId)
 
 	cprint.Success("Key rotation completed successfully.")

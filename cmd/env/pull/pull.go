@@ -15,6 +15,7 @@ import (
 
 var (
 	forceFlag bool
+	Silent    bool = false
 )
 
 var PullCmd = &cobra.Command{
@@ -82,14 +83,18 @@ func RunPull(args []string, forceFlag bool) error {
 			return err
 		}
 
-		printPullSummary(pulledEnvs)
+		if !Silent {
+			printPullSummary(pulledEnvs)
+		}
 		return nil
 	} else if envName == "default" {
 		if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
 			return err
 		}
 
-		printPullSummary([]string{"default"})
+		if !Silent {
+			printPullSummary([]string{"default"})
+		}
 		return nil
 	} else { // we have a specific env name
 		err = service.checkForEnvironment(orgId, envName, projectId)
@@ -100,7 +105,9 @@ func RunPull(args []string, forceFlag bool) error {
 			return err
 		}
 
-		printPullSummary([]string{envName})
+		if !Silent {
+			printPullSummary([]string{envName})
+		}
 		return nil
 	}
 }

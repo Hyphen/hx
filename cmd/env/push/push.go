@@ -13,6 +13,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var Silent bool = false
+
 var PushCmd = &cobra.Command{
 	Use:   "push [environment]",
 	Short: "Push local environment variables to Hyphen",
@@ -101,7 +103,9 @@ func RunPush(args []string, secretKeyId int64) error {
 		}
 	}
 
-	printPushSummary(envsToPush, envsPushed)
+	if !Silent {
+		printPushSummary(envsToPush, envsPushed)
+	}
 	return nil
 }
 
@@ -130,7 +134,9 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 			return err, false
 		}
 		if skippable && m.SecretKeyId == secretKeyId {
-			cprint.Info(fmt.Sprintf("Local %s environment is already up to date - skipping", envName))
+			if !Silent {
+				cprint.Info(fmt.Sprintf("Local %s environment is already up to date - skipping", envName))
+			}
 			return nil, true
 		}
 	}

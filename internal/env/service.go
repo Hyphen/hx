@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/apiconf"
@@ -36,7 +36,6 @@ func NewService() *EnvService {
 		baseUrl:    baseUrl,
 		httpClient: httputil.NewHyphenHTTPClient(),
 	}
-
 }
 
 func (es *EnvService) GetEnvironment(organizationId, projectId, environmentId string) (Environment, bool, error) {
@@ -67,19 +66,16 @@ func (es *EnvService) GetEnvironment(organizationId, projectId, environmentId st
 	return environment, true, nil
 }
 
-// PutEnvironmentEnv updates the environment variables for the given organization, app, and environment.
-// In case of key rotation set the new key in the env.secretKeyId and send the current secretKeyId in the func param
 func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env Env) error {
-	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseUrl, organizationId, appId)
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseUrl, organizationId, appId)
 
-	var queryParams []string
-	queryParams = append(queryParams, fmt.Sprintf("secretKeyId=%s", strconv.FormatInt(secretKeyId, 10)))
+	query := url.Values{}
+	query.Set("secretKeyId", strconv.FormatInt(secretKeyId, 10))
 	if environmentId != "default" {
-		queryParams = append(queryParams, fmt.Sprintf("environmentId=%s", environmentId))
+		query.Set("environmentId", environmentId)
 	}
-	if len(queryParams) > 0 {
-		url = fmt.Sprintf("%s?%s", url, strings.Join(queryParams, "&"))
-	}
+
+	url := fmt.Sprintf("%s?%s", baseURL, query.Encode())
 
 	envJSON, err := json.Marshal(env)
 	if err != nil {
@@ -105,16 +101,15 @@ func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId str
 }
 
 func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64) (Env, error) {
-	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseUrl, organizationId, appId)
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseUrl, organizationId, appId)
 
-	var queryParams []string
-	queryParams = append(queryParams, fmt.Sprintf("secretKeyId=%s", strconv.FormatInt(secretKeyId, 10)))
+	query := url.Values{}
+	query.Set("secretKeyId", strconv.FormatInt(secretKeyId, 10))
 	if environmentId != "default" {
-		queryParams = append(queryParams, fmt.Sprintf("environmentId=%s", environmentId))
+		query.Set("environmentId", environmentId)
 	}
-	if len(queryParams) > 0 {
-		url = fmt.Sprintf("%s?%s", url, strings.Join(queryParams, "&"))
-	}
+
+	url := fmt.Sprintf("%s?%s", baseURL, query.Encode())
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -140,20 +135,16 @@ func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId str
 }
 
 func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]Env, error) {
-	url := fmt.Sprintf("%s/api/organizations/%s/dot-envs", es.baseUrl, organizationId)
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/dot-envs", es.baseUrl, organizationId)
 
-	var queryParams []string
-
-	queryParams = append(queryParams, fmt.Sprintf("pageSize=%d", size))
-	queryParams = append(queryParams, fmt.Sprintf("pageNum=%d", page))
-
+	query := url.Values{}
+	query.Set("pageSize", strconv.Itoa(size))
+	query.Set("pageNum", strconv.Itoa(page))
 	if appId != "" {
-		queryParams = append(queryParams, fmt.Sprintf("appIds=%s", appId))
+		query.Set("appIds", appId)
 	}
 
-	if len(queryParams) > 0 {
-		url = fmt.Sprintf("%s?%s", url, strings.Join(queryParams, "&"))
-	}
+	url := fmt.Sprintf("%s?%s", baseURL, query.Encode())
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -185,8 +176,13 @@ func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]
 }
 
 func (es *EnvService) ListEnvironments(organizationId, projectId string, size, page int) ([]Environment, error) {
-	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments?pageSize=%d&pageNum=%d",
-		es.baseUrl, organizationId, projectId, size, page)
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments", es.baseUrl, organizationId, projectId)
+
+	query := url.Values{}
+	query.Set("pageSize", strconv.Itoa(size))
+	query.Set("pageNum", strconv.Itoa(page))
+
+	url := fmt.Sprintf("%s?%s", baseURL, query.Encode())
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -231,7 +227,6 @@ func GetLocalEnvContents(envName string) (string, error) {
 	return e.Data, nil
 }
 
-// GetLocalEncryptedEnv returns the local environment variables from the .env file
 func GetLocalEncryptedEnv(envName string, m manifest.Manifest) (Env, error) {
 	envFile, err := GetFileName(envName)
 	if err != nil {
