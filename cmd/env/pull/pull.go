@@ -9,6 +9,7 @@ import (
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
@@ -176,11 +177,29 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 	}
 
 	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName, &m.SecretKeyId, versionPtr)
-	if versionPtr == nil && err != nil {
+
+	// Case 1: Error occurred and no version specified
+	if err != nil && versionPtr == nil {
 		return err
-	} else if versionPtr != nil && err != nil && !Silent {
-		cprint.Warning(fmt.Sprintf("No version found for environment %s. Skipping.", envName))
-		return nil
+	}
+
+	// Case 2: Error occurred and version specified
+	if err != nil && versionPtr != nil {
+		// Check if it's a NotFound error
+		if !errors.Is(err, errors.ErrNotFound) {
+			return err
+		}
+
+		// Handle NotFound error
+		if !Silent {
+			cprint.Warning(fmt.Sprintf("No version found for environment %s. Pulling the latest version.", envName))
+		}
+
+		// Retry without version
+		e, err = s.envService.GetEnvironmentEnv(orgId, appId, envName, &m.SecretKeyId, nil)
+		if err != nil {
+			return err
+		}
 	}
 
 	envDataDecrypted, err := e.DecryptData(secretKey)
