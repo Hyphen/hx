@@ -81,7 +81,7 @@ func HandleHTTPError(resp *http.Response) *Error {
 	case http.StatusForbidden:
 		return New("forbidden: you don't have permission to perform this action")
 	case http.StatusNotFound:
-		return New("not found: the requested resource does not exist")
+		return Wrapf(New("NotFound"), "not found: %s", errorMessage)
 	case http.StatusConflict:
 		return Wrapf(New("Conflict"), "conflict: %s", errorMessage)
 	case http.StatusTooManyRequests:

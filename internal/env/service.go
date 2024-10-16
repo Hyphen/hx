@@ -17,7 +17,7 @@ import (
 type EnvServicer interface {
 	GetEnvironment(organizationId, projectId, environment string) (Environment, bool, error)
 	PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env Env) error
-	GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64) (Env, error)
+	GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId *int64, version *int) (Env, error)
 	ListEnvs(organizationId, appId string, size, page int) ([]Env, error)
 	ListEnvironments(organizationId, projectId string, size, page int) ([]Environment, error)
 }
@@ -100,11 +100,19 @@ func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId str
 	return nil
 }
 
-func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64) (Env, error) {
+func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId *int64, version *int) (Env, error) {
 	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseUrl, organizationId, appId)
 
 	query := url.Values{}
-	query.Set("secretKeyId", strconv.FormatInt(secretKeyId, 10))
+
+	if secretKeyId != nil {
+		query.Set("secretKeyId", strconv.FormatInt(*secretKeyId, 10))
+	}
+
+	if version != nil {
+		query.Set("version", strconv.Itoa(*version))
+	}
+
 	if environmentId != "default" {
 		query.Set("environmentId", environmentId)
 	}

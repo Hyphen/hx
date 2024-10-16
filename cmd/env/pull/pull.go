@@ -14,8 +14,10 @@ import (
 )
 
 var (
-	forceFlag bool
-	Silent    bool = false
+	Silent     bool = false
+	forceFlag  bool
+	version    int
+	versionPtr *int = nil
 )
 
 var PullCmd = &cobra.Command{
@@ -38,6 +40,9 @@ After pulling, all environment variables will be locally available and ready for
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		if version != 0 {
+			versionPtr = &version
+		}
 		if err := RunPull(args, forceFlag); err != nil {
 			cprint.Error(cmd, err)
 		}
@@ -114,6 +119,7 @@ func RunPull(args []string, forceFlag bool) error {
 
 func init() {
 	PullCmd.Flags().BoolVar(&forceFlag, "force", false, "Force overwrite of locally modified environment files")
+	PullCmd.Flags().IntVar(&version, "version", 0, "Specify a version to pull")
 }
 
 type service struct {
@@ -169,9 +175,12 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		}
 	}
 
-	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName, m.SecretKeyId)
-	if err != nil {
+	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName, &m.SecretKeyId, versionPtr)
+	if versionPtr == nil && err != nil {
 		return err
+	} else if versionPtr != nil && err != nil && !Silent {
+		cprint.Warning(fmt.Sprintf("No version found for environment %s. Skipping.", envName))
+		return nil
 	}
 
 	envDataDecrypted, err := e.DecryptData(secretKey)
