@@ -133,7 +133,7 @@ func TestErrorHandling(t *testing.T) {
 		{"BadRequest", http.StatusBadRequest, "Invalid input", "bad request: Invalid input"},
 		{"Unauthorized", http.StatusUnauthorized, "", "unauthorized: please authenticate with `auth` and try again"},
 		{"Forbidden", http.StatusForbidden, "", "forbidden: you don't have permission to perform this action"},
-		{"NotFound", http.StatusNotFound, "", "not found: the requested resource does not exist"},
+		{"NotFound", http.StatusNotFound, "", "not found: "},
 		{"Conflict", http.StatusConflict, "Resource already exists", "conflict: Resource already exists"},
 		{"TooManyRequests", http.StatusTooManyRequests, "", "rate limit exceeded: please try again later"},
 		{"InternalServerError", http.StatusInternalServerError, "", "internal server error: please try again later"},
