@@ -19,6 +19,7 @@ type EnvServicer interface {
 	PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env Env) error
 	GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64) (Env, error)
 	ListEnvs(organizationId, appId string, size, page int) ([]Env, error)
+	ListEnvVersions(organizationId, appId, environmentId string, size, page int) ([]Env, error)
 	ListEnvironments(organizationId, projectId string, size, page int) ([]Environment, error)
 }
 
@@ -142,6 +143,48 @@ func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]
 	query.Set("pageNum", strconv.Itoa(page))
 	if appId != "" {
 		query.Set("appIds", appId)
+	}
+
+	url := fmt.Sprintf("%s?%s", baseURL, query.Encode())
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return []Env{}, errors.Wrap(err, "Failed to create a new HTTP request")
+	}
+
+	resp, err := es.httpClient.Do(req)
+	if err != nil {
+		return []Env{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return []Env{}, errors.HandleHTTPError(resp)
+	}
+
+	envsData := struct {
+		Data       []Env `json:"data"`
+		TotalCount int   `json:"totalCount"`
+		PageNum    int   `json:"pageNum"`
+		PageSize   int   `json:"pageSize"`
+	}{}
+
+	if err := json.NewDecoder(resp.Body).Decode(&envsData); err != nil {
+		return []Env{}, errors.Wrap(err, "Failed to decode response body")
+	}
+
+	return envsData.Data, nil
+}
+
+func (es *EnvService) ListEnvVersions(organizationId, appId, environmentId string, size, page int) ([]Env, error) {
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/versions/", es.baseUrl, organizationId, appId)
+
+	query := url.Values{}
+	query.Set("pageSize", strconv.Itoa(size))
+	query.Set("pageNum", strconv.Itoa(page))
+
+	if environmentId != "default" {
+		query.Set("environmentId", environmentId)
 	}
 
 	url := fmt.Sprintf("%s?%s", baseURL, query.Encode())

@@ -1,6 +1,8 @@
 package env
 
 import (
+	"github.com/Hyphen/cli/cmd/env/list"
+	"github.com/Hyphen/cli/cmd/env/listversions"
 	"github.com/Hyphen/cli/cmd/env/pull"
 	"github.com/Hyphen/cli/cmd/env/push"
 	"github.com/Hyphen/cli/cmd/env/rotatekey"
@@ -24,5 +26,7 @@ func init() {
 	EnvCmd.AddCommand(pull.PullCmd)
 	EnvCmd.AddCommand(push.PushCmd)
 	EnvCmd.AddCommand(run.RunCmd)
+	EnvCmd.AddCommand(list.ListCmd)
+	EnvCmd.AddCommand(listversions.ListVersionsCmd)
 	EnvCmd.AddCommand(rotatekey.RotateCmd)
 }

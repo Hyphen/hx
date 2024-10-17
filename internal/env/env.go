@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/errors"
@@ -18,9 +19,17 @@ type Env struct {
 	Size           string              `json:"size"`
 	CountVariables int                 `json:"countVariables"`
 	Data           string              `json:"data"`
+	ID             *string             `json:"id,omitempty"`
 	Version        *int                `json:"version,omitempty"`
 	ProjectEnv     *ProjectEnvironment `json:"projectEnvironment,omitempty"`
 	SecretKeyId    *int64              `json:"secretKeyId,omitempty"`
+	Published      *time.Time          `json:"published,omitempty"`
+}
+
+type ProjectEnvironment struct {
+	ID          string `json:"id"`
+	AlternateID string `json:"alternateId"`
+	Name        string `json:"name"`
 }
 
 // HashData returns the SHA256 hash of the environment data.
@@ -33,12 +42,6 @@ func HashData(data string) string {
 
 func (e *Env) HashData() string {
 	return HashData(e.Data)
-}
-
-type ProjectEnvironment struct {
-	ID          string `json:"id"`
-	AlternateID string `json:"alternateId"`
-	Name        string `json:"name"`
 }
 
 func New(fileName string) (Env, error) {
