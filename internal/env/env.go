@@ -19,7 +19,6 @@ type Env struct {
 	Size           string              `json:"size"`
 	CountVariables int                 `json:"countVariables"`
 	Data           string              `json:"data"`
-	ID             *string             `json:"id,omitempty"`
 	Version        *int                `json:"version,omitempty"`
 	ProjectEnv     *ProjectEnvironment `json:"projectEnvironment,omitempty"`
 	SecretKeyId    *int64              `json:"secretKeyId,omitempty"`
