@@ -192,7 +192,8 @@ func TestEnvService_GetEnv(t *testing.T) {
 
 	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
 
-	env, err := service.GetEnvironmentEnv("org1", "app1", "env1", 123)
+	var secretKeyId int64 = 123
+	env, err := service.GetEnvironmentEnv("org1", "app1", "env1", &secretKeyId, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedEnv, env)
 
