@@ -111,12 +111,12 @@ func Restore() (Database, error) {
 }
 
 func Save(db Database) error {
-	m, err := manifest.Restore()
+	mc, err := manifest.RestoreManifestConfig()
 	if err != nil {
 		return err
 	}
-	m.Database = db
+	mc.Database = db
 
-	return manifest.UpsertGlobalManifest(m)
+	return manifest.UpsertGlobalManifestConfig(mc)
 
 }

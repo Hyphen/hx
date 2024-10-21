@@ -28,13 +28,13 @@ func NewHyphenHTTPClient() *HyphenClient {
 }
 
 func (hc *HyphenClient) Do(req *http.Request) (*http.Response, error) {
-	manifest, err := manifest.Restore()
+	manifestConfig, err := manifest.RestoreManifestConfig()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to load .hx")
 	}
 
-	if manifest.HyphenAPIKey != nil {
-		req.Header.Set("x-api-key", *manifest.HyphenAPIKey)
+	if manifestConfig.HyphenAPIKey != nil {
+		req.Header.Set("x-api-key", *manifestConfig.HyphenAPIKey)
 	} else {
 		token, err := hc.oauthService.GetValidToken()
 		if err != nil {

@@ -69,16 +69,14 @@ func login(cmd *cobra.Command) error {
 		idToken = &token.IDToken
 		expiryTime = &token.ExpiryTime
 
-		m := manifest.Manifest{
-			ManifestConfig: manifest.ManifestConfig{
-				HyphenAccessToken:  accessToken,
-				HyphenRefreshToken: refreshToken,
-				HypenIDToken:       idToken,
-				ExpiryTime:         expiryTime,
-			},
+		mc := manifest.ManifestConfig{
+			HyphenAccessToken:  accessToken,
+			HyphenRefreshToken: refreshToken,
+			HypenIDToken:       idToken,
+			ExpiryTime:         expiryTime,
 		}
 
-		if err := manifest.UpsertGlobalManifest(m); err != nil {
+		if err := manifest.UpsertGlobalManifestConfig(mc); err != nil {
 			return fmt.Errorf("failed to save credentials: %w", err)
 		}
 
@@ -110,13 +108,11 @@ func login(cmd *cobra.Command) error {
 			apiKey = &flags.SetApiKeyFlag
 		}
 
-		m := manifest.Manifest{
-			ManifestConfig: manifest.ManifestConfig{
-				HyphenAPIKey: apiKey,
-			},
+		mc := manifest.ManifestConfig{
+			HyphenAPIKey: apiKey,
 		}
 
-		if err := manifest.UpsertGlobalManifest(m); err != nil {
+		if err := manifest.UpsertGlobalManifestConfig(mc); err != nil {
 			return fmt.Errorf("failed to save credentials: %w", err)
 		}
 
@@ -158,7 +154,7 @@ func login(cmd *cobra.Command) error {
 		AppAlternateId:     nil,
 	}
 
-	if _, err := manifest.GlobalInitialize(mc); err != nil {
+	if err := manifest.GlobalInitializeManifestConfig(mc); err != nil {
 		return err
 	}
 

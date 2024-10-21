@@ -345,29 +345,29 @@ func (s *OAuthService) RefreshToken(refreshToken string) (*TokenResponse, error)
 }
 
 func (s *OAuthService) GetValidToken() (string, error) {
-	m, err := manifest.Restore()
+	mc, err := manifest.RestoreManifestConfig()
 	if err != nil {
 		return "", err
 	}
 
-	if m.ExpiryTime == nil || m.HyphenRefreshToken == nil {
+	if mc.ExpiryTime == nil || mc.HyphenRefreshToken == nil {
 		return "", errors.New("You must authenticate. Run `hx auth` and try again.")
 	}
 
-	if s.IsTokenExpired(*m.ExpiryTime) {
-		tokenResponse, err := s.RefreshToken(*m.HyphenRefreshToken)
+	if s.IsTokenExpired(*mc.ExpiryTime) {
+		tokenResponse, err := s.RefreshToken(*mc.HyphenRefreshToken)
 		if err != nil {
 			return "", errors.Wrap(err, "Failed to refresh token")
 		}
-		m.HyphenAccessToken = &tokenResponse.AccessToken
-		m.HyphenRefreshToken = &tokenResponse.RefreshToken
-		m.HypenIDToken = &tokenResponse.IDToken
-		m.ExpiryTime = &tokenResponse.ExpiryTime
-		err = manifest.UpsertGlobalManifest(m)
+		mc.HyphenAccessToken = &tokenResponse.AccessToken
+		mc.HyphenRefreshToken = &tokenResponse.RefreshToken
+		mc.HypenIDToken = &tokenResponse.IDToken
+		mc.ExpiryTime = &tokenResponse.ExpiryTime
+		err = manifest.UpsertGlobalManifestConfig(mc)
 		if err != nil {
 			return "", errors.Wrap(err, "Failed to save refreshed credentials")
 		}
 		return tokenResponse.AccessToken, nil
 	}
-	return *m.HyphenAccessToken, nil
+	return *mc.HyphenAccessToken, nil
 }
