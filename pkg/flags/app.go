@@ -16,7 +16,7 @@ func GetApplicationID() (string, error) {
 	}
 
 	if manifest.AppId == nil {
-		return "", errors.New("No organization ID provided and no default found in manifest")
+		return "", errors.New("No app ID provided and no default found in manifest")
 	}
 
 	return *manifest.AppId, nil
