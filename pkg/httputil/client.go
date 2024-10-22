@@ -28,7 +28,7 @@ func NewHyphenHTTPClient() *HyphenClient {
 }
 
 func (hc *HyphenClient) Do(req *http.Request) (*http.Response, error) {
-	manifestConfig, err := manifest.RestoreManifestConfig()
+	manifestConfig, err := manifest.RestoreConfig()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to load .hx")
 	}

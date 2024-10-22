@@ -20,7 +20,7 @@ var (
 	ManifestSecretFile = ".hxkey"
 )
 
-type ManifestConfig struct {
+type Config struct {
 	ProjectName        *string     `json:"project_name,omitempty"`
 	ProjectId          *string     `json:"project_id,omitempty"`
 	ProjectAlternateId *string     `json:"project_alternate_id,omitempty"`
@@ -37,17 +37,17 @@ type ManifestConfig struct {
 }
 
 type Manifest struct {
-	ManifestConfig
-	ManifestSecret
+	Config
+	Secret
 }
 
-type ManifestSecret struct {
+type Secret struct {
 	SecretKeyId int64  `json:"secret_key_id"`
 	SecretKey   string `json:"secret_key"`
 }
 
-func NewSecret(sk *secretkey.SecretKey) ManifestSecret {
-	return ManifestSecret{
+func NewSecret(sk *secretkey.SecretKey) Secret {
+	return Secret{
 		SecretKeyId: time.Now().Unix(),
 		SecretKey:   sk.Base64(),
 	}
@@ -57,16 +57,16 @@ func (m *Manifest) GetSecretKey() *secretkey.SecretKey {
 	return secretkey.FromBase64(m.SecretKey)
 }
 
-func LocalInitialize(mc ManifestConfig) (Manifest, error) {
+func LocalInitialize(mc Config) (Manifest, error) {
 	return Initialize(mc, ManifestSecretFile, ManifestConfigFile)
 }
 
-func GlobalInitializeManifestConfig(mc ManifestConfig) error {
+func GlobalInitializeConfig(mc Config) error {
 	configDirectory := GetGlobalDirectory()
 
 	manifestConfigFilePath := fmt.Sprintf("%s/%s", configDirectory, ManifestConfigFile)
 
-	return InitializeManifestConfig(mc, manifestConfigFilePath)
+	return InitializeConfig(mc, manifestConfigFilePath)
 }
 
 func GetGlobalDirectory() string {
@@ -78,7 +78,7 @@ func GetGlobalDirectory() string {
 	return home
 }
 
-func UpsertGlobalManifestConfig(mc ManifestConfig) error {
+func UpsertGlobalConfig(mc Config) error {
 	globDir := GetGlobalDirectory()
 
 	if err := FS.MkdirAll(globDir, 0755); err != nil {
@@ -100,7 +100,7 @@ func UpsertGlobalManifestConfig(mc ManifestConfig) error {
 	return nil
 }
 
-func InitializeManifestConfig(mc ManifestConfig, configFile string) error {
+func InitializeConfig(mc Config, configFile string) error {
 	jsonData, err := json.MarshalIndent(mc, "", "  ")
 	if err != nil {
 		return errors.Wrap(err, "Error encoding JSON")
@@ -112,33 +112,33 @@ func InitializeManifestConfig(mc ManifestConfig, configFile string) error {
 	return nil
 }
 
-func InitializeManifestSecret(secretFile string) (ManifestSecret, error) {
+func InitializeSecret(secretFile string) (Secret, error) {
 	sk, err := secretkey.New()
 	if err != nil {
-		return ManifestSecret{}, errors.Wrap(err, "Failed to create new secret key")
+		return Secret{}, errors.Wrap(err, "Failed to create new secret key")
 	}
 
 	ms := NewSecret(sk)
 
 	jsonData, err := json.MarshalIndent(ms, "", "  ")
 	if err != nil {
-		return ManifestSecret{}, errors.Wrap(err, "Error encoding JSON")
+		return Secret{}, errors.Wrap(err, "Error encoding JSON")
 	}
 	err = FS.WriteFile(secretFile, jsonData, 0644)
 	if err != nil {
-		return ManifestSecret{}, errors.Wrapf(err, "Error writing file: %s", secretFile)
+		return Secret{}, errors.Wrapf(err, "Error writing file: %s", secretFile)
 	}
 
 	return ms, nil
 }
 
-func Initialize(mc ManifestConfig, secretFile, configFile string) (Manifest, error) {
-	err := InitializeManifestConfig(mc, configFile)
+func Initialize(mc Config, secretFile, configFile string) (Manifest, error) {
+	err := InitializeConfig(mc, configFile)
 	if err != nil {
 		return Manifest{}, errors.Wrap(err, "Failed to initialize manifest config")
 	}
 
-	ms, err := InitializeManifestSecret(secretFile)
+	ms, err := InitializeSecret(secretFile)
 	if err != nil {
 		return Manifest{}, errors.Wrap(err, "Failed to initialize manifest secret")
 	}
@@ -151,77 +151,77 @@ func Initialize(mc ManifestConfig, secretFile, configFile string) (Manifest, err
 	return m, nil
 }
 
-func RestoreManifestConfigFromFile(manifestConfigFile string) (ManifestConfig, error) {
-	var mconfig ManifestConfig
+func RestoreConfigFromFile(manifestConfigFile string) (Config, error) {
+	var mconfig Config
 	var hasConfig bool
 
 	globalConfigFile := fmt.Sprintf("%s/%s", GetGlobalDirectory(), manifestConfigFile)
 
-	globalConfig, err := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
+	globalConfig, err := readAndUnmarshalConfigJSON[Config](globalConfigFile)
 	if err == nil {
 		mconfig = globalConfig
 		hasConfig = true
 	} else if !os.IsNotExist(err) {
-		return ManifestConfig{}, err
+		return Config{}, err
 	}
 
-	localConfig, localConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](manifestConfigFile)
+	localConfig, localConfigErr := readAndUnmarshalConfigJSON[Config](manifestConfigFile)
 	if localConfigErr == nil {
 		mergeErr := mergo.Merge(&mconfig, localConfig, mergo.WithOverride)
 		if mergeErr != nil {
-			return ManifestConfig{}, errors.Wrap(mergeErr, "Error merging your .hx config(s)")
+			return Config{}, errors.Wrap(mergeErr, "Error merging your .hx config(s)")
 		}
 		hasConfig = true
 	} else if !os.IsNotExist(localConfigErr) {
-		return ManifestConfig{}, localConfigErr
+		return Config{}, localConfigErr
 	}
 
 	if !hasConfig {
-		return ManifestConfig{}, errors.New("No valid .hx found (neither global nor local). Please authenticate using `hx auth` or `hx init`")
+		return Config{}, errors.New("No valid .hx found (neither global nor local). Please authenticate using `hx auth` or `hx init`")
 	}
 
 	return mconfig, nil
 }
 
-func RestoreManifestSecretFromFile(manifestSecretFile string) (ManifestSecret, error) {
-	var secret ManifestSecret
+func RestoreSecretFromFile(manifestSecretFile string) (Secret, error) {
+	var secret Secret
 	var hasSecret bool
 
 	globalSecretFile := fmt.Sprintf("%s/%s", GetGlobalDirectory(), manifestSecretFile)
 
-	globalSecret, err := readAndUnmarshalConfigJSON[ManifestSecret](globalSecretFile)
+	globalSecret, err := readAndUnmarshalConfigJSON[Secret](globalSecretFile)
 	if err == nil {
 		secret = globalSecret
 		hasSecret = true
 	} else if !os.IsNotExist(err) {
-		return ManifestSecret{}, err
+		return Secret{}, err
 	}
 
-	localSecret, localSecretErr := readAndUnmarshalConfigJSON[ManifestSecret](manifestSecretFile)
+	localSecret, localSecretErr := readAndUnmarshalConfigJSON[Secret](manifestSecretFile)
 	if localSecretErr == nil {
 		mergeErr := mergo.Merge(&secret, localSecret, mergo.WithOverride)
 		if mergeErr != nil {
-			return ManifestSecret{}, errors.Wrap(mergeErr, "Error merging your .hxkey secret(s)")
+			return Secret{}, errors.Wrap(mergeErr, "Error merging your .hxkey secret(s)")
 		}
 		hasSecret = true
 	} else if !os.IsNotExist(localSecretErr) {
-		return ManifestSecret{}, localSecretErr
+		return Secret{}, localSecretErr
 	}
 
 	if !hasSecret {
-		return ManifestSecret{}, errors.New("No valid .hxkey found (neither global nor local). Please authenticate using `hx init`")
+		return Secret{}, errors.New("No valid .hxkey found (neither global nor local). Please authenticate using `hx init`")
 	}
 
 	return secret, nil
 }
 
 func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, error) {
-	mconfig, configErr := RestoreManifestConfigFromFile(manifestConfigFile)
+	mconfig, configErr := RestoreConfigFromFile(manifestConfigFile)
 	if configErr != nil {
 		return Manifest{}, configErr
 	}
 
-	secret, secretErr := RestoreManifestSecretFromFile(manifestSecretFile)
+	secret, secretErr := RestoreSecretFromFile(manifestSecretFile)
 	if secretErr != nil {
 		return Manifest{}, secretErr
 	}
@@ -252,8 +252,8 @@ func Restore() (Manifest, error) {
 	return RestoreFromFile(ManifestConfigFile, ManifestSecretFile)
 }
 
-func RestoreManifestConfig() (ManifestConfig, error) {
-	return RestoreManifestConfigFromFile(ManifestConfigFile)
+func RestoreConfig() (Config, error) {
+	return RestoreConfigFromFile(ManifestConfigFile)
 }
 
 func ExistsLocal() bool {
@@ -262,18 +262,18 @@ func ExistsLocal() bool {
 }
 
 func UpsertOrganizationID(organizationID string) error {
-	var mconfig ManifestConfig
+	var mconfig Config
 	var hasConfig bool
 
 	globalConfigFile := fmt.Sprintf("%s/%s", GetGlobalDirectory(), ManifestConfigFile)
 	localConfigFile := ManifestConfigFile
-	localConfig, localConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](localConfigFile)
+	localConfig, localConfigErr := readAndUnmarshalConfigJSON[Config](localConfigFile)
 	if localConfigErr == nil {
 		mconfig = localConfig
 		hasConfig = true
 	}
 	if !hasConfig {
-		globalConfig, globalConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
+		globalConfig, globalConfigErr := readAndUnmarshalConfigJSON[Config](globalConfigFile)
 		if globalConfigErr == nil {
 			mconfig = globalConfig
 			hasConfig = true
@@ -281,7 +281,7 @@ func UpsertOrganizationID(organizationID string) error {
 	}
 
 	if !hasConfig {
-		mc := ManifestConfig{
+		mc := Config{
 			AppName:        nil,
 			AppId:          nil,
 			AppAlternateId: nil,
@@ -321,10 +321,10 @@ func UpsertGlobalOrganizationID(organizationID string) error {
 	globalDir := GetGlobalDirectory()
 	globalConfigFile := filepath.Join(globalDir, ManifestConfigFile)
 
-	var mconfig ManifestConfig
+	var mconfig Config
 
 	// Try to read existing global config
-	existingConfig, err := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
+	existingConfig, err := readAndUnmarshalConfigJSON[Config](globalConfigFile)
 	if err != nil && !os.IsNotExist(err) {
 		return errors.Wrap(err, "Error reading global config file")
 	}
@@ -358,20 +358,20 @@ func UpsertGlobalOrganizationID(organizationID string) error {
 }
 
 func UpsertProjectID(projectID string) error {
-	var mconfig ManifestConfig
+	var mconfig Config
 	var hasConfig bool
 
 	globalConfigFile := fmt.Sprintf("%s/%s", GetGlobalDirectory(), ManifestConfigFile)
 	localConfigFile := ManifestConfigFile
 
-	localConfig, localConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](localConfigFile)
+	localConfig, localConfigErr := readAndUnmarshalConfigJSON[Config](localConfigFile)
 	if localConfigErr == nil {
 		mconfig = localConfig
 		hasConfig = true
 	}
 
 	if !hasConfig {
-		globalConfig, globalConfigErr := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
+		globalConfig, globalConfigErr := readAndUnmarshalConfigJSON[Config](globalConfigFile)
 		if globalConfigErr == nil {
 			mconfig = globalConfig
 			hasConfig = true
@@ -379,7 +379,7 @@ func UpsertProjectID(projectID string) error {
 	}
 
 	if !hasConfig {
-		mc := ManifestConfig{
+		mc := Config{
 			ProjectId:      &projectID,
 			AppName:        nil,
 			AppId:          nil,
@@ -420,10 +420,10 @@ func UpsertGlobalProjectID(projectID string) error {
 	globalDir := GetGlobalDirectory()
 	globalConfigFile := filepath.Join(globalDir, ManifestConfigFile)
 
-	var mconfig ManifestConfig
+	var mconfig Config
 
 	// Try to read existing global config
-	existingConfig, err := readAndUnmarshalConfigJSON[ManifestConfig](globalConfigFile)
+	existingConfig, err := readAndUnmarshalConfigJSON[Config](globalConfigFile)
 	if err != nil && !os.IsNotExist(err) {
 		return errors.Wrap(err, "Error reading global config file")
 	}
@@ -456,7 +456,7 @@ func UpsertGlobalProjectID(projectID string) error {
 	return nil
 }
 
-func UpsertLocalManifestSecret(secret ManifestSecret) error {
+func UpsertLocalSecret(secret Secret) error {
 	localSecretFile := ManifestSecretFile
 
 	jsonData, err := json.MarshalIndent(secret, "", "  ")

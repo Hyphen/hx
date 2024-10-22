@@ -126,7 +126,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	mcl := manifest.ManifestConfig{
+	mcl := manifest.Config{
 		ProjectId:          m.ProjectId,
 		ProjectAlternateId: m.ProjectAlternateId,
 		ProjectName:        m.ProjectName,
