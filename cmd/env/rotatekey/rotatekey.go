@@ -67,7 +67,7 @@ func runRotateKey(cmd *cobra.Command) error {
 		return err
 	}
 
-	manifest.UpsertLocalManifestSecret(newManifestSecret)
+	manifest.UpsertLocalSecret(newManifestSecret)
 
 	push.Silent = true
 	push.RunPush([]string{}, currentManifest.SecretKeyId)
@@ -79,11 +79,11 @@ func runRotateKey(cmd *cobra.Command) error {
 	return nil
 }
 
-func getNewManifestSecret() (manifest.ManifestSecret, error) {
+func getNewManifestSecret() (manifest.Secret, error) {
 	//generate new key
 	newSecretKey, err := secretkey.New()
 	if err != nil {
-		return manifest.ManifestSecret{}, err
+		return manifest.Secret{}, err
 	}
 
 	return manifest.NewSecret(newSecretKey), nil
