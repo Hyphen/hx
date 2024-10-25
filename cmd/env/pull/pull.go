@@ -236,9 +236,13 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 			envName = e.ProjectEnv.AlternateID
 		}
 		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secretkey, m, force); err != nil {
-			return pulledEnvs, err
+			if !Silent {
+				cprint.Warning(fmt.Sprintf("Failed to pull environment %s: %s", envName, err))
+			}
+			continue
 		}
 		pulledEnvs = append(pulledEnvs, envName)
+
 	}
 	return pulledEnvs, nil
 }
