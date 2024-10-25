@@ -248,6 +248,9 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 }
 
 func printPullSummary(pulledEnvs []string) {
+	if len(pulledEnvs) == 0 {
+		return
+	}
 	cprint.Print("Pulled environments:")
 	for _, env := range pulledEnvs {
 		if env == "default" {
