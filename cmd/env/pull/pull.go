@@ -249,6 +249,7 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 
 func printPullSummary(pulledEnvs []string) {
 	if len(pulledEnvs) == 0 {
+		cprint.Print("No environments pulled")
 		return
 	}
 	cprint.Print("Pulled environments:")
