@@ -223,6 +223,15 @@ func (es *EnvService) ListEnvVersions(organizationId, appId, environmentId strin
 		return []Env{}, errors.Wrap(err, "Failed to decode response body")
 	}
 
+	for i := range envsData.Data {
+		fmt.Println(envsData.Data[i].Version)
+		if envsData.Data[i].ProjectEnv != nil {
+			fmt.Println(*envsData.Data[i].ProjectEnv)
+		} else {
+			fmt.Println("No ProjectEnv")
+		}
+	}
+
 	return envsData.Data, nil
 }
 
