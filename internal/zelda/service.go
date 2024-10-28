@@ -13,7 +13,7 @@ import (
 )
 
 type ZeldaServicer interface {
-	CreateCode(code Code) (Code, error)
+	CreateCode(organizationID string, code Code) (Code, error)
 	CreateQRCode(organizationID, codeId string) (QR, error)
 	ListDomains(organizationID string, pageSize, pageNum int) ([]DomainInfo, error)
 }
@@ -24,15 +24,15 @@ type ZeldaService struct {
 }
 
 func NewService() *ZeldaService {
-	baseUrl := fmt.Sprintf("%s/%s", apiconf.GetBaseApixUrl(), "link")
+	baseUrl := fmt.Sprintf("%s/api/organizations", apiconf.GetBaseApixUrl())
 	return &ZeldaService{
 		baseUrl:    baseUrl,
 		httpClient: httputil.NewHyphenHTTPClient(),
 	}
 }
 
-func (zs *ZeldaService) CreateCode(code Code) (Code, error) {
-	url := fmt.Sprintf("%s/codes/", zs.baseUrl)
+func (zs *ZeldaService) CreateCode(organizationID string, code Code) (Code, error) {
+	url := fmt.Sprintf("%s/%s/link/codes/", zs.baseUrl, organizationID)
 
 	payload, err := json.Marshal(code)
 	if err != nil {
@@ -68,9 +68,9 @@ func (zs *ZeldaService) CreateCode(code Code) (Code, error) {
 	return createdCode, nil
 }
 
-func (zs *ZeldaService) ListDomains(organizationId string, pageSize, pageNum int) ([]DomainInfo, error) {
-	url := fmt.Sprintf("%s/domains/?organizationId=%s&pageSize=%d&pageNum=%d",
-		zs.baseUrl, organizationId, pageSize, pageNum)
+func (zs *ZeldaService) ListDomains(organizationID string, pageSize, pageNum int) ([]DomainInfo, error) {
+	url := fmt.Sprintf("%s/%s/domains/?pageSize=%d&pageNum=%d",
+		zs.baseUrl, organizationID, pageSize, pageNum)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -105,9 +105,8 @@ func (zs *ZeldaService) ListDomains(organizationId string, pageSize, pageNum int
 }
 
 func (zs *ZeldaService) CreateQRCode(organizationID, codeId string) (QR, error) {
-	url := fmt.Sprintf("%s/codes/%s/qr", zs.baseUrl, codeId)
+	url := fmt.Sprintf("%s/%s/link/codes/%s/qr", zs.baseUrl, organizationID, codeId)
 
-	// Create the request payload
 	payload := struct {
 		OrganizationID string `json:"organizationId,omitempty"`
 	}{
@@ -147,3 +146,4 @@ func (zs *ZeldaService) CreateQRCode(organizationID, codeId string) (QR, error) 
 
 	return qr, nil
 }
+

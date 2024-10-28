@@ -97,7 +97,7 @@ Use 'hyphen link --help' for more information about available flags.
 			cprint.Info("Generating short code...")
 		}
 
-		shortCode, err := service.GenerateShortCode(newCode)
+		shortCode, err := service.GenerateShortCode(orgId, newCode)
 		if err != nil {
 			cprint.Error(cmd, fmt.Errorf("failed to generate short code: %w", err))
 			return
@@ -169,8 +169,8 @@ func newService(zeldaService zelda.ZeldaServicer) *service {
 	}
 }
 
-func (s *service) GenerateShortCode(code zelda.Code) (zelda.Code, error) {
-	return s.zeldaService.CreateCode(code)
+func (s *service) GenerateShortCode(orgID string, code zelda.Code) (zelda.Code, error) {
+	return s.zeldaService.CreateCode(orgID, code)
 }
 
 func (s *service) GetDomain(organizationId string) (string, error) {
