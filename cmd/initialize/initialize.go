@@ -109,34 +109,34 @@ func runInit(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	m, err := manifest.Restore()
+	mc, err := manifest.RestoreConfig()
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
 	}
 
-	if m.ProjectId == nil {
+	if mc.ProjectId == nil {
 		cprint.Error(cmd, fmt.Errorf("No project found in .hx file"))
 		return
 	}
 
-	newApp, err := appService.CreateApp(orgID, *m.ProjectId, appAlternateId, appName)
+	newApp, err := appService.CreateApp(orgID, *mc.ProjectId, appAlternateId, appName)
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
 	}
 
 	mcl := manifest.Config{
-		ProjectId:          m.ProjectId,
-		ProjectAlternateId: m.ProjectAlternateId,
-		ProjectName:        m.ProjectName,
-		OrganizationId:     m.OrganizationId,
+		ProjectId:          mc.ProjectId,
+		ProjectAlternateId: mc.ProjectAlternateId,
+		ProjectName:        mc.ProjectName,
+		OrganizationId:     mc.OrganizationId,
 		AppName:            &newApp.Name,
 		AppAlternateId:     &newApp.AlternateId,
 		AppId:              &newApp.ID,
 	}
 
-	m, err = manifest.LocalInitialize(mcl) //Loading the local hxkey
+	ml, err := manifest.LocalInitialize(mcl) //Loading the local hxkey
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
@@ -147,7 +147,7 @@ func runInit(cmd *cobra.Command, args []string) {
 	}
 
 	// List the environments for the project
-	environments, err := envService.ListEnvironments(orgID, *m.ProjectId, 100, 1)
+	environments, err := envService.ListEnvironments(orgID, *mc.ProjectId, 100, 1)
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
@@ -157,14 +157,14 @@ func runInit(cmd *cobra.Command, args []string) {
 	for _, e := range environments {
 		envName := strings.ToLower(e.Name)
 		envID := e.ID
-		err = createAndPushEmptyEnvFile(cmd, envService, m, orgID, newApp.ID, envID, envName)
+		err = createAndPushEmptyEnvFile(cmd, envService, ml, orgID, newApp.ID, envID, envName)
 		if err != nil {
 			cprint.Error(cmd, err)
 			return
 		}
 	}
 
-	err = createAndPushEmptyEnvFile(cmd, envService, m, orgID, newApp.ID, "default", "default")
+	err = createAndPushEmptyEnvFile(cmd, envService, ml, orgID, newApp.ID, "default", "default")
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
