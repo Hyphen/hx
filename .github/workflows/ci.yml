@@ -2,6 +2,8 @@ name: Go CI
 
 on:
   pull_request:
+    branches:
+      - main
 
 jobs:
   test:
@@ -36,6 +38,7 @@ jobs:
 
   build:
     needs: test
+    secrets: inherit
     uses: ./.github/workflows/build.yml
     with:
       version: testBuild
