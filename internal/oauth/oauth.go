@@ -223,7 +223,9 @@ func (s *OAuthService) StartOAuthServer() (*TokenResponse, error) {
 			return
 		}
 
-		http.Redirect(w, r, "https://hyphen.ai/cli?authenticate=true", http.StatusTemporaryRedirect)
+
+		http.Redirect(w, r, "https://hyphen.ai/cli?authenticated=true", http.StatusTemporaryRedirect)
+
 		tokenChan <- token
 	})
 
