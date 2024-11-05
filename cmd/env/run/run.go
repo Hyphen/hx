@@ -32,6 +32,8 @@ Examples:
   hyphen env run -- go run main.go (uses default environment)
 `,
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
+
 		var envName string
 		var childCommand []string
 
@@ -127,8 +129,4 @@ func runCommandWithEnv(command []string, envVars []string) error {
 		printer.Info(fmt.Sprintf("Executing command: %s", strings.Join(command, " ")))
 	}
 	return cmd.Run()
-}
-
-func init() {
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }

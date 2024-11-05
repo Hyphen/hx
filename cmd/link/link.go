@@ -49,6 +49,7 @@ Use 'hyphen link --help' for more information about available flags.
 `,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		service := newService(zelda.NewService())
 
 		orgId, err := flags.GetOrganizationID()
@@ -158,7 +159,6 @@ func init() {
 	LinkCmd.Flags().StringArrayVar(&tags, "tag", []string{}, "Tags for the shortened URL. Can be specified multiple times")
 	LinkCmd.Flags().StringVar(&code, "code", "", "Custom short code")
 	LinkCmd.Flags().StringVar(&title, "title", "", "Title for the shortened URL")
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }
 
 type service struct {

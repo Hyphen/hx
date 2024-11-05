@@ -21,6 +21,7 @@ var SetOrgCmd = &cobra.Command{
 	Long:  `Set the organization ID for the Hyphen CLI to use.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		orgID := args[0]
 		var err error
 
@@ -59,7 +60,6 @@ var SetOrgCmd = &cobra.Command{
 
 func init() {
 	SetOrgCmd.Flags().BoolVar(&globalFlag, "global", false, "Set the organization ID globally")
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }
 
 func printOrgUpdateSuccess(orgID string, isGlobal bool) {

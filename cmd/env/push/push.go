@@ -37,6 +37,7 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		m, err := manifest.Restore()
 		if err != nil {
 			printer.Error(cmd, err)
@@ -231,8 +232,4 @@ func printPushSummary(envsToPush []string, envsPushed []string) {
 			printer.Success(fmt.Sprintf("Successfully pushed environment '%s'", envsToPush[0]))
 		}
 	}
-}
-
-func init() {
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }

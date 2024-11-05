@@ -45,6 +45,7 @@ Use 'hyphen app list --help' for more information about available flags.
 `,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
 			printer.Error(cmd, err)
@@ -136,5 +137,4 @@ func init() {
 	ListCmd.Flags().IntVar(&pageSize, "page-size", 10, "Number of results per page")
 	ListCmd.Flags().IntVar(&page, "page", 1, "Page number")
 	ListCmd.Flags().BoolVar(&showTable, "table", false, "Display results in a table format")
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }

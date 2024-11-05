@@ -85,6 +85,7 @@ var UpdateCmd = &cobra.Command{
 	Long:  `This command updates the Hyphen CLI to the specified version or the latest version available for your operating system`,
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		updater := NewDefaultUpdater(version)
 		updater.Run(cmd, args)
 	},
@@ -286,7 +287,6 @@ func defaultGetExecutablePath() string {
 
 func init() {
 	UpdateCmd.Flags().StringVar(&version, "version", "", "Specific version to update to (default is latest)")
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }
 
 var version string

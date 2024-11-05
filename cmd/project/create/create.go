@@ -47,6 +47,8 @@ This will create a project named "My New Project" with an alternate ID like "my-
 `,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
+
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
 			printer.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
@@ -87,8 +89,4 @@ This will create a project named "My New Project" with an alternate ID like "my-
 		printer.PrintDetail("ID", *newProject.ID)
 		printer.PrintDetail("AlternateID", newProject.AlternateID)
 	},
-}
-
-func init() {
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }

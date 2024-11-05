@@ -39,6 +39,7 @@ Note: Make sure you have the necessary permissions to access the project informa
 `,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		projectID := args[0]
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
@@ -57,8 +58,4 @@ Note: Make sure you have the necessary permissions to access the project informa
 		printer.PrintDetail("ID", *project.ID)
 		printer.PrintDetail("AlternateID", project.AlternateID)
 	},
-}
-
-func init() {
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }

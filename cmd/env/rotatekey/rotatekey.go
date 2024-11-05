@@ -24,6 +24,7 @@ var RotateCmd = &cobra.Command{
 	Long:  `This command rotates the encryption key and updates all environments with the new key.`,
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		if err := runRotateKey(cmd); err != nil {
 			printer.Error(cmd, err)
 		}
@@ -32,7 +33,6 @@ var RotateCmd = &cobra.Command{
 
 func init() {
 	RotateCmd.Flags().BoolVar(&forceFlag, "force", false, "Force overwrite of locally modified environment files")
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }
 
 func runRotateKey(cmd *cobra.Command) error {

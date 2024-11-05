@@ -16,6 +16,7 @@ var VersionCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	Long:  `All software has versions. This is Hyphen's`,
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		printVersionInfo()
 	},
 }
@@ -32,8 +33,4 @@ func GetVersion() string {
 		Version = "unknown" // Default if not set by ldflags
 	}
 	return Version
-}
-
-func init() {
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }

@@ -51,11 +51,11 @@ Examples:
 }
 
 func init() {
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 	InitCmd.Flags().StringVarP(&appIDFlag, "id", "i", "", "App ID (optional)")
 }
 
 func runInit(cmd *cobra.Command, args []string) {
+	printer = cprint.NewCPrinter(flags.VerboseFlag)
 	appService := app.NewService()
 	envService := env.NewService()
 

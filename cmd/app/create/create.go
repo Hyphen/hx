@@ -46,10 +46,10 @@ ID, and associated organization.
 
 func init() {
 	CreateCmd.Flags().StringVarP(&appIDFlag, "id", "i", "", "App ID (optional)")
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }
 
 func runCreate(cmd *cobra.Command, args []string) {
+	printer = cprint.NewCPrinter(flags.VerboseFlag)
 	appService := app.NewService()
 	orgID, err := flags.GetOrganizationID()
 	if err != nil {

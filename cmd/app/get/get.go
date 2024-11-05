@@ -39,11 +39,9 @@ After execution, you'll see a summary of the application's details.
 	Run:  runGet,
 }
 
-func init() {
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
-}
-
 func runGet(cmd *cobra.Command, args []string) {
+	printer = cprint.NewCPrinter(flags.VerboseFlag)
+
 	appService := app.NewService()
 	orgID, err := flags.GetOrganizationID()
 	if err != nil {

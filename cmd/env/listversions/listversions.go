@@ -52,6 +52,7 @@ Examples:
     `,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		if err := RunListVersions(args[0]); err != nil {
 			printer.Error(cmd, err)
 		}
@@ -166,5 +167,4 @@ func init() {
 	ListVersionsCmd.Flags().IntVar(&pageSize, "page-size", 10, "Number of results per page")
 	ListVersionsCmd.Flags().IntVar(&page, "page", 1, "Page number")
 	ListVersionsCmd.Flags().BoolVar(&showTable, "table", false, "Display results in a table format")
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }

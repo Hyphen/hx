@@ -42,6 +42,7 @@ After pulling, all environment variables will be locally available and ready for
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		if version != 0 {
 			versionPtr = &version
 		}
@@ -122,7 +123,6 @@ func RunPull(args []string, forceFlag bool) error {
 func init() {
 	PullCmd.Flags().BoolVar(&forceFlag, "force", false, "Force overwrite of locally modified environment files")
 	PullCmd.Flags().IntVar(&version, "version", 0, "Specify a version to pull")
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }
 
 type service struct {

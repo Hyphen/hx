@@ -20,6 +20,7 @@ var SetProjectCmd = &cobra.Command{
 	Long:  `Set the project ID for the Hyphen CLI to use.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		projectID := args[0]
 		var err error
 
@@ -39,7 +40,6 @@ var SetProjectCmd = &cobra.Command{
 
 func init() {
 	SetProjectCmd.Flags().BoolVar(&globalFlag, "global", false, "Set the project ID globally")
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }
 
 func printProjectUpdateSuccess(projectID string, isGlobal bool) {

@@ -34,6 +34,7 @@ Examples:
 	hyphen auth --set-api-key YOURKEY1234
 	`,
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		if err := login(cmd); err != nil {
 			printer.Error(cmd, err)
 			return
@@ -44,7 +45,6 @@ Examples:
 func init() {
 	AuthCmd.PersistentFlags().StringVar(&flags.SetApiKeyFlag, "set-api-key", "", "Authenticate using API key provided inline")
 	AuthCmd.PersistentFlags().BoolVar(&flags.UseApiKeyFlag, "use-api-key", false, "Authenticate using an API key provided via prompt or HYPHEN_API_KEY env variable")
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }
 
 func login(cmd *cobra.Command) error {
