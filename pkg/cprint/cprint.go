@@ -3,7 +3,6 @@ package cprint
 import (
 	"fmt"
 
-	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -16,9 +15,21 @@ var (
 	red    = color.New(color.FgRed, color.Bold).SprintFunc()
 )
 
-// Error prints an error message in red
-func Error(cmd *cobra.Command, err error) {
-	if flags.VerboseFlag {
+// CPrinter holds the configuration for printing
+type CPrinter struct {
+	verbose bool
+}
+
+// NewCPrinter creates a new CPrinter instance
+func NewCPrinter(verbose bool) *CPrinter {
+	return &CPrinter{
+		verbose: verbose,
+	}
+}
+
+// Standalone functions
+func Error(cmd *cobra.Command, err error, verbose bool) {
+	if verbose {
 		errorDetails := color.New(color.FgWhite).SprintFunc()
 		cmd.PrintErrf("%s %s\n", red("ERROR:"), errorDetails(err.Error()))
 	} else {
@@ -26,65 +37,60 @@ func Error(cmd *cobra.Command, err error) {
 	}
 }
 
-// Info prints an informational message
-func Info(message string) {
-	if flags.VerboseFlag {
+func Info(message string, verbose bool) {
+	if verbose {
 		fmt.Printf("%s %s\n", cyan("ℹ"), white(message))
 	} else {
 		fmt.Println(message)
 	}
 }
 
-func YellowPrint(message string) {
-	if flags.VerboseFlag {
+func YellowPrint(message string, verbose bool) {
+	if verbose {
 		fmt.Printf("%s\n", yellow(message))
 	} else {
 		fmt.Println(message)
 	}
 }
 
-func GreenPrint(message string) {
-	if flags.VerboseFlag {
+func GreenPrint(message string, verbose bool) {
+	if verbose {
 		fmt.Printf("%s\n", green(message))
 	} else {
 		fmt.Println(message)
 	}
 }
 
-func Print(message string) {
-	if flags.VerboseFlag {
+func Print(message string, verbose bool) {
+	if verbose {
 		fmt.Printf("%s\n", white(message))
 	} else {
 		fmt.Println(message)
 	}
 }
 
-// PrintNorm prints a normal message without any special formatting or symbols
 func PrintNorm(message string) {
 	fmt.Println(message)
 }
 
-// Success prints a success message
-func Success(message string) {
-	if flags.VerboseFlag {
+func Success(message string, verbose bool) {
+	if verbose {
 		fmt.Printf("%s %s\n", green("✅"), white(message))
 	} else {
 		fmt.Println(message)
 	}
 }
 
-// Warning prints a warning message
-func Warning(message string) {
-	if flags.VerboseFlag {
+func Warning(message string, verbose bool) {
+	if verbose {
 		fmt.Printf("%s %s\n", yellow("⚠"), white(message))
 	} else {
 		fmt.Println("WARNING:", message)
 	}
 }
 
-// OrganizationInfo prints organization information
-func OrganizationInfo(orgID string) {
-	if flags.VerboseFlag {
+func OrganizationInfo(orgID string, verbose bool) {
+	if verbose {
 		fmt.Printf("\n%s\n", white("Organization Information:"))
 		fmt.Printf("  %s %s\n", white("ID:"), cyan(orgID))
 	} else {
@@ -92,29 +98,75 @@ func OrganizationInfo(orgID string) {
 	}
 }
 
-// Prompt prints a prompt message
-func Prompt(message string) {
-	if flags.VerboseFlag {
+func Prompt(message string, verbose bool) {
+	if verbose {
 		fmt.Print(yellow(message))
 	} else {
 		fmt.Print(message)
 	}
 }
 
-// PrintHeader prints a header
-func PrintHeader(message string) {
-	if flags.VerboseFlag {
+func PrintHeader(message string, verbose bool) {
+	if verbose {
 		fmt.Printf("\n%s\n", yellow(message))
 	} else {
 		fmt.Println(message)
 	}
 }
 
-// PrintDetail prints a detail line
-func PrintDetail(label, value string) {
-	if flags.VerboseFlag {
+func PrintDetail(label, value string, verbose bool) {
+	if verbose {
 		fmt.Printf("   %s %s\n", white(label+":"), cyan(value))
 	} else {
 		fmt.Printf("%s: %s\n", label, value)
 	}
+}
+
+// CPrinter methods
+func (p *CPrinter) Error(cmd *cobra.Command, err error) {
+	Error(cmd, err, p.verbose)
+}
+
+func (p *CPrinter) Info(message string) {
+	Info(message, p.verbose)
+}
+
+func (p *CPrinter) YellowPrint(message string) {
+	YellowPrint(message, p.verbose)
+}
+
+func (p *CPrinter) GreenPrint(message string) {
+	GreenPrint(message, p.verbose)
+}
+
+func (p *CPrinter) Print(message string) {
+	Print(message, p.verbose)
+}
+
+func (p *CPrinter) PrintNorm(message string) {
+	PrintNorm(message)
+}
+
+func (p *CPrinter) Success(message string) {
+	Success(message, p.verbose)
+}
+
+func (p *CPrinter) Warning(message string) {
+	Warning(message, p.verbose)
+}
+
+func (p *CPrinter) OrganizationInfo(orgID string) {
+	OrganizationInfo(orgID, p.verbose)
+}
+
+func (p *CPrinter) Prompt(message string) {
+	Prompt(message, p.verbose)
+}
+
+func (p *CPrinter) PrintHeader(message string) {
+	PrintHeader(message, p.verbose)
+}
+
+func (p *CPrinter) PrintDetail(label, value string) {
+	PrintDetail(label, value, p.verbose)
 }

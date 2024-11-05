@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var printer *cprint.CPrinter
+
 var ProjectGetCmd = &cobra.Command{
 	Use:   "get [project_id]",
 	Short: "Get a project by ID",
@@ -40,19 +42,23 @@ Note: Make sure you have the necessary permissions to access the project informa
 		projectID := args[0]
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
-			cprint.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
+			printer.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
 			return
 		}
 
 		service := projects.NewService(orgId)
 		project, err := service.GetProject(projectID)
 		if err != nil {
-			cprint.Error(cmd, fmt.Errorf("failed to get project: %w", err))
+			printer.Error(cmd, fmt.Errorf("failed to get project: %w", err))
 			return
 		}
 
-		cprint.PrintDetail("Name", project.Name)
-		cprint.PrintDetail("ID", *project.ID)
-		cprint.PrintDetail("AlternateID", project.AlternateID)
+		printer.PrintDetail("Name", project.Name)
+		printer.PrintDetail("ID", *project.ID)
+		printer.PrintDetail("AlternateID", project.AlternateID)
 	},
+}
+
+func init() {
+	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }

@@ -5,11 +5,13 @@ import (
 
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
 
 var (
 	globalFlag bool
+	printer    *cprint.CPrinter
 )
 
 var SetProjectCmd = &cobra.Command{
@@ -37,20 +39,21 @@ var SetProjectCmd = &cobra.Command{
 
 func init() {
 	SetProjectCmd.Flags().BoolVar(&globalFlag, "global", false, "Set the project ID globally")
+	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }
 
 func printProjectUpdateSuccess(projectID string, isGlobal bool) {
-	cprint.PrintHeader("--- Project Update ---")
+	printer.PrintHeader("--- Project Update ---")
 	if isGlobal {
-		cprint.Success("Successfully updated global project ID")
+		printer.Success("Successfully updated global project ID")
 	} else {
-		cprint.Success("Successfully updated project ID")
+		printer.Success("Successfully updated project ID")
 	}
-	cprint.PrintDetail("New Project ID", projectID)
+	printer.PrintDetail("New Project ID", projectID)
 	fmt.Println()
 	if isGlobal {
-		cprint.GreenPrint("Hyphen CLI is now set to use the new project globally.")
+		printer.GreenPrint("Hyphen CLI is now set to use the new project globally.")
 	} else {
-		cprint.GreenPrint("Hyphen CLI is now set to use the new project.")
+		printer.GreenPrint("Hyphen CLI is now set to use the new project.")
 	}
 }

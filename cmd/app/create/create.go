@@ -13,6 +13,7 @@ import (
 
 var (
 	appIDFlag string
+	printer   *cprint.CPrinter
 )
 
 var CreateCmd = &cobra.Command{
@@ -45,24 +46,25 @@ ID, and associated organization.
 
 func init() {
 	CreateCmd.Flags().StringVarP(&appIDFlag, "id", "i", "", "App ID (optional)")
+	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }
 
 func runCreate(cmd *cobra.Command, args []string) {
 	appService := app.NewService()
 	orgID, err := flags.GetOrganizationID()
 	if err != nil {
-		cprint.Error(cmd, err)
+		printer.Error(cmd, err)
 		return
 	}
 	projID, err := flags.GetProjectID()
 	if err != nil {
-		cprint.Error(cmd, err)
+		printer.Error(cmd, err)
 		return
 	}
 
 	appName := args[0]
 	if appName == "" {
-		cprint.Error(cmd, fmt.Errorf("app name is required"))
+		printer.Error(cmd, fmt.Errorf("app name is required"))
 		return
 	}
 
@@ -73,7 +75,7 @@ func runCreate(cmd *cobra.Command, args []string) {
 
 	newApp, err := appService.CreateApp(orgID, projID, appAlternateId, appName)
 	if err != nil {
-		cprint.Error(cmd, err)
+		printer.Error(cmd, err)
 		return
 	}
 
@@ -93,7 +95,7 @@ func getAppID(cmd *cobra.Command, appName string) string {
 		response := prompt.PromptYesNo(cmd, fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]?", suggestedID), true)
 
 		if response.IsFlag && !response.Confirmed {
-			cprint.Info("Operation cancelled due to --no flag.")
+			printer.Info("Operation cancelled due to --no flag.")
 			return ""
 		}
 
@@ -103,7 +105,7 @@ func getAppID(cmd *cobra.Command, appName string) string {
 				var err error
 				customID, err = prompt.PromptString(cmd, "Enter a custom app ID:")
 				if err != nil {
-					cprint.Error(cmd, err)
+					printer.Error(cmd, err)
 					return ""
 				}
 
@@ -111,7 +113,7 @@ func getAppID(cmd *cobra.Command, appName string) string {
 				if err == nil {
 					return customID
 				}
-				cprint.Warning("Invalid app ID. Please try again.")
+				printer.Warning("Invalid app ID. Please try again.")
 			}
 		}
 		appAlternateId = suggestedID
@@ -124,10 +126,10 @@ func generateDefaultAppId(appName string) string {
 }
 
 func printCreationSummary(appName, appAlternateId, appID, orgID string) {
-	cprint.Success("App successfully created")
-	cprint.Print("") // Print an empty line for spacing
-	cprint.PrintDetail("App Name", appName)
-	cprint.PrintDetail("App AlternateId", appAlternateId)
-	cprint.PrintDetail("App ID", appID)
-	cprint.PrintDetail("Organization ID", orgID)
+	printer.Success("App successfully created")
+	printer.Print("") // Print an empty line for spacing
+	printer.PrintDetail("App Name", appName)
+	printer.PrintDetail("App AlternateId", appAlternateId)
+	printer.PrintDetail("App ID", appID)
+	printer.PrintDetail("Organization ID", orgID)
 }

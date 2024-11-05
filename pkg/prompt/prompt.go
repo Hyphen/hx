@@ -8,9 +8,16 @@ import (
 	"syscall"
 
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
+
+var printer *cprint.CPrinter
+
+func init() {
+	printer = cprint.NewCPrinter(flags.VerboseFlag)
+}
 
 type Response struct {
 	Confirmed bool
@@ -45,7 +52,7 @@ func PromptYesNo(cmd *cobra.Command, prompt string, defaultValue bool) Response 
 	case "":
 		return Response{Confirmed: defaultValue, IsFlag: false}
 	default:
-		cprint.Warning("Invalid response. Please enter 'y' or 'n'.")
+		printer.Warning("Invalid response. Please enter 'y' or 'n'.")
 		return PromptYesNo(cmd, prompt, defaultValue)
 	}
 }

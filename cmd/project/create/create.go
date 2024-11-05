@@ -11,6 +11,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var printer *cprint.CPrinter
+
 var ProjectCreateCmd = &cobra.Command{
 	Use:   "create [name]",
 	Short: "Create a new project in your organization",
@@ -47,7 +49,7 @@ This will create a project named "My New Project" with an alternate ID like "my-
 	Run: func(cmd *cobra.Command, args []string) {
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
-			cprint.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
+			printer.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
 			return
 		}
 
@@ -75,14 +77,18 @@ This will create a project named "My New Project" with an alternate ID like "my-
 		// Call the service to create the project
 		newProject, err := service.CreateProject(project)
 		if err != nil {
-			cprint.Error(cmd, fmt.Errorf("failed to create project: %w", err))
+			printer.Error(cmd, fmt.Errorf("failed to create project: %w", err))
 			return
 		}
 
-		cprint.GreenPrint(fmt.Sprintf("Project '%s' created successfully!", name))
+		printer.GreenPrint(fmt.Sprintf("Project '%s' created successfully!", name))
 
-		cprint.PrintDetail("Name", newProject.Name)
-		cprint.PrintDetail("ID", *newProject.ID)
-		cprint.PrintDetail("AlternateID", newProject.AlternateID)
+		printer.PrintDetail("Name", newProject.Name)
+		printer.PrintDetail("ID", *newProject.ID)
+		printer.PrintDetail("AlternateID", newProject.AlternateID)
 	},
+}
+
+func init() {
+	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }

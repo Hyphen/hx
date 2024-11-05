@@ -11,11 +11,12 @@ import (
 )
 
 var (
-	qr     bool
-	domain string
-	tags   []string
-	code   string
-	title  string
+	qr      bool
+	domain  string
+	tags    []string
+	code    string
+	title   string
+	printer *cprint.CPrinter
 )
 
 var LinkCmd = &cobra.Command{
@@ -52,22 +53,22 @@ Use 'hyphen link --help' for more information about available flags.
 
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
-			cprint.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
+			printer.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
 			return
 		}
 
 		if flags.VerboseFlag {
-			cprint.Info("Fetching domain information...")
+			printer.Info("Fetching domain information...")
 		}
 
 		domain, err := service.GetDomain(orgId)
 		if err != nil {
-			cprint.Error(cmd, fmt.Errorf("failed to get domain: %w", err))
+			printer.Error(cmd, fmt.Errorf("failed to get domain: %w", err))
 			return
 		}
 
 		if flags.VerboseFlag {
-			cprint.Success(fmt.Sprintf("Using domain: %s", domain))
+			printer.Success(fmt.Sprintf("Using domain: %s", domain))
 		}
 
 		var codePtr, titlePtr *string
@@ -94,58 +95,58 @@ Use 'hyphen link --help' for more information about available flags.
 		}
 
 		if flags.VerboseFlag {
-			cprint.Info("Generating short code...")
+			printer.Info("Generating short code...")
 		}
 
 		shortCode, err := service.GenerateShortCode(orgId, newCode)
 		if err != nil {
-			cprint.Error(cmd, fmt.Errorf("failed to generate short code: %w", err))
+			printer.Error(cmd, fmt.Errorf("failed to generate short code: %w", err))
 			return
 		}
 
 		var qrCodeURL string
 		if qr == true {
 			if flags.VerboseFlag {
-				cprint.Info("Generating QR code...")
+				printer.Info("Generating QR code...")
 			}
 			qrCode, err := service.GenerateQR(orgId, *shortCode.ID)
 			if err != nil {
-				cprint.Error(cmd, fmt.Errorf("failed to generate QR code: %w", err))
+				printer.Error(cmd, fmt.Errorf("failed to generate QR code: %w", err))
 				return
 			}
 			qrCodeURL = qrCode.QRLink
 		}
 
 		if flags.VerboseFlag {
-			cprint.Success("Link generation successful")
+			printer.Success("Link generation successful")
 		}
 
 		shortURL := fmt.Sprintf("%s/%s", domain, *shortCode.Code)
 
 		if flags.VerboseFlag {
-			cprint.PrintDetail("Long URL", args[0])
-			cprint.PrintDetail("Short URL", shortURL)
-			cprint.PrintDetail("Short Code", *shortCode.Code)
+			printer.PrintDetail("Long URL", args[0])
+			printer.PrintDetail("Short URL", shortURL)
+			printer.PrintDetail("Short Code", *shortCode.Code)
 			if shortCode.Title != nil {
-				cprint.PrintDetail("Title", *shortCode.Title)
+				printer.PrintDetail("Title", *shortCode.Title)
 			}
 			if len(tags) > 0 {
-				cprint.PrintDetail("Tags", fmt.Sprintf("%v", tags))
+				printer.PrintDetail("Tags", fmt.Sprintf("%v", tags))
 			}
 			if qrCodeURL != "" {
-				cprint.PrintDetail("QR Code URL", qrCodeURL)
+				printer.PrintDetail("QR Code URL", qrCodeURL)
 			}
 
-			cprint.GreenPrint("\nURL shortened successfully!")
+			printer.GreenPrint("\nURL shortened successfully!")
 
 			if qr {
-				cprint.PrintHeader("QR Code")
-				cprint.PrintNorm(shortURL)
+				printer.PrintHeader("QR Code")
+				printer.PrintNorm(shortURL)
 			}
 		} else {
-			cprint.Print(shortURL)
+			printer.Print(shortURL)
 			if qr {
-				cprint.Print(qrCodeURL)
+				printer.Print(qrCodeURL)
 			}
 		}
 	},
@@ -157,6 +158,7 @@ func init() {
 	LinkCmd.Flags().StringArrayVar(&tags, "tag", []string{}, "Tags for the shortened URL. Can be specified multiple times")
 	LinkCmd.Flags().StringVar(&code, "code", "", "Custom short code")
 	LinkCmd.Flags().StringVar(&title, "title", "", "Title for the shortened URL")
+	printer = cprint.NewCPrinter(flags.VerboseFlag)
 }
 
 type service struct {
