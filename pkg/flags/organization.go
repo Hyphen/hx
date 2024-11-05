@@ -28,15 +28,12 @@ func GetOrganizationID() (string, error) {
 }
 
 func isGlobalOrgIdSameAsLocal() bool {
-	ml, err := manifest.RestoreLocalConfig()
-	if err != nil {
-		return false
+	ml, _ := manifest.RestoreLocalConfig() // we can skip the error, if its new project will no have ml
+	if ml.OrganizationId == "" {
+		return true //if we dont have ml return true bc is new project
 	}
 
-	mg, err := manifest.RestoreGlobalConfig()
-	if err != nil {
-		return false
-	}
+	mg, _ := manifest.RestoreGlobalConfig() // we can skip this error check, bc whe check the error in the line  16
 
 	if ml.OrganizationId != mg.OrganizationId {
 		return false
