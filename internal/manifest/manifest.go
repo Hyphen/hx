@@ -209,7 +209,7 @@ func RestoreSecretFromFile(manifestSecretFile string) (Secret, error) {
 	}
 
 	if !hasSecret {
-		return Secret{}, errors.New("No valid .hxkey found (neither global nor local). Please authenticate using `hx init`")
+		return Secret{}, errors.New("No valid .hxkey found (neither global nor local). Please init and app using `hx init`")
 	}
 
 	return secret, nil

@@ -54,6 +54,10 @@ func init() {
 }
 
 func runInit(cmd *cobra.Command, args []string) {
+	if err := isValidDirectory(cmd); err != nil {
+		return
+	}
+
 	appService := app.NewService()
 	envService := env.NewService()
 
@@ -136,7 +140,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		AppId:              &newApp.ID,
 	}
 
-	ml, err := manifest.LocalInitialize(mcl) //Loading the local hxkey
+	ml, err := manifest.LocalInitialize(mcl)
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
@@ -147,7 +151,7 @@ func runInit(cmd *cobra.Command, args []string) {
 	}
 
 	// List the environments for the project
-	environments, err := envService.ListEnvironments(orgID, *mc.ProjectId, 100, 1)
+	environments, err := envService.ListEnvironments(orgID, *ml.ProjectId, 100, 1)
 	if err != nil {
 		cprint.Error(cmd, err)
 		return
@@ -306,4 +310,24 @@ func printInitializationSummary(appName, appAlternateId, appID, orgID string) {
 	cprint.PrintDetail("App AlternateId", appAlternateId)
 	cprint.PrintDetail("App ID", appID)
 	cprint.PrintDetail("Organization ID", orgID)
+}
+
+func isValidDirectory(cmd *cobra.Command) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	if cwd == homeDir {
+		cprint.Warning("Cannot initialize in home directory (~). This would override the global Hyphen configuration.")
+		cprint.Info("Please change to a project directory and try again.")
+		return fmt.Errorf("initialization in home directory not allowed")
+	}
+
+	return nil
 }
