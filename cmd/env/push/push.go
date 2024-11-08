@@ -14,6 +14,7 @@ import (
 )
 
 var Silent bool = false
+var printer *cprint.CPrinter
 
 var PushCmd = &cobra.Command{
 	Use:   "push [environment]",
@@ -36,12 +37,13 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		m, err := manifest.Restore()
 		if err != nil {
-			cprint.Error(cmd, err)
+			printer.Error(cmd, err)
 		}
 		if err := RunPush(args, m.SecretKeyId); err != nil {
-			cprint.Error(cmd, err)
+			printer.Error(cmd, err)
 		}
 	},
 }
@@ -91,12 +93,12 @@ func RunPush(args []string, secretKeyId int64) error {
 	for _, envName := range envsToPush {
 		e, err := env.GetLocalEncryptedEnv(envName, manifest)
 		if err != nil {
-			cprint.Error(nil, err)
+			printer.Error(nil, err)
 			continue
 		}
 		err, skippable := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey(), manifest, secretKeyId)
 		if err != nil {
-			cprint.Error(nil, err)
+			printer.Error(nil, err)
 			continue
 		} else if !skippable {
 			envsPushed = append(envsPushed, envName)
@@ -135,7 +137,7 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 		}
 		if skippable && m.SecretKeyId == secretKeyId {
 			if !Silent {
-				cprint.Info(fmt.Sprintf("Local %s environment is already up to date - skipping", envName))
+				printer.Info(fmt.Sprintf("Local %s environment is already up to date - skipping", envName))
 			}
 			return nil, true
 		}
@@ -219,15 +221,15 @@ func (s *service) getLocalEnvsNamesFromFiles() ([]string, error) {
 
 func printPushSummary(envsToPush []string, envsPushed []string) {
 	if len(envsToPush) > 1 {
-		cprint.PrintDetail("Local environments", strings.Join(envsToPush, ", "))
+		printer.PrintDetail("Local environments", strings.Join(envsToPush, ", "))
 		if len(envsPushed) > 0 {
-			cprint.PrintDetail("Environments pushed", strings.Join(envsPushed, ", "))
+			printer.PrintDetail("Environments pushed", strings.Join(envsPushed, ", "))
 		} else {
-			cprint.PrintDetail("Environments pushed", "None")
+			printer.PrintDetail("Environments pushed", "None")
 		}
 	} else {
 		if len(envsToPush) == 1 && len(envsPushed) == 1 {
-			cprint.Success(fmt.Sprintf("Successfully pushed environment '%s'", envsToPush[0]))
+			printer.Success(fmt.Sprintf("Successfully pushed environment '%s'", envsToPush[0]))
 		}
 	}
 }

@@ -16,6 +16,7 @@ var (
 	pageSize  int
 	page      int
 	showTable bool
+	printer   *cprint.CPrinter
 )
 
 var ListCmd = &cobra.Command{
@@ -44,26 +45,27 @@ Use 'hyphen app list --help' for more information about available flags.
 `,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
-			cprint.Error(cmd, err)
+			printer.Error(cmd, err)
 			return
 		}
 		projectId, err := flags.GetProjectID()
 		if err != nil {
-			cprint.Error(cmd, err)
+			printer.Error(cmd, err)
 			return
 		}
 		service := newService(app.NewService())
 
 		apps, err := service.ListApps(orgId, projectId, pageSize, page)
 		if err != nil {
-			cprint.Error(cmd, fmt.Errorf("failed to list apps: %w", err))
+			printer.Error(cmd, fmt.Errorf("failed to list apps: %w", err))
 			return
 		}
 
 		if len(apps) == 0 {
-			cprint.Info("No applications found for the specified organization.")
+			printer.Info("No applications found for the specified organization.")
 			return
 		}
 
@@ -108,11 +110,11 @@ func displayTable(apps []app.App) {
 
 func displayList(apps []app.App) {
 	for _, app := range apps {
-		cprint.PrintDetail("App Name", app.Name)
-		cprint.PrintDetail("App AlternateId", app.AlternateId)
-		cprint.PrintDetail("App ID", app.ID)
-		cprint.PrintDetail("Organization ID", app.Organization.ID)
-		cprint.PrintDetail("Organization Name", app.Organization.Name)
+		printer.PrintDetail("App Name", app.Name)
+		printer.PrintDetail("App AlternateId", app.AlternateId)
+		printer.PrintDetail("App ID", app.ID)
+		printer.PrintDetail("Organization ID", app.Organization.ID)
+		printer.PrintDetail("Organization Name", app.Organization.Name)
 		fmt.Println()
 	}
 }

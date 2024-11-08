@@ -232,6 +232,15 @@ func RestoreFromFile(manifestConfigFile, manifestSecretFile string) (Manifest, e
 	}, nil
 }
 
+func RestoreGlobalConfig() (Config, error) {
+	globalConfigFile := fmt.Sprintf("%s/%s", GetGlobalDirectory(), ManifestConfigFile)
+	return readAndUnmarshalConfigJSON[Config](globalConfigFile)
+}
+
+func RestoreLocalConfig() (Config, error) {
+	return readAndUnmarshalConfigJSON[Config](ManifestConfigFile)
+}
+
 func readAndUnmarshalConfigJSON[T any](filename string) (T, error) {
 	var result T
 

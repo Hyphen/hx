@@ -16,6 +16,7 @@ var (
 	pageSize  int
 	page      int
 	showTable bool
+	printer   *cprint.CPrinter
 )
 
 var ListVersionsCmd = &cobra.Command{
@@ -51,8 +52,9 @@ Examples:
     `,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		if err := RunListVersions(args[0]); err != nil {
-			cprint.Error(cmd, err)
+			printer.Error(cmd, err)
 		}
 	},
 }
@@ -77,7 +79,7 @@ func RunListVersions(environmentId string) error {
 	}
 
 	if len(envs) == 0 {
-		cprint.Info("No versions found for the specified environment.")
+		printer.Info("No versions found for the specified environment.")
 		return nil
 	}
 
@@ -140,22 +142,22 @@ func displayList(envs []env.Env) {
 		if e.ProjectEnv != nil {
 			id = e.ProjectEnv.AlternateID
 		}
-		cprint.PrintHeader(fmt.Sprintf("ID: %s", id))
+		printer.PrintHeader(fmt.Sprintf("ID: %s", id))
 
 		version := "-"
 		if e.Version != nil {
 			version = fmt.Sprintf("%d", *e.Version)
 		}
-		cprint.PrintDetail("Version", version)
+		printer.PrintDetail("Version", version)
 
-		cprint.PrintDetail("Secrets Count", fmt.Sprintf("%d", e.CountVariables))
-		cprint.PrintDetail("Size", e.Size)
+		printer.PrintDetail("Secrets Count", fmt.Sprintf("%d", e.CountVariables))
+		printer.PrintDetail("Size", e.Size)
 
 		publishedTime := "-"
 		if e.Published != nil {
 			publishedTime = e.Published.Format("01/02/2006 3:04:05 PM")
 		}
-		cprint.PrintDetail("Published", publishedTime)
+		printer.PrintDetail("Published", publishedTime)
 
 		fmt.Println()
 	}
