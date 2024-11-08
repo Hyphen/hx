@@ -6,11 +6,13 @@ import (
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
 
 var (
 	globalFlag bool
+	printer    *cprint.CPrinter
 )
 
 var SetOrgCmd = &cobra.Command{
@@ -19,6 +21,7 @@ var SetOrgCmd = &cobra.Command{
 	Long:  `Set the organization ID for the Hyphen CLI to use.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		orgID := args[0]
 		var err error
 
@@ -60,17 +63,17 @@ func init() {
 }
 
 func printOrgUpdateSuccess(orgID string, isGlobal bool) {
-	cprint.PrintHeader("--- Organization Update ---")
+	printer.PrintHeader("--- Organization Update ---")
 	if isGlobal {
-		cprint.Success("Successfully updated global organization ID")
+		printer.Success("Successfully updated global organization ID")
 	} else {
-		cprint.Success("Successfully updated organization ID")
+		printer.Success("Successfully updated organization ID")
 	}
-	cprint.PrintDetail("New Organization ID", orgID)
+	printer.PrintDetail("New Organization ID", orgID)
 	fmt.Println()
 	if isGlobal {
-		cprint.GreenPrint("Hyphen CLI is now set to use the new organization globally.")
+		printer.GreenPrint("Hyphen CLI is now set to use the new organization globally.")
 	} else {
-		cprint.GreenPrint("Hyphen CLI is now set to use the new organization.")
+		printer.GreenPrint("Hyphen CLI is now set to use the new organization.")
 	}
 }

@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var printer *cprint.CPrinter
+
 var ProjectListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all projects",
@@ -40,29 +42,32 @@ This command does not accept any arguments. Use it to get a quick overview of al
 Note: The list is fetched based on your current organization context. Ensure you're in the correct organization before running this command.
 `,
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
+
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
-			cprint.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
+			printer.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
 			return
 		}
 
 		service := projects.NewService(orgId)
 		projects, err := service.ListProjects()
 		if err != nil {
-			cprint.Error(cmd, fmt.Errorf("failed to list projects: %w", err))
+			printer.Error(cmd, fmt.Errorf("failed to list projects: %w", err))
 			return
 		}
 
 		if len(projects) == 0 {
-			cprint.YellowPrint("No projects found")
+			printer.YellowPrint("No projects found")
 			return
 		}
 
 		for _, project := range projects {
-			cprint.PrintDetail("Name", project.Name)
-			cprint.PrintDetail("ID", *project.ID)
-			cprint.PrintDetail("AlternateID", project.AlternateID)
-			cprint.Print("")
+			printer.PrintDetail("Name", project.Name)
+			printer.PrintDetail("ID", *project.ID)
+			printer.PrintDetail("AlternateID", project.AlternateID)
+			printer.Print("")
 		}
+
 	},
 }

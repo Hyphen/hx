@@ -19,6 +19,7 @@ var (
 	forceFlag  bool
 	version    int
 	versionPtr *int = nil
+	printer    *cprint.CPrinter
 )
 
 var PullCmd = &cobra.Command{
@@ -41,11 +42,12 @@ After pulling, all environment variables will be locally available and ready for
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		if version != 0 {
 			versionPtr = &version
 		}
 		if err := RunPull(args, forceFlag); err != nil {
-			cprint.Error(cmd, err)
+			printer.Error(cmd, err)
 		}
 	},
 }
@@ -192,7 +194,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 
 		// Handle NotFound error
 		if !Silent {
-			cprint.Warning(fmt.Sprintf("No version found for environment %s. Pulling the latest version.", envName))
+			printer.Warning(fmt.Sprintf("No version found for environment %s. Pulling the latest version.", envName))
 		}
 
 		// Retry without version
@@ -237,7 +239,7 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 		}
 		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secretkey, m, force); err != nil {
 			if !Silent {
-				cprint.Warning(fmt.Sprintf("Failed to pull environment %s: %s", envName, err))
+				printer.Warning(fmt.Sprintf("Failed to pull environment %s: %s", envName, err))
 			}
 			continue
 		}
@@ -249,15 +251,15 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 
 func printPullSummary(pulledEnvs []string) {
 	if len(pulledEnvs) == 0 {
-		cprint.Print("No environments pulled")
+		printer.Print("No environments pulled")
 		return
 	}
-	cprint.Print("Pulled environments:")
+	printer.Print("Pulled environments:")
 	for _, env := range pulledEnvs {
 		if env == "default" {
-			cprint.Print("  - default -> .env")
+			printer.Print("  - default -> .env")
 		} else {
-			cprint.Print(fmt.Sprintf("  - %s -> .env.%s", env, env))
+			printer.Print(fmt.Sprintf("  - %s -> .env.%s", env, env))
 		}
 	}
 }

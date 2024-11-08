@@ -8,12 +8,14 @@ import (
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
 )
 
 var (
 	forceFlag bool
+	printer   *cprint.CPrinter
 )
 
 var RotateCmd = &cobra.Command{
@@ -22,8 +24,9 @@ var RotateCmd = &cobra.Command{
 	Long:  `This command rotates the encryption key and updates all environments with the new key.`,
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		if err := runRotateKey(cmd); err != nil {
-			cprint.Error(cmd, err)
+			printer.Error(cmd, err)
 		}
 	},
 }
@@ -34,22 +37,22 @@ func init() {
 
 func runRotateKey(cmd *cobra.Command) error {
 	// Display warning and prompt for confirmation
-	cprint.Warning("You are about to rotate the encryption key. This action is irreversible and will affect all environments.")
-	cprint.Info("Make sure you have a backup of your current configuration before proceeding.")
-	cprint.Info("This action will:")
-	cprint.Info("  1. Generate a new encryption key")
-	cprint.Info("  2. Re-encrypt all environment variables with the new key")
-	cprint.Info("  3. Update the local configuration with the new key")
-	cprint.Info("\nAre you absolutely sure you want to proceed?")
+	printer.Warning("You are about to rotate the encryption key. This action is irreversible and will affect all environments.")
+	printer.Info("Make sure you have a backup of your current configuration before proceeding.")
+	printer.Info("This action will:")
+	printer.Info("  1. Generate a new encryption key")
+	printer.Info("  2. Re-encrypt all environment variables with the new key")
+	printer.Info("  3. Update the local configuration with the new key")
+	printer.Info("\nAre you absolutely sure you want to proceed?")
 
 	response := prompt.PromptYesNo(cmd, "Rotate encryption key?", false)
 	if !response.Confirmed {
-		cprint.Info("Key rotation cancelled.")
+		printer.Info("Key rotation cancelled.")
 		return nil
 	}
 
 	// Proceed with key rotation
-	cprint.Info("Proceeding with key rotation...")
+	printer.Info("Proceeding with key rotation...")
 
 	//Get all the envs
 	pull.Silent = true
@@ -72,9 +75,9 @@ func runRotateKey(cmd *cobra.Command) error {
 	push.Silent = true
 	push.RunPush([]string{}, currentManifest.SecretKeyId)
 
-	cprint.Success("Key rotation completed successfully.")
-	cprint.Info("New encryption key has been generated and all environments have been updated.")
-	cprint.Info("Please ensure all team members pull the latest changes.")
+	printer.Success("Key rotation completed successfully.")
+	printer.Info("New encryption key has been generated and all environments have been updated.")
+	printer.Info("Please ensure all team members pull the latest changes.")
 
 	return nil
 }
