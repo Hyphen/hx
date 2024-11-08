@@ -56,6 +56,13 @@ func init() {
 
 func runInit(cmd *cobra.Command, args []string) {
 	printer = cprint.NewCPrinter(flags.VerboseFlag)
+
+	if err := isValidDirectory(cmd); err != nil {
+		printer.Error(cmd, err)
+		printer.Info("Please change to a project directory and try again.")
+		return
+	}
+
 	appService := app.NewService()
 	envService := env.NewService()
 
@@ -138,7 +145,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		AppId:              &newApp.ID,
 	}
 
-	ml, err := manifest.LocalInitialize(mcl) //Loading the local hxkey
+	ml, err := manifest.LocalInitialize(mcl)
 	if err != nil {
 		printer.Error(cmd, err)
 		return
@@ -149,7 +156,7 @@ func runInit(cmd *cobra.Command, args []string) {
 	}
 
 	// List the environments for the project
-	environments, err := envService.ListEnvironments(orgID, *mc.ProjectId, 100, 1)
+	environments, err := envService.ListEnvironments(orgID, *ml.ProjectId, 100, 1)
 	if err != nil {
 		printer.Error(cmd, err)
 		return
@@ -308,4 +315,22 @@ func printInitializationSummary(appName, appAlternateId, appID, orgID string) {
 	printer.PrintDetail("App AlternateId", appAlternateId)
 	printer.PrintDetail("App ID", appID)
 	printer.PrintDetail("Organization ID", orgID)
+}
+
+func isValidDirectory(cmd *cobra.Command) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	if cwd == homeDir {
+		return fmt.Errorf("initialization in home directory not allowed")
+	}
+
+	return nil
 }
