@@ -11,6 +11,7 @@ import (
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
@@ -131,8 +132,22 @@ func runInit(cmd *cobra.Command, args []string) {
 
 	newApp, err := appService.CreateApp(orgID, *mc.ProjectId, appAlternateId, appName)
 	if err != nil {
-		printer.Error(cmd, err)
-		return
+		if !errors.Is(err, errors.ErrConflict) {
+			printer.Error(cmd, err)
+			return
+		}
+
+		existingApp, handleErr := handleExistingApp(cmd, *appService, orgID, appAlternateId)
+		if handleErr != nil {
+			printer.Error(cmd, handleErr)
+			return
+		}
+		if existingApp == nil {
+			printer.Info("Operation cancelled.")
+			return
+		}
+
+		newApp = *existingApp
 	}
 
 	mcl := manifest.Config{
@@ -204,11 +219,19 @@ func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 		return err
 	}
 
-	newVersion := 1
-	envStruct.Version = &newVersion
+	version := 1
+	envStruct.Version = &version
 
 	if err := envService.PutEnvironmentEnv(orgID, appID, envID, m.SecretKeyId, envStruct); err != nil {
-		return err
+		if !errors.Is(err, errors.ErrConflict) {
+			return err
+		}
+		envStruct, err = envService.GetEnvironmentEnv(orgID, appID, envID, &m.SecretKeyId, nil)
+		if err != nil {
+			return err
+		}
+		version = *envStruct.Version
+
 	}
 
 	db, err := database.Restore()
@@ -227,7 +250,7 @@ func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 		EnvName:   envName,
 	}
 
-	if err := db.UpsertSecret(secretKey, newEnvDcrypted, 1); err != nil {
+	if err := db.UpsertSecret(secretKey, newEnvDcrypted, version); err != nil {
 		return fmt.Errorf("failed to save local environment: %w", err) // TODO: check if this should be and error
 	}
 
@@ -333,4 +356,19 @@ func isValidDirectory(cmd *cobra.Command) error {
 	}
 
 	return nil
+}
+
+func handleExistingApp(cmd *cobra.Command, appService app.AppService, orgID, appAlternateId string) (*app.App, error) {
+	response := prompt.PromptYesNo(cmd, fmt.Sprintf("An app with ID '%s' already exists. Do you want to use this existing app?", appAlternateId), true)
+	if !response.Confirmed {
+		return nil, nil
+	}
+
+	existingApp, err := appService.GetApp(orgID, appAlternateId)
+	if err != nil {
+		return nil, err
+	}
+
+	printer.Info(fmt.Sprintf("Using existing app '%s' (%s)", existingApp.Name, existingApp.AlternateId))
+	return &existingApp, nil
 }

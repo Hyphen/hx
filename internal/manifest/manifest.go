@@ -58,7 +58,30 @@ func (m *Manifest) GetSecretKey() *secretkey.SecretKey {
 }
 
 func LocalInitialize(mc Config) (Manifest, error) {
-	return Initialize(mc, ManifestSecretFile, ManifestConfigFile)
+	err := InitializeConfig(mc, ManifestConfigFile)
+	if err != nil {
+		return Manifest{}, errors.Wrap(err, "Failed to initialize manifest config")
+	}
+
+	var ms Secret
+	if _, err := os.Stat(ManifestSecretFile); err == nil {
+		ms, err = RestoreSecretFromFile(ManifestSecretFile)
+		if err != nil {
+			return Manifest{}, errors.Wrap(err, "Failed to restore manifest secret from file")
+		}
+	} else {
+		ms, err = InitializeSecret(ManifestSecretFile)
+		if err != nil {
+			return Manifest{}, errors.Wrap(err, "Failed to initialize manifest secret")
+		}
+	}
+
+	m := Manifest{
+		mc,
+		ms,
+	}
+
+	return m, nil
 }
 
 func GlobalInitializeConfig(mc Config) error {
