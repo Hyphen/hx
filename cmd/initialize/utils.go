@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Hyphen/cli/pkg/errors"
@@ -12,10 +13,32 @@ import (
 const gitDirPath = ".git"
 const gitignorePath = ".gitignore"
 
-// Check if the .git directory exists
+// Check if we're inside a git repository
 func gitExists() bool {
-	_, err := os.Stat(gitDirPath)
-	return err == nil
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return false
+	}
+
+	_, found := findGitRoot(currentDir)
+	return found
+}
+
+// findGitRoot searches for .git directory up the directory tree
+func findGitRoot(startPath string) (string, bool) {
+	currentPath := startPath
+	for {
+		gitPath := filepath.Join(currentPath, gitDirPath)
+		if _, err := os.Stat(gitPath); err == nil {
+			return currentPath, true
+		}
+
+		parent := filepath.Dir(currentPath)
+		if parent == currentPath {
+			return "", false
+		}
+		currentPath = parent
+	}
 }
 
 // Check if the .gitignore file exists, and create it if necessary
