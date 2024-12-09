@@ -72,8 +72,8 @@ jobs:
           password: ${{ secrets.ES_PASSWORD }}
           credential_id: ${{ secrets.ES_CREDENTIAL_ID }}
           totp_secret: ${{ secrets.ES_TOTP_SECRET }}
-          file_path: hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe
-          output_path: hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe
+          file_path: ${GITHUB_WORKSPACE}/hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe
+          output_path: ${GITHUB_WORKSPACE}/artifacts
           malware_block: false
           environment_name: PROD
 
@@ -93,4 +93,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: hyphen-${{ env.VERSION }}-${{ matrix.arch }}
-          path: hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe
+          path: ${GITHUB_WORKSPACE}/hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe
