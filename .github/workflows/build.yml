@@ -93,4 +93,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: hyphen-${{ env.VERSION }}-${{ matrix.arch }}
-          path: ${GITHUB_WORKSPACE}/artifacts/hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe
+          path: artifacts/hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe
