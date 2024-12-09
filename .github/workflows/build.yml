@@ -64,6 +64,7 @@ jobs:
         run: pwsh -Command 'go build -v -ldflags="-X github.com/Hyphen/cli/cmd/version.Version=${{ env.VERSION }}" -o hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe'
 
       - name: Sign Artifact with CodeSignTool
+        if: runner.os != 'Windows'
         uses: sslcom/esigner-codesign@develop
         with:
           command: sign
@@ -71,7 +72,21 @@ jobs:
           password: ${{ secrets.ES_PASSWORD }}
           credential_id: ${{ secrets.ES_CREDENTIAL_ID }}
           totp_secret: ${{ secrets.ES_TOTP_SECRET }}
-          file_path: ${GITHUB_WORKSPACE}/hyphen-*
+          file_path: ${GITHUB_WORKSPACE}/hyphen-${{ env.VERSION }}-${{ matrix.arch }}
+          output_path: ${GITHUB_WORKSPACE}/artifacts
+          malware_block: false
+          environment_name: PROD
+
+      - name: Sign Windows Artifact with CodeSignTool
+        if: runner.os == 'Windows'
+        uses: sslcom/esigner-codesign@develop
+        with:
+          command: sign
+          username: ${{ secrets.ES_USERNAME }}
+          password: ${{ secrets.ES_PASSWORD }}
+          credential_id: ${{ secrets.ES_CREDENTIAL_ID }}
+          totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+          file_path: ${GITHUB_WORKSPACE}/hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe
           output_path: ${GITHUB_WORKSPACE}/artifacts
           malware_block: false
           environment_name: PROD
