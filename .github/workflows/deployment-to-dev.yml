@@ -89,3 +89,4 @@ jobs:
     with:
       version: ${{ needs.extract-version.outputs.version_without_v }}
       package_name: hyphen-cli-dev
+    secrets: inherit
