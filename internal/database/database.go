@@ -43,9 +43,9 @@ func (db *Database) GetSecret(key SecretKey) (Secret, bool) {
 	return secret, ok
 }
 
-// SaveSecret saves a secret to the Database.
+// UpsertSecret saves a secret to the Database.
 // Data will be hashed before saving
-func (db *Database) SaveSecret(key SecretKey, data string, version int) error {
+func (db *Database) UpsertSecret(key SecretKey, data string, version int) error {
 	if db.Secrets == nil {
 		db.Secrets = make(map[string]map[string]map[string]Secret)
 	}
@@ -111,12 +111,12 @@ func Restore() (Database, error) {
 }
 
 func Save(db Database) error {
-	m, err := manifest.Restore()
+	mc, err := manifest.RestoreConfig()
 	if err != nil {
 		return err
 	}
-	m.Database = db
+	mc.Database = db
 
-	return manifest.UpsertGlobalManifest(m)
+	return manifest.UpsertGlobalConfig(mc)
 
 }

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/apiconf"
@@ -14,9 +16,10 @@ import (
 
 type EnvServicer interface {
 	GetEnvironment(organizationId, projectId, environment string) (Environment, bool, error)
-	PutEnvironmentEnv(organizationId, appId, environmentId string, env Env) error
-	GetEnvironmentEnv(organizationId, appId, env string) (Env, error)
+	PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env Env) error
+	GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId *int64, version *int) (Env, error)
 	ListEnvs(organizationId, appId string, size, page int) ([]Env, error)
+	ListEnvVersions(organizationId, appId, environmentId string, size, page int) ([]Env, error)
 	ListEnvironments(organizationId, projectId string, size, page int) ([]Environment, error)
 }
 
@@ -34,7 +37,6 @@ func NewService() *EnvService {
 		baseUrl:    baseUrl,
 		httpClient: httputil.NewHyphenHTTPClient(),
 	}
-
 }
 
 func (es *EnvService) GetEnvironment(organizationId, projectId, environmentId string) (Environment, bool, error) {
@@ -65,18 +67,16 @@ func (es *EnvService) GetEnvironment(organizationId, projectId, environmentId st
 	return environment, true, nil
 }
 
-func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId string, env Env) error {
-	url := ""
-	if environmentId == "default" {
-		url = fmt.Sprintf("%s/api/organizations/%s/apps/%s/env", es.baseUrl, organizationId, appId)
-	} else {
-		envName, err := GetEnvName(environmentId)
-		if err != nil {
-			return errors.Wrap(err, "Failed to get environment name")
-		}
+func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env Env) error {
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseUrl, organizationId, appId)
 
-		url = fmt.Sprintf("%s/api/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, appId, envName)
+	query := url.Values{}
+	query.Set("secretKeyId", strconv.FormatInt(secretKeyId, 10))
+	if environmentId != "default" {
+		query.Set("environmentId", environmentId)
 	}
+
+	url := fmt.Sprintf("%s?%s", baseURL, query.Encode())
 
 	envJSON, err := json.Marshal(env)
 	if err != nil {
@@ -101,18 +101,24 @@ func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId str
 	return nil
 }
 
-func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId string) (Env, error) {
-	url := ""
-	if environmentId == "default" {
-		url = fmt.Sprintf("%s/api/organizations/%s/apps/%s/env", es.baseUrl, organizationId, appId)
-	} else {
-		envName, err := GetEnvName(environmentId)
-		if err != nil {
-			return Env{}, errors.Wrap(err, "Failed to get environment name")
-		}
+func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId *int64, version *int) (Env, error) {
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseUrl, organizationId, appId)
 
-		url = fmt.Sprintf("%s/api/organizations/%s/apps/%s/environments/%s/env", es.baseUrl, organizationId, appId, envName)
+	query := url.Values{}
+
+	if secretKeyId != nil {
+		query.Set("secretKeyId", strconv.FormatInt(*secretKeyId, 10))
 	}
+
+	if version != nil {
+		query.Set("version", strconv.Itoa(*version))
+	}
+
+	if environmentId != "default" {
+		query.Set("environmentId", environmentId)
+	}
+
+	url := fmt.Sprintf("%s?%s", baseURL, query.Encode())
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -138,8 +144,16 @@ func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId str
 }
 
 func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]Env, error) {
-	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/envs?pageSize=%d&pageNum=%d",
-		es.baseUrl, organizationId, appId, size, page)
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/dot-envs", es.baseUrl, organizationId)
+
+	query := url.Values{}
+	query.Set("pageSize", strconv.Itoa(size))
+	query.Set("pageNum", strconv.Itoa(page))
+	if appId != "" {
+		query.Set("appIds", appId)
+	}
+
+	url := fmt.Sprintf("%s?%s", baseURL, query.Encode())
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -170,9 +184,65 @@ func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]
 	return envsData.Data, nil
 }
 
+func (es *EnvService) ListEnvVersions(organizationId, appId, environmentId string, size, page int) ([]Env, error) {
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/versions/", es.baseUrl, organizationId, appId)
+
+	query := url.Values{}
+	query.Set("pageSize", strconv.Itoa(size))
+	query.Set("pageNum", strconv.Itoa(page))
+
+	if environmentId != "default" {
+		query.Set("environmentId", environmentId)
+	}
+
+	url := fmt.Sprintf("%s?%s", baseURL, query.Encode())
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return []Env{}, errors.Wrap(err, "Failed to create a new HTTP request")
+	}
+
+	resp, err := es.httpClient.Do(req)
+	if err != nil {
+		return []Env{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return []Env{}, errors.HandleHTTPError(resp)
+	}
+
+	envsData := struct {
+		Data       []Env `json:"data"`
+		TotalCount int   `json:"totalCount"`
+		PageNum    int   `json:"pageNum"`
+		PageSize   int   `json:"pageSize"`
+	}{}
+
+	if err := json.NewDecoder(resp.Body).Decode(&envsData); err != nil {
+		return []Env{}, errors.Wrap(err, "Failed to decode response body")
+	}
+
+	for i := range envsData.Data {
+		fmt.Println(envsData.Data[i].Version)
+		if envsData.Data[i].ProjectEnv != nil {
+			fmt.Println(*envsData.Data[i].ProjectEnv)
+		} else {
+			fmt.Println("No ProjectEnv")
+		}
+	}
+
+	return envsData.Data, nil
+}
+
 func (es *EnvService) ListEnvironments(organizationId, projectId string, size, page int) ([]Environment, error) {
-	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments?pageSize=%d&pageNum=%d",
-		es.baseUrl, organizationId, projectId, size, page)
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments", es.baseUrl, organizationId, projectId)
+
+	query := url.Values{}
+	query.Set("pageSize", strconv.Itoa(size))
+	query.Set("pageNum", strconv.Itoa(page))
+
+	url := fmt.Sprintf("%s?%s", baseURL, query.Encode())
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -217,7 +287,6 @@ func GetLocalEnvContents(envName string) (string, error) {
 	return e.Data, nil
 }
 
-// GetLocalEncryptedEnv returns the local environment variables from the .env file
 func GetLocalEncryptedEnv(envName string, m manifest.Manifest) (Env, error) {
 	envFile, err := GetFileName(envName)
 	if err != nil {
@@ -234,6 +303,7 @@ func GetLocalEncryptedEnv(envName string, m manifest.Manifest) (Env, error) {
 		return Env{}, err
 	}
 	e.Data = envEncrytedData
+	e.SecretKeyId = &m.SecretKeyId
 
 	return e, nil
 }

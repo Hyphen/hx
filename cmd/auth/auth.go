@@ -14,6 +14,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var printer *cprint.CPrinter
+
 var AuthCmd = &cobra.Command{
 	Use:   "auth",
 	Short: "Authenticate with Hyphen",
@@ -32,8 +34,9 @@ Examples:
 	hyphen auth --set-api-key YOURKEY1234
 	`,
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		if err := login(cmd); err != nil {
-			cprint.Error(cmd, err)
+			printer.Error(cmd, err)
 			return
 		}
 	},
@@ -61,7 +64,7 @@ func login(cmd *cobra.Command) error {
 		}
 
 		if flags.VerboseFlag {
-			cprint.Success("OAuth server started successfully")
+			printer.Success("OAuth server started successfully")
 		}
 
 		accessToken = &token.AccessToken
@@ -69,21 +72,19 @@ func login(cmd *cobra.Command) error {
 		idToken = &token.IDToken
 		expiryTime = &token.ExpiryTime
 
-		m := manifest.Manifest{
-			ManifestConfig: manifest.ManifestConfig{
-				HyphenAccessToken:  accessToken,
-				HyphenRefreshToken: refreshToken,
-				HypenIDToken:       idToken,
-				ExpiryTime:         expiryTime,
-			},
+		mc := manifest.Config{
+			HyphenAccessToken:  accessToken,
+			HyphenRefreshToken: refreshToken,
+			HypenIDToken:       idToken,
+			ExpiryTime:         expiryTime,
 		}
 
-		if err := manifest.UpsertGlobalManifest(m); err != nil {
+		if err := manifest.UpsertGlobalConfig(mc); err != nil {
 			return fmt.Errorf("failed to save credentials: %w", err)
 		}
 
 		if flags.VerboseFlag {
-			cprint.Success("Credentials saved successfully")
+			printer.Success("Credentials saved successfully")
 		}
 	} else { // API key login flow
 		if flags.UseApiKeyFlag {
@@ -110,18 +111,16 @@ func login(cmd *cobra.Command) error {
 			apiKey = &flags.SetApiKeyFlag
 		}
 
-		m := manifest.Manifest{
-			ManifestConfig: manifest.ManifestConfig{
-				HyphenAPIKey: apiKey,
-			},
+		mc := manifest.Config{
+			HyphenAPIKey: apiKey,
 		}
 
-		if err := manifest.UpsertGlobalManifest(m); err != nil {
+		if err := manifest.UpsertGlobalConfig(mc); err != nil {
 			return fmt.Errorf("failed to save credentials: %w", err)
 		}
 
 		if flags.VerboseFlag {
-			cprint.Success("Credentials saved successfully")
+			printer.Success("Credentials saved successfully")
 		}
 	}
 
@@ -143,7 +142,7 @@ func login(cmd *cobra.Command) error {
 
 	defaultProject := projectList[0]
 
-	mc := manifest.ManifestConfig{
+	mc := manifest.Config{
 		ProjectId:          defaultProject.ID,
 		ProjectName:        &defaultProject.Name,
 		ProjectAlternateId: &defaultProject.AlternateID,
@@ -158,7 +157,7 @@ func login(cmd *cobra.Command) error {
 		AppAlternateId:     nil,
 	}
 
-	if _, err := manifest.GlobalInitialize(mc); err != nil {
+	if err := manifest.GlobalInitializeConfig(mc); err != nil {
 		return err
 	}
 
@@ -168,13 +167,13 @@ func login(cmd *cobra.Command) error {
 
 func printAuthenticationSummary(user *user.ExecutionContext, organizationID string, projectID string) {
 	if flags.VerboseFlag {
-		cprint.PrintHeader("Authentication Summary")
-		cprint.Success("Login successful!")
-		cprint.Print("") // Add an empty line for better spacing
-		cprint.PrintDetail("User", user.User.Name)
-		cprint.PrintDetail("Organization ID", organizationID)
-		cprint.PrintDetail("Default Project ID", projectID)
-		cprint.Print("") // Add an empty line for better spacing
+		printer.PrintHeader("Authentication Summary")
+		printer.Success("Login successful!")
+		printer.Print("") // Add an empty line for better spacing
+		printer.PrintDetail("User", user.User.Name)
+		printer.PrintDetail("Organization ID", organizationID)
+		printer.PrintDetail("Default Project ID", projectID)
+		printer.Print("") // Add an empty line for better spacing
 	}
-	cprint.GreenPrint("You are now authenticated and ready to use Hyphen CLI.")
+	printer.GreenPrint("You are now authenticated and ready to use Hyphen CLI.")
 }

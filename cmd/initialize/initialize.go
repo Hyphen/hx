@@ -11,12 +11,14 @@ import (
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
 )
 
 var appIDFlag string
+var printer *cprint.CPrinter
 
 var InitCmd = &cobra.Command{
 	Use:   "init <app name>",
@@ -54,12 +56,20 @@ func init() {
 }
 
 func runInit(cmd *cobra.Command, args []string) {
+	printer = cprint.NewCPrinter(flags.VerboseFlag)
+
+	if err := isValidDirectory(cmd); err != nil {
+		printer.Error(cmd, err)
+		printer.Info("Please change to a project directory and try again.")
+		return
+	}
+
 	appService := app.NewService()
 	envService := env.NewService()
 
 	orgID, err := flags.GetOrganizationID()
 	if err != nil {
-		cprint.Error(cmd, err)
+		printer.Error(cmd, err)
 		return
 	}
 
@@ -68,7 +78,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		// get the local directory name and prompt if we wish to use this as the app name
 		cwd, err := os.Getwd()
 		if err != nil {
-			cprint.Error(cmd, err)
+			printer.Error(cmd, err)
 			return
 		}
 
@@ -76,14 +86,14 @@ func runInit(cmd *cobra.Command, args []string) {
 		response := prompt.PromptYesNo(cmd, fmt.Sprintf("Use the current directory name '%s' as the app name?", appName), true)
 		if !response.Confirmed {
 			if response.IsFlag {
-				cprint.Info("Operation cancelled due to --no flag.")
+				printer.Info("Operation cancelled due to --no flag.")
 				return
 			} else {
 				// Prompt for a new app name
 				var err error
 				appName, err = prompt.PromptString(cmd, "What would you like the app name to be?")
 				if err != nil {
-					cprint.Error(cmd, err)
+					printer.Error(cmd, err)
 					return
 				}
 			}
@@ -101,55 +111,69 @@ func runInit(cmd *cobra.Command, args []string) {
 		response := prompt.PromptYesNo(cmd, "Config file exists. Do you want to overwrite it?", false)
 		if !response.Confirmed {
 			if response.IsFlag {
-				cprint.Info("Operation cancelled due to --no flag.")
+				printer.Info("Operation cancelled due to --no flag.")
 			} else {
-				cprint.Info("Operation cancelled.")
+				printer.Info("Operation cancelled.")
 			}
 			return
 		}
 	}
 
-	m, err := manifest.Restore()
+	mc, err := manifest.RestoreConfig()
 	if err != nil {
-		cprint.Error(cmd, err)
+		printer.Error(cmd, err)
 		return
 	}
 
-	if m.ProjectId == nil {
-		cprint.Error(cmd, fmt.Errorf("No project found in .hx file"))
+	if mc.ProjectId == nil {
+		printer.Error(cmd, fmt.Errorf("No project found in .hx file"))
 		return
 	}
 
-	newApp, err := appService.CreateApp(orgID, *m.ProjectId, appAlternateId, appName)
+	newApp, err := appService.CreateApp(orgID, *mc.ProjectId, appAlternateId, appName)
 	if err != nil {
-		cprint.Error(cmd, err)
-		return
+		if !errors.Is(err, errors.ErrConflict) {
+			printer.Error(cmd, err)
+			return
+		}
+
+		existingApp, handleErr := handleExistingApp(cmd, *appService, orgID, appAlternateId)
+		if handleErr != nil {
+			printer.Error(cmd, handleErr)
+			return
+		}
+		if existingApp == nil {
+			printer.Info("Operation cancelled.")
+			return
+		}
+
+		newApp = *existingApp
 	}
 
-	mcl := manifest.ManifestConfig{
-		ProjectId:          m.ProjectId,
-		ProjectAlternateId: m.ProjectAlternateId,
-		ProjectName:        m.ProjectName,
-		OrganizationId:     m.OrganizationId,
+	mcl := manifest.Config{
+		ProjectId:          mc.ProjectId,
+		ProjectAlternateId: mc.ProjectAlternateId,
+		ProjectName:        mc.ProjectName,
+		OrganizationId:     mc.OrganizationId,
 		AppName:            &newApp.Name,
 		AppAlternateId:     &newApp.AlternateId,
 		AppId:              &newApp.ID,
 	}
 
-	m, err = manifest.LocalInitialize(mcl) //Loading the local hxkey
+	ml, err := manifest.LocalInitialize(mcl)
 	if err != nil {
-		cprint.Error(cmd, err)
+		printer.Error(cmd, err)
 		return
 	}
 
 	if err := ensureGitignore(manifest.ManifestSecretFile); err != nil {
-		cprint.Error(cmd, fmt.Errorf("error adding .hxkey to .gitignore: %w. Please do this manually if you wish", err))
+		printer.Error(cmd, fmt.Errorf("error adding .hxkey to .gitignore: %w. Please do this manually if you wish", err))
 	}
 
 	// List the environments for the project
-	environments, err := envService.ListEnvironments(orgID, *m.ProjectId, 100, 1)
+	environments, err := envService.ListEnvironments(orgID, *ml.ProjectId, 100, 1)
 	if err != nil {
-		cprint.Error(cmd, err)
+		printer.Error(cmd, err)
 		return
 	}
 
@@ -157,16 +181,16 @@ func runInit(cmd *cobra.Command, args []string) {
 	for _, e := range environments {
 		envName := strings.ToLower(e.Name)
 		envID := e.ID
-		err = createAndPushEmptyEnvFile(cmd, envService, m, orgID, newApp.ID, envID, envName)
+		err = createAndPushEmptyEnvFile(cmd, envService, ml, orgID, newApp.ID, envID, envName)
 		if err != nil {
-			cprint.Error(cmd, err)
+			printer.Error(cmd, err)
 			return
 		}
 	}
 
-	err = createAndPushEmptyEnvFile(cmd, envService, m, orgID, newApp.ID, "default", "default")
+	err = createAndPushEmptyEnvFile(cmd, envService, ml, orgID, newApp.ID, "default", "default")
 	if err != nil {
-		cprint.Error(cmd, err)
+		printer.Error(cmd, err)
 		return
 	}
 
@@ -178,7 +202,7 @@ func runInit(cmd *cobra.Command, args []string) {
 	printInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
 }
 
-func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, manifest manifest.Manifest, orgID, appID, envID, envName string) error {
+func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m manifest.Manifest, orgID, appID, envID, envName string) error {
 	envFileName, err := env.GetFileName(envName)
 	if err != nil {
 		return err
@@ -190,16 +214,24 @@ func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 	}
 
 	// Build an Env struct from that new empty file
-	envStruct, err := env.GetLocalEncryptedEnv(envName, manifest)
+	envStruct, err := env.GetLocalEncryptedEnv(envName, m)
 	if err != nil {
 		return err
 	}
 
-	newVersion := 1
-	envStruct.Version = &newVersion
+	version := 1
+	envStruct.Version = &version
 
-	if err := envService.PutEnvironmentEnv(orgID, appID, envID, envStruct); err != nil {
-		return err
+	if err := envService.PutEnvironmentEnv(orgID, appID, envID, m.SecretKeyId, envStruct); err != nil {
+		if !errors.Is(err, errors.ErrConflict) {
+			return err
+		}
+		envStruct, err = envService.GetEnvironmentEnv(orgID, appID, envID, &m.SecretKeyId, nil)
+		if err != nil {
+			return err
+		}
+		version = *envStruct.Version
+
 	}
 
 	db, err := database.Restore()
@@ -207,18 +239,18 @@ func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 		return err
 	}
 
-	newEnvDcrypted, err := envStruct.DecryptData(manifest.GetSecretKey())
+	newEnvDcrypted, err := envStruct.DecryptData(m.GetSecretKey())
 	if err != nil {
 		return err
 	}
 
 	secretKey := database.SecretKey{
-		ProjectId: *manifest.ProjectId,
-		AppId:     *manifest.AppId,
+		ProjectId: *m.ProjectId,
+		AppId:     *m.AppId,
 		EnvName:   envName,
 	}
 
-	if err := db.SaveSecret(secretKey, newEnvDcrypted, 1); err != nil {
+	if err := db.UpsertSecret(secretKey, newEnvDcrypted, version); err != nil {
 		return fmt.Errorf("failed to save local environment: %w", err) // TODO: check if this should be and error
 	}
 
@@ -235,7 +267,7 @@ func createGitignoredFile(cmd *cobra.Command, fileName string) error {
 	// Create the file
 	file, err := os.Create(fileName)
 	if err != nil {
-		cprint.Error(cmd, fmt.Errorf("error creating %s: %w", fileName, err))
+		printer.Error(cmd, fmt.Errorf("error creating %s: %w", fileName, err))
 		return err
 	}
 	defer file.Close()
@@ -243,12 +275,12 @@ func createGitignoredFile(cmd *cobra.Command, fileName string) error {
 	// Write '# KEY=Value' to the file
 	_, err = file.WriteString("# Example\n# KEY=Value\n")
 	if err != nil {
-		cprint.Error(cmd, fmt.Errorf("error writing to %s: %w", fileName, err))
+		printer.Error(cmd, fmt.Errorf("error writing to %s: %w", fileName, err))
 		return err
 	}
 
 	if err := ensureGitignore(fileName); err != nil {
-		cprint.Error(cmd, fmt.Errorf("error adding %s to .gitignore: %w. Please do this manually if you wish", fileName, err))
+		printer.Error(cmd, fmt.Errorf("error adding %s to .gitignore: %w. Please do this manually if you wish", fileName, err))
 		// don't error here. Keep going.
 	}
 
@@ -269,7 +301,7 @@ func getAppID(cmd *cobra.Command, appName string) string {
 
 		if !response.Confirmed {
 			if response.IsFlag {
-				cprint.Info("Operation cancelled due to --no flag.")
+				printer.Info("Operation cancelled due to --no flag.")
 				return ""
 			} else {
 				// Prompt for a custom app ID
@@ -277,7 +309,7 @@ func getAppID(cmd *cobra.Command, appName string) string {
 					var err error
 					appAlternateId, err = prompt.PromptString(cmd, "Enter a custom app ID:")
 					if err != nil {
-						cprint.Error(cmd, err)
+						printer.Error(cmd, err)
 						return ""
 					}
 
@@ -285,7 +317,7 @@ func getAppID(cmd *cobra.Command, appName string) string {
 					if err == nil {
 						return appAlternateId
 					}
-					cprint.Warning("Invalid app ID. Please try again.")
+					printer.Warning("Invalid app ID. Please try again.")
 				}
 			}
 		} else {
@@ -300,10 +332,43 @@ func generateDefaultAppId(appName string) string {
 }
 
 func printInitializationSummary(appName, appAlternateId, appID, orgID string) {
-	cprint.Success("App successfully initialized")
-	cprint.Print("") // Print an empty line for spacing
-	cprint.PrintDetail("App Name", appName)
-	cprint.PrintDetail("App AlternateId", appAlternateId)
-	cprint.PrintDetail("App ID", appID)
-	cprint.PrintDetail("Organization ID", orgID)
+	printer.Success("App successfully initialized")
+	printer.Print("") // Print an empty line for spacing
+	printer.PrintDetail("App Name", appName)
+	printer.PrintDetail("App AlternateId", appAlternateId)
+	printer.PrintDetail("App ID", appID)
+	printer.PrintDetail("Organization ID", orgID)
+}
+
+func isValidDirectory(cmd *cobra.Command) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	if cwd == homeDir {
+		return fmt.Errorf("initialization in home directory not allowed")
+	}
+
+	return nil
+}
+
+func handleExistingApp(cmd *cobra.Command, appService app.AppService, orgID, appAlternateId string) (*app.App, error) {
+	response := prompt.PromptYesNo(cmd, fmt.Sprintf("An app with ID '%s' already exists. Do you want to use this existing app?", appAlternateId), true)
+	if !response.Confirmed {
+		return nil, nil
+	}
+
+	existingApp, err := appService.GetApp(orgID, appAlternateId)
+	if err != nil {
+		return nil, err
+	}
+
+	printer.Info(fmt.Sprintf("Using existing app '%s' (%s)", existingApp.Name, existingApp.AlternateId))
+	return &existingApp, nil
 }

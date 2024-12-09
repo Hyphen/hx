@@ -223,66 +223,8 @@ func (s *OAuthService) StartOAuthServer() (*TokenResponse, error) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Authentication Complete</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f5f5f5;
-        }
-        .container {
-            text-align: center;
-            background-color: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        .check-circle {
-            width: 80px;
-            height: 80px;
-            background-color: #4CAF50;
-            border-radius: 50%%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin: 0 auto 20px;
-        }
-        .check-mark {
-            color: white;
-            font-size: 40px;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-        p {
-            color: #666;
-            font-size: 16px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="check-circle">
-            <span class="check-mark">&#10004;</span>
-        </div>
-        <h1>Authentication complete</h1>
-        <p>You can close the tab and go back to the Hyphen CLI.</p>
-    </div>
-</body>
-</html>
-`)
+
+		http.Redirect(w, r, "https://hyphen.ai/cli?authenticated=true", http.StatusTemporaryRedirect)
 
 		tokenChan <- token
 	})
@@ -345,29 +287,29 @@ func (s *OAuthService) RefreshToken(refreshToken string) (*TokenResponse, error)
 }
 
 func (s *OAuthService) GetValidToken() (string, error) {
-	m, err := manifest.Restore()
+	mc, err := manifest.RestoreConfig()
 	if err != nil {
 		return "", err
 	}
 
-	if m.ExpiryTime == nil || m.HyphenRefreshToken == nil {
+	if mc.ExpiryTime == nil || mc.HyphenRefreshToken == nil {
 		return "", errors.New("You must authenticate. Run `hx auth` and try again.")
 	}
 
-	if s.IsTokenExpired(*m.ExpiryTime) {
-		tokenResponse, err := s.RefreshToken(*m.HyphenRefreshToken)
+	if s.IsTokenExpired(*mc.ExpiryTime) {
+		tokenResponse, err := s.RefreshToken(*mc.HyphenRefreshToken)
 		if err != nil {
 			return "", errors.Wrap(err, "Failed to refresh token")
 		}
-		m.HyphenAccessToken = &tokenResponse.AccessToken
-		m.HyphenRefreshToken = &tokenResponse.RefreshToken
-		m.HypenIDToken = &tokenResponse.IDToken
-		m.ExpiryTime = &tokenResponse.ExpiryTime
-		err = manifest.UpsertGlobalManifest(m)
+		mc.HyphenAccessToken = &tokenResponse.AccessToken
+		mc.HyphenRefreshToken = &tokenResponse.RefreshToken
+		mc.HypenIDToken = &tokenResponse.IDToken
+		mc.ExpiryTime = &tokenResponse.ExpiryTime
+		err = manifest.UpsertGlobalConfig(mc)
 		if err != nil {
 			return "", errors.Wrap(err, "Failed to save refreshed credentials")
 		}
 		return tokenResponse.AccessToken, nil
 	}
-	return *m.HyphenAccessToken, nil
+	return *mc.HyphenAccessToken, nil
 }

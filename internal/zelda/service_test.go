@@ -24,7 +24,7 @@ func (m *MockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 func TestNewService(t *testing.T) {
 	service := NewService()
 	assert.NotNil(t, service)
-	assert.Contains(t, service.baseUrl, "/link")
+	assert.Contains(t, service.baseUrl, "/api")
 	assert.NotNil(t, service.httpClient)
 }
 
@@ -45,7 +45,7 @@ func TestCreateCode(t *testing.T) {
 
 	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
 
-	createdCode, err := service.CreateCode(testCode)
+	createdCode, err := service.CreateCode("org123", testCode)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "https://example.com", createdCode.LongURL)
@@ -133,7 +133,7 @@ func TestErrorHandling(t *testing.T) {
 		{"BadRequest", http.StatusBadRequest, "Invalid input", "bad request: Invalid input"},
 		{"Unauthorized", http.StatusUnauthorized, "", "unauthorized: please authenticate with `auth` and try again"},
 		{"Forbidden", http.StatusForbidden, "", "forbidden: you don't have permission to perform this action"},
-		{"NotFound", http.StatusNotFound, "", "not found: the requested resource does not exist"},
+		{"NotFound", http.StatusNotFound, "", "not found: "},
 		{"Conflict", http.StatusConflict, "Resource already exists", "conflict: Resource already exists"},
 		{"TooManyRequests", http.StatusTooManyRequests, "", "rate limit exceeded: please try again later"},
 		{"InternalServerError", http.StatusInternalServerError, "", "internal server error: please try again later"},
@@ -149,7 +149,7 @@ func TestErrorHandling(t *testing.T) {
 
 			mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil).Once()
 
-			_, err := service.CreateCode(Code{})
+			_, err := service.CreateCode("org123", Code{})
 			assert.Error(t, err)
 			assert.Equal(t, tc.expectedErrMsg, err.Error())
 		})
@@ -170,7 +170,7 @@ func TestJSONParsingError(t *testing.T) {
 
 	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
 
-	_, err := service.CreateCode(Code{})
+	_, err := service.CreateCode("org123", Code{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to parse JSON response")
 }
@@ -180,7 +180,7 @@ func TestRequestCreationError(t *testing.T) {
 		baseUrl: "://invalid-url",
 	}
 
-	_, err := service.CreateCode(Code{})
+	_, err := service.CreateCode("org123", Code{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to create request")
 }
@@ -200,7 +200,7 @@ func TestReadBodyError(t *testing.T) {
 
 	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
 
-	_, err := service.CreateCode(Code{})
+	_, err := service.CreateCode("org123", Code{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to read response body")
 }
@@ -213,3 +213,4 @@ type ErrorReader struct {
 func (er *ErrorReader) Read(p []byte) (n int, err error) {
 	return 0, er.Err
 }
+

@@ -15,6 +15,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var printer *cprint.CPrinter
+
 var RunCmd = &cobra.Command{
 	Use:   "run [environment] -- [command]",
 	Short: "Run your app with the specified environment",
@@ -30,6 +32,8 @@ Examples:
   hyphen env run -- go run main.go (uses default environment)
 `,
 	Run: func(cmd *cobra.Command, args []string) {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
+
 		var envName string
 		var childCommand []string
 
@@ -45,24 +49,24 @@ Examples:
 		}
 
 		if len(childCommand) == 0 {
-			cprint.Error(cmd, errors.New("No command specified"))
+			printer.Error(cmd, errors.New("No command specified"))
 			return
 		}
 
 		manifest, err := manifest.Restore()
 		if err != nil {
-			cprint.Error(cmd, errors.Wrap(err, "Failed to restore manifest"))
+			printer.Error(cmd, errors.Wrap(err, "Failed to restore manifest"))
 			return
 		}
 
 		mergedEnvVars, err := loadAndMergeEnvFiles(envName, manifest)
 		if err != nil {
-			cprint.Error(cmd, err)
+			printer.Error(cmd, err)
 			return
 		}
 
 		if err := runCommandWithEnv(childCommand, mergedEnvVars); err != nil {
-			cprint.Error(cmd, errors.Wrap(err, "Command execution failed"))
+			printer.Error(cmd, errors.Wrap(err, "Command execution failed"))
 			return
 		}
 	},
@@ -109,7 +113,7 @@ func loadAndAppendEnv(envName string, m manifest.Manifest, mergedVars *[]string)
 	}
 
 	if flags.VerboseFlag {
-		cprint.Info(fmt.Sprintf("Loaded and appended %s environment", envName))
+		printer.Info(fmt.Sprintf("Loaded and appended %s environment", envName))
 	}
 	return nil
 }
@@ -121,8 +125,8 @@ func runCommandWithEnv(command []string, envVars []string) error {
 	cmd.Stderr = os.Stderr
 
 	if flags.VerboseFlag {
-		cprint.Info(fmt.Sprintf("Running command with %s environment", command[0]))
-		cprint.Info(fmt.Sprintf("Executing command: %s", strings.Join(command, " ")))
+		printer.Info(fmt.Sprintf("Running command with %s environment", command[0]))
+		printer.Info(fmt.Sprintf("Executing command: %s", strings.Join(command, " ")))
 	}
 	return cmd.Run()
 }

@@ -74,7 +74,7 @@ func TestInitialize(t *testing.T) {
 	}()
 
 	t.Run("Successful initialization", func(t *testing.T) {
-		mc := ManifestConfig{
+		mc := Config{
 			AppName:        stringPtr("TestApp"),
 			AppId:          stringPtr("app1"),
 			AppAlternateId: stringPtr("test-app"),
@@ -221,12 +221,12 @@ func TestExistsLocal(t *testing.T) {
 }
 
 func TestGetSecretKey(t *testing.T) {
-	ms := ManifestSecret{
+	ms := Secret{
 		SecretKey: "dGVzdC1zZWNyZXQta2V5",
 	}
 	m := Manifest{
-		ManifestConfig: ManifestConfig{},
-		ManifestSecret: ms,
+		Config: Config{},
+		Secret: ms,
 	}
 
 	sk := m.GetSecretKey()

@@ -9,12 +9,17 @@ import (
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
 
 var (
-	forceFlag bool
+	Silent     bool = false
+	forceFlag  bool
+	version    int
+	versionPtr *int = nil
+	printer    *cprint.CPrinter
 )
 
 var PullCmd = &cobra.Command{
@@ -31,83 +36,93 @@ The pulled environments will be decrypted and saved as .env.[environment_name] f
 
 Examples:
   hyphen pull production
-  hyphen pull --all
+  hyphen pull
 
 After pulling, all environment variables will be locally available and ready for use.
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		manifest, err := manifest.Restore()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
+		if version != 0 {
+			versionPtr = &version
 		}
-
-		db, err := database.Restore()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		service := newService(env.NewService(), db)
-
-		orgId, err := flags.GetOrganizationID()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		appId, err := flags.GetApplicationID()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		projectId, err := flags.GetProjectID()
-		if err != nil {
-			cprint.Error(cmd, err)
-			return
-		}
-
-		var envName string
-		if len(args) == 1 {
-			envName = args[0]
-		}
-
-		if envName == "" { // ALL
-			pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey(), manifest, forceFlag)
-			if err != nil {
-				cprint.Error(cmd, err)
-				return
-			}
-
-			printPullSummary(pulledEnvs)
-			return
-		} else if envName == "default" {
-			if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
-				cprint.Error(cmd, err)
-				return
-			}
-
-			printPullSummary([]string{"default"})
-		} else { // we have a specific env name
-			err = service.checkForEnvironment(orgId, envName, projectId)
-			if err != nil {
-				cprint.Error(cmd, err)
-				return
-			}
-			if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
-				cprint.Error(cmd, err)
-				return
-			}
-
-			printPullSummary([]string{envName})
+		if err := RunPull(args, forceFlag); err != nil {
+			printer.Error(cmd, err)
 		}
 	},
 }
 
+func RunPull(args []string, forceFlag bool) error {
+	manifest, err := manifest.Restore()
+	if err != nil {
+		return err
+	}
+
+	db, err := database.Restore()
+	if err != nil {
+		return err
+	}
+
+	service := newService(env.NewService(), db)
+
+	orgId, err := flags.GetOrganizationID()
+	if err != nil {
+		return err
+	}
+
+	appId, err := flags.GetApplicationID()
+	if err != nil {
+		return err
+	}
+
+	projectId, err := flags.GetProjectID()
+	if err != nil {
+		return err
+	}
+
+	var envName string
+	if len(args) == 1 {
+		envName = args[0]
+	}
+
+	if envName == "" { // ALL
+		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey(), manifest, forceFlag)
+		if err != nil {
+			return err
+		}
+
+		if !Silent {
+			printPullSummary(pulledEnvs)
+		}
+		return nil
+	} else if envName == "default" {
+		if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
+			return err
+		}
+
+		if !Silent {
+			printPullSummary([]string{"default"})
+		}
+		return nil
+	} else { // we have a specific env name
+		err = service.checkForEnvironment(orgId, envName, projectId)
+		if err != nil {
+			return err
+		}
+		if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
+			return err
+		}
+
+		if !Silent {
+			printPullSummary([]string{envName})
+		}
+		return nil
+	}
+}
+
 func init() {
 	PullCmd.Flags().BoolVar(&forceFlag, "force", false, "Force overwrite of locally modified environment files")
+	PullCmd.Flags().IntVar(&version, "version", 0, "Specify a version to pull")
 }
 
 type service struct {
@@ -163,9 +178,30 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		}
 	}
 
-	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName)
-	if err != nil {
+	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName, &m.SecretKeyId, versionPtr)
+
+	// Case 1: Error occurred and no version specified
+	if err != nil && versionPtr == nil {
 		return err
+	}
+
+	// Case 2: Error occurred and version specified
+	if err != nil && versionPtr != nil {
+		// Check if it's a NotFound error
+		if !errors.Is(err, errors.ErrNotFound) {
+			return err
+		}
+
+		// Handle NotFound error
+		if !Silent {
+			printer.Warning(fmt.Sprintf("No version found for environment %s. Pulling the latest version.", envName))
+		}
+
+		// Retry without version
+		e, err = s.envService.GetEnvironmentEnv(orgId, appId, envName, &m.SecretKeyId, nil)
+		if err != nil {
+			return err
+		}
 	}
 
 	envDataDecrypted, err := e.DecryptData(secretKey)
@@ -173,7 +209,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		return err
 	}
 
-	if err := s.db.SaveSecret(
+	if err := s.db.UpsertSecret(
 		database.SecretKey{
 			ProjectId: *m.ProjectId,
 			AppId:     *m.AppId,
@@ -202,20 +238,28 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 			envName = e.ProjectEnv.AlternateID
 		}
 		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secretkey, m, force); err != nil {
-			return pulledEnvs, err
+			if !Silent {
+				printer.Warning(fmt.Sprintf("Failed to pull environment %s: %s", envName, err))
+			}
+			continue
 		}
 		pulledEnvs = append(pulledEnvs, envName)
+
 	}
 	return pulledEnvs, nil
 }
 
 func printPullSummary(pulledEnvs []string) {
-	cprint.Print("Pulled environments:")
+	if len(pulledEnvs) == 0 {
+		printer.Print("No environments pulled")
+		return
+	}
+	printer.Print("Pulled environments:")
 	for _, env := range pulledEnvs {
 		if env == "default" {
-			cprint.Print("  - default -> .env")
+			printer.Print("  - default -> .env")
 		} else {
-			cprint.Print(fmt.Sprintf("  - %s -> .env.%s", env, env))
+			printer.Print(fmt.Sprintf("  - %s -> .env.%s", env, env))
 		}
 	}
 }

@@ -8,6 +8,19 @@ import (
 	"net/http"
 )
 
+// Sentinel errors
+var (
+	ErrBadRequest          = New("BadRequest")
+	ErrUnauthorized        = New("Unauthorized")
+	ErrForbidden           = New("Forbidden")
+	ErrNotFound            = New("NotFound")
+	ErrConflict            = New("Conflict")
+	ErrTooManyRequests     = New("TooManyRequests")
+	ErrInternalServerError = New("InternalServerError")
+	ErrUnexpected          = New("UnexpectedError")
+	ErrGeneric             = New("GenericError")
+)
+
 // Error wraps the original error and adds a user-friendly message
 type Error struct {
 	OriginalError error
@@ -61,6 +74,29 @@ func (e *Error) Is(target error) bool {
 	return e.UserMessage == err.UserMessage
 }
 
+// Is reports whether any error in err's chain matches target.
+// This function is similar to the standard errors.Is, but works with our custom Error type.
+func Is(err, target error) bool {
+	if err == nil || target == nil {
+		return err == target
+	}
+
+	for {
+		if customErr, ok := err.(*Error); ok {
+			if customErr.Is(target) {
+				return true
+			}
+			err = customErr.Unwrap()
+		} else {
+			return errors.Is(err, target)
+		}
+
+		if err == nil {
+			return false
+		}
+	}
+}
+
 func HandleHTTPError(resp *http.Response) *Error {
 	body, _ := io.ReadAll(resp.Body)
 	errorMessage := body
@@ -75,20 +111,20 @@ func HandleHTTPError(resp *http.Response) *Error {
 
 	switch resp.StatusCode {
 	case http.StatusBadRequest:
-		return Wrapf(New("BadRequest"), "bad request: %s", errorMessage)
+		return Wrapf(ErrBadRequest, "bad request: %s", errorMessage)
 	case http.StatusUnauthorized:
-		return New("unauthorized: please authenticate with `auth` and try again")
+		return Wrap(ErrUnauthorized, "unauthorized: please authenticate with `auth` and try again")
 	case http.StatusForbidden:
-		return New("forbidden: you don't have permission to perform this action")
+		return Wrap(ErrForbidden, "forbidden: you don't have permission to perform this action")
 	case http.StatusNotFound:
-		return New("not found: the requested resource does not exist")
+		return Wrapf(ErrNotFound, "not found: %s", errorMessage)
 	case http.StatusConflict:
-		return Wrapf(New("Conflict"), "conflict: %s", errorMessage)
+		return Wrapf(ErrConflict, "conflict: %s", errorMessage)
 	case http.StatusTooManyRequests:
-		return New("rate limit exceeded: please try again later")
+		return Wrap(ErrTooManyRequests, "rate limit exceeded: please try again later")
 	case http.StatusInternalServerError:
-		return New("internal server error: please try again later")
+		return Wrap(ErrInternalServerError, "internal server error: please try again later")
 	default:
-		return Wrapf(New("UnexpectedError"), "unexpected error (status code %d): %s", resp.StatusCode, errorMessage)
+		return Wrapf(ErrUnexpected, "unexpected error (status code %d): %s", resp.StatusCode, errorMessage)
 	}
 }
