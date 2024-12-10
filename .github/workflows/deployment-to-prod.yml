@@ -5,6 +5,9 @@ on:
     types:
       - published
 
+permissions:
+  secrets: read
+
 jobs:
   extract-version:
     runs-on: ubuntu-latest
