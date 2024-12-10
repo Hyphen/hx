@@ -5,8 +5,7 @@ on:
     types:
       - published
 
-permissions:
-  secrets: read
+permissions: read-all
 
 jobs:
   extract-version:
