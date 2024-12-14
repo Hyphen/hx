@@ -73,7 +73,7 @@ func runCreate(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	newApp, err := appService.CreateApp(orgID, projID, appAlternateId, appName)
+	newApp, err := appService.CreateApp(orgID, projID, appAlternateId, appName, false)
 	if err != nil {
 		printer.Error(cmd, err)
 		return

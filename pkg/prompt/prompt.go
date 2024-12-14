@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -95,4 +96,111 @@ func PromptPassword(cmd *cobra.Command, prompt string) (string, error) {
 	fmt.Println()
 
 	return string(byteKey), nil
+}
+
+func PromptDir(cmd *cobra.Command, prompt string, mustExist bool) (string, error) {
+	fmt.Printf("%s ", prompt)
+
+	noFlag, _ := cmd.Flags().GetBool("no")
+	if noFlag {
+		return "", fmt.Errorf("operation cancelled due to --no flag")
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+
+	response = strings.TrimSpace(response)
+
+	if response == "" {
+		return "", fmt.Errorf("no directory path provided")
+	}
+
+	if strings.HasPrefix(response, "~") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("error expanding home directory: %w", err)
+		}
+		response = strings.Replace(response, "~", homeDir, 1)
+	}
+
+	if mustExist {
+		fileInfo, err := os.Stat(response)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return "", fmt.Errorf("directory does not exist: %s", response)
+			}
+			return "", fmt.Errorf("error checking directory: %w", err)
+		}
+
+		if !fileInfo.IsDir() {
+			return "", fmt.Errorf("path is not a directory: %s", response)
+		}
+	}
+
+	return response, nil
+}
+
+func PromptForMonorepoApps(cmd *cobra.Command) ([]string, error) {
+	// First prompt for the monorepo directory
+	monorepoDir, err := PromptDir(cmd, "Enter the monorepo directory path:", true)
+	if err != nil {
+		return nil, err
+	}
+
+	// Read directory contents
+	entries, err := os.ReadDir(monorepoDir)
+	if err != nil {
+		return nil, fmt.Errorf("error reading directory: %w", err)
+	}
+
+	// Filter only directories
+	var dirs []string
+	for _, entry := range entries {
+		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") { // Skip hidden directories
+			dirs = append(dirs, entry.Name())
+		}
+	}
+
+	if len(dirs) == 0 {
+		return nil, fmt.Errorf("no directories found in %s", monorepoDir)
+	}
+
+	// Show all directories and ask if correct
+	fmt.Println("\nFound the following directories:")
+	for _, dir := range dirs {
+		fmt.Printf("  - %s\n", dir)
+	}
+
+	response := PromptYesNo(cmd, "Would you like to include all these directories?", true)
+
+	var selectedDirs []string
+	if response.Confirmed {
+		// User wants all directories
+		selectedDirs = dirs
+	} else {
+		// Ask for each directory individually
+		fmt.Println("\nLet's go through each directory:")
+		for _, dir := range dirs {
+			dirResponse := PromptYesNo(cmd, fmt.Sprintf("Include %s?", dir), false)
+			if dirResponse.Confirmed {
+				selectedDirs = append(selectedDirs, dir)
+			}
+		}
+	}
+
+	// Convert to full paths
+	var fullPaths []string
+	for _, dir := range selectedDirs {
+		fullPath := filepath.Join(monorepoDir, dir)
+		fullPaths = append(fullPaths, fullPath)
+	}
+
+	if len(fullPaths) == 0 {
+		return nil, fmt.Errorf("no directories were selected")
+	}
+
+	return fullPaths, nil
 }

@@ -15,9 +15,11 @@ import (
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
+	"go.uber.org/thriftrw/ptr"
 )
 
 var appIDFlag string
+var isMonorepo bool
 var printer *cprint.CPrinter
 
 var InitCmd = &cobra.Command{
@@ -48,11 +50,19 @@ Examples:
   hyphen init "My New App" --id my-custom-app-id
 `,
 	Args: cobra.MaximumNArgs(1),
-	Run:  runInit,
+	Run: func(cmd *cobra.Command, args []string) {
+		if isMonorepo {
+			runInitMonorepo(cmd, args)
+		} else {
+			runInit(cmd, args)
+
+		}
+	},
 }
 
 func init() {
 	InitCmd.Flags().StringVarP(&appIDFlag, "id", "i", "", "App ID (optional)")
+	InitCmd.Flags().BoolVarP(&isMonorepo, "monorepo", "m", false, "Initialize a monorepo")
 }
 
 func runInit(cmd *cobra.Command, args []string) {
@@ -73,33 +83,14 @@ func runInit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	appName := ""
-	if len(args) == 0 {
-		// get the local directory name and prompt if we wish to use this as the app name
-		cwd, err := os.Getwd()
-		if err != nil {
-			printer.Error(cmd, err)
-			return
-		}
-
-		appName = filepath.Base(cwd)
-		response := prompt.PromptYesNo(cmd, fmt.Sprintf("Use the current directory name '%s' as the app name?", appName), true)
-		if !response.Confirmed {
-			if response.IsFlag {
-				printer.Info("Operation cancelled due to --no flag.")
-				return
-			} else {
-				// Prompt for a new app name
-				var err error
-				appName, err = prompt.PromptString(cmd, "What would you like the app name to be?")
-				if err != nil {
-					printer.Error(cmd, err)
-					return
-				}
-			}
-		}
-	} else {
-		appName = args[0]
+	appName, shouldContinue, err := getAppName(cmd, args)
+	if err != nil {
+		printer.Error(cmd, err)
+		return
+	}
+	//If te operation is canceled
+	if !shouldContinue {
+		return
 	}
 
 	appAlternateId := getAppID(cmd, appName)
@@ -130,7 +121,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	newApp, err := appService.CreateApp(orgID, *mc.ProjectId, appAlternateId, appName)
+	newApp, err := appService.CreateApp(orgID, *mc.ProjectId, appAlternateId, appName, false)
 	if err != nil {
 		if !errors.Is(err, errors.ErrConflict) {
 			printer.Error(cmd, err)
@@ -200,6 +191,37 @@ func runInit(cmd *cobra.Command, args []string) {
 	}
 
 	printInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
+}
+
+func getAppName(cmd *cobra.Command, args []string) (string, bool, error) {
+	if len(args) > 0 {
+		return args[0], true, nil
+	}
+
+	// Get the local directory name
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", false, err
+	}
+
+	dirName := filepath.Base(cwd)
+	response := prompt.PromptYesNo(cmd, fmt.Sprintf("Use the current directory name '%s' as the app name?", dirName), true)
+
+	if !response.Confirmed {
+		if response.IsFlag {
+			printer.Info("Operation cancelled due to --no flag.")
+			return "", false, nil
+		}
+
+		// Prompt for a new app name
+		appName, err := prompt.PromptString(cmd, "What would you like the app name to be?")
+		if err != nil {
+			return "", false, err
+		}
+		return appName, true, nil
+	}
+
+	return dirName, true, nil
 }
 
 func createAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m manifest.Manifest, orgID, appID, envID, envName string) error {
