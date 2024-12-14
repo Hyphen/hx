@@ -15,7 +15,6 @@ import (
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
-	"go.uber.org/thriftrw/ptr"
 )
 
 var appIDFlag string
