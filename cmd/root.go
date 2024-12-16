@@ -10,6 +10,7 @@ import (
 	"github.com/Hyphen/cli/cmd/env/pull"
 	"github.com/Hyphen/cli/cmd/env/push"
 	"github.com/Hyphen/cli/cmd/initialize"
+	"github.com/Hyphen/cli/cmd/initproject"
 	"github.com/Hyphen/cli/cmd/link"
 	"github.com/Hyphen/cli/cmd/project"
 	"github.com/Hyphen/cli/cmd/setorg"
@@ -42,6 +43,7 @@ func init() {
 	rootCmd.AddCommand(app.AppCmd)
 	rootCmd.AddCommand(project.ProjectCmd)
 	rootCmd.AddCommand(env.EnvCmd)
+	rootCmd.AddCommand(initproject.InitProjectCmd)
 
 	// Override the default completion command with a hidden no-op command
 	rootCmd.AddCommand(&cobra.Command{
