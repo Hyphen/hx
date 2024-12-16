@@ -22,7 +22,7 @@ var appIDFlag string
 var printer *cprint.CPrinter
 
 var InitCmd = &cobra.Command{
-	Use:   "init <app name>",
+	Use:   "init-app <app name>",
 	Short: "Initialize a new Hyphen application in the current directory",
 	Long: `
 The init command sets up a new Hyphen application in your current directory.
