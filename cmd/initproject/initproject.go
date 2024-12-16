@@ -241,4 +241,3 @@ func handleExistingProject(cmd *cobra.Command, projectService projects.ProjectSe
 	printer.Info(fmt.Sprintf("Using existing project '%s' (%s)", existingProject.Name, existingProject.AlternateID))
 	return &existingProject, nil
 }
-func ensureGitignore()
