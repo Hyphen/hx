@@ -27,7 +27,6 @@ The init-project command sets up a new Hyphen project in your current directory.
 This command will:
 - Create a new project in Hyphen
 - Generate a local configuration file
-- Update .gitignore to exclude sensitive files
 
 If no project name is provided, it will prompt to use the current directory name.
 
