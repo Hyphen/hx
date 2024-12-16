@@ -11,6 +11,7 @@ import (
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
+	"github.com/Hyphen/cli/pkg/gitutil"
 	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
 )
@@ -149,6 +150,9 @@ func runInitProject(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	if err := gitutil.EnsureGitignore(manifest.ManifestSecretFile); err != nil {
+		printer.Error(cmd, fmt.Errorf("error adding .hxkey to .gitignore: %w. Please do this manually if you wish", err))
+	}
 	printInitializationSummary(createdProject.Name, createdProject.AlternateID, *createdProject.ID, orgID)
 }
 
@@ -237,3 +241,4 @@ func handleExistingProject(cmd *cobra.Command, projectService projects.ProjectSe
 	printer.Info(fmt.Sprintf("Using existing project '%s' (%s)", existingProject.Name, existingProject.AlternateID))
 	return &existingProject, nil
 }
+func ensureGitignore()
