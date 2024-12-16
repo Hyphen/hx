@@ -69,32 +69,15 @@ func runInitProject(cmd *cobra.Command, args []string) {
 
 	projectService := projects.NewService(orgID)
 
-	projectName := ""
-	if len(args) == 0 {
-		cwd, err := os.Getwd()
-		if err != nil {
-			printer.Error(cmd, err)
-			return
-		}
-
-		projectName = filepath.Base(cwd)
-		response := prompt.PromptYesNo(cmd, fmt.Sprintf("Use the current directory name '%s' as the project name?", projectName), true)
-		if !response.Confirmed {
-			if response.IsFlag {
-				printer.Info("Operation cancelled due to --no flag.")
-				return
-			} else {
-				projectName, err = prompt.PromptString(cmd, "What would you like the project name to be?")
-				if err != nil {
-					printer.Error(cmd, err)
-					return
-				}
-			}
-		}
-	} else {
-		projectName = args[0]
+	projectName, shouldContinue, err := getProjectName(cmd, args)
+	if err != nil {
+		printer.Error(cmd, err)
+		return
 	}
-
+	//If the operation is canceled
+	if !shouldContinue {
+		return
+	}
 	projectAlternateId := getProjectID(cmd, projectName)
 	if projectAlternateId == "" {
 		return
@@ -240,4 +223,35 @@ func handleExistingProject(cmd *cobra.Command, projectService projects.ProjectSe
 
 	printer.Info(fmt.Sprintf("Using existing project '%s' (%s)", existingProject.Name, existingProject.AlternateID))
 	return &existingProject, nil
+}
+
+func getProjectName(cmd *cobra.Command, args []string) (string, bool, error) {
+	if len(args) > 0 {
+		return args[0], true, nil
+	}
+
+	// Get the local directory name
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", false, err
+	}
+
+	dirName := filepath.Base(cwd)
+	response := prompt.PromptYesNo(cmd, fmt.Sprintf("Use the current directory name '%s' as the project name?", dirName), true)
+
+	if !response.Confirmed {
+		if response.IsFlag {
+			printer.Info("Operation cancelled due to --no flag.")
+			return "", false, nil
+		}
+
+		// Prompt for a new project name
+		projectName, err := prompt.PromptString(cmd, "What would you like the project name to be?")
+		if err != nil {
+			return "", false, err
+		}
+		return projectName, true, nil
+	}
+
+	return dirName, true, nil
 }
