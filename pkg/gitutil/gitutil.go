@@ -1,4 +1,4 @@
-package initialize
+package gitutil
 
 import (
 	"bufio"
@@ -96,7 +96,7 @@ func fileEndsWithNewline(file *os.File) (bool, error) {
 	return buf[0] == '\n', nil
 }
 
-func ensureGitignore(appendStr string) error {
+func EnsureGitignore(appendStr string) error {
 	if !gitExists() {
 		return nil
 	}

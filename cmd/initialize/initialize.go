@@ -13,6 +13,7 @@ import (
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
+	"github.com/Hyphen/cli/pkg/gitutil"
 	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
 )
@@ -156,7 +157,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	if err := ensureGitignore(manifest.ManifestSecretFile); err != nil {
+	if err := gitutil.EnsureGitignore(manifest.ManifestSecretFile); err != nil {
 		printer.Error(cmd, fmt.Errorf("error adding .hxkey to .gitignore: %w. Please do this manually if you wish", err))
 	}
 
@@ -300,7 +301,7 @@ func createGitignoredFile(cmd *cobra.Command, fileName string) error {
 		return err
 	}
 
-	if err := ensureGitignore(fileName); err != nil {
+	if err := gitutil.EnsureGitignore(fileName); err != nil {
 		printer.Error(cmd, fmt.Errorf("error adding %s to .gitignore: %w. Please do this manually if you wish", fileName, err))
 		// don't error here. Keep going.
 	}

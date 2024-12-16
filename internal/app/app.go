@@ -36,7 +36,7 @@ func CheckAppId(appId string) error {
 		suggested = strings.Trim(suggested, "-")
 
 		return errors.Wrapf(
-			errors.New("invalid project ID"),
+			errors.New("invalid app ID"),
 			"You are using unpermitted characters. A valid App ID can only contain lowercase letters, numbers, hyphens, and underscores. Suggested valid ID: %s",
 			suggested,
 		)
