@@ -83,7 +83,7 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		printer.Error(cmd, err)
 		return
 	}
-	//If te operation is canceled
+	//If the operation is canceled
 	if !shouldContinue {
 		return
 	}
@@ -240,6 +240,7 @@ func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 	envStruct.Version = &version
 
 	if err := envService.PutEnvironmentEnv(orgID, appID, envID, m.SecretKeyId, envStruct); err != nil {
+		//if its conflic it means it already exists so me can pull it
 		if !errors.Is(err, errors.ErrConflict) {
 			return err
 		}
@@ -256,7 +257,7 @@ func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 		return err
 	}
 
-	newEnvDcrypted, err := envStruct.DecryptData(m.GetSecretKey())
+	newEnvDecrypted, err := envStruct.DecryptData(m.GetSecretKey())
 	if err != nil {
 		return err
 	}
@@ -267,8 +268,8 @@ func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 		EnvName:   envName,
 	}
 
-	if err := db.UpsertSecret(secretKey, newEnvDcrypted, version); err != nil {
-		return fmt.Errorf("failed to save local environment: %w", err) // TODO: check if this should be and error
+	if err := db.UpsertSecret(secretKey, newEnvDecrypted, version); err != nil {
+		return fmt.Errorf("failed to save local environment: %w", err)
 	}
 
 	return nil

@@ -139,7 +139,6 @@ func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc m
 		newApp = *existingApp
 	}
 
-	// Rest of the function remains the same...
 	mcl := manifest.Config{
 		ProjectId:          mc.ProjectId,
 		ProjectAlternateId: mc.ProjectAlternateId,
@@ -235,7 +234,7 @@ func CreateAndPushEmptyEnvFileMonorepo(cmd *cobra.Command, envService *env.EnvSe
 		return err
 	}
 
-	newEnvDcrypted, err := envStruct.DecryptData(m.GetSecretKey())
+	newEnvDecrypted, err := envStruct.DecryptData(m.GetSecretKey())
 	if err != nil {
 		return err
 	}
@@ -246,7 +245,7 @@ func CreateAndPushEmptyEnvFileMonorepo(cmd *cobra.Command, envService *env.EnvSe
 		EnvName:   envName,
 	}
 
-	if err := db.UpsertSecret(secretKey, newEnvDcrypted, version); err != nil {
+	if err := db.UpsertSecret(secretKey, newEnvDecrypted, version); err != nil {
 		return fmt.Errorf("failed to save local environment: %w", err)
 	}
 
