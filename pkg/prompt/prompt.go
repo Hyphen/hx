@@ -168,26 +168,12 @@ func PromptForMonorepoApps(cmd *cobra.Command) ([]string, error) {
 		return nil, fmt.Errorf("no directories found in %s", monorepoDir)
 	}
 
-	// Show all directories and ask if correct
-	fmt.Println("\nFound the following directories:")
-	for _, dir := range dirs {
-		fmt.Printf("  - %s\n", dir)
-	}
-
-	response := PromptYesNo(cmd, "Would you like to include all these directories?", true)
-
+	fmt.Println("\nLet's go through each directory:")
 	var selectedDirs []string
-	if response.Confirmed {
-		// User wants all directories
-		selectedDirs = dirs
-	} else {
-		// Ask for each directory individually
-		fmt.Println("\nLet's go through each directory:")
-		for _, dir := range dirs {
-			dirResponse := PromptYesNo(cmd, fmt.Sprintf("Include %s?", dir), false)
-			if dirResponse.Confirmed {
-				selectedDirs = append(selectedDirs, dir)
-			}
+	for _, dir := range dirs {
+		dirResponse := PromptYesNo(cmd, fmt.Sprintf("Include %s?", dir), false)
+		if dirResponse.Confirmed {
+			selectedDirs = append(selectedDirs, dir)
 		}
 	}
 
