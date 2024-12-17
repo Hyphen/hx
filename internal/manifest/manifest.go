@@ -33,6 +33,7 @@ type Config struct {
 	HypenIDToken       *string     `json:"hyphen_id_token,omitempty"`
 	ExpiryTime         *int64      `json:"expiry_time,omitempty"`
 	HyphenAPIKey       *string     `json:"hyphen_api_key,omitempty"`
+	IsMonorepo         *bool       `json:"is_monorepo,omitempty"`
 	Database           interface{} `json:"database,omitempty"`
 }
 
@@ -57,6 +58,7 @@ func (m *Manifest) GetSecretKey() *secretkey.SecretKey {
 	return secretkey.FromBase64(m.SecretKey)
 }
 
+// It will detect if its an app of a monorepo, and will not create the .hxkey
 func LocalInitialize(mc Config) (Manifest, error) {
 	err := InitializeConfig(mc, ManifestConfigFile)
 	if err != nil {
@@ -206,7 +208,48 @@ func RestoreConfigFromFile(manifestConfigFile string) (Config, error) {
 	return mconfig, nil
 }
 
+func RestoreSecretFromMonorepo() (Secret, error) {
+	// Start from current directory
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return Secret{}, errors.Wrap(err, "Failed to get current working directory")
+	}
+
+	// Keep traversing up until we find a monorepo config or hit root
+	for {
+		// Check for .hx file in current directory
+		configPath := filepath.Join(currentDir, ManifestConfigFile)
+		config, err := readAndUnmarshalConfigJSON[Config](configPath)
+
+		// If we can read the config and it's a monorepo
+		if err == nil && config.IsMonorepo != nil && *config.IsMonorepo {
+			// Look for .hxkey in the same directory
+			secretPath := filepath.Join(currentDir, ManifestSecretFile)
+			secret, err := readAndUnmarshalConfigJSON[Secret](secretPath)
+			if err == nil {
+				return secret, nil
+			}
+			return Secret{}, errors.Wrapf(err, "Found monorepo config at %s but failed to read secret file", currentDir)
+		}
+
+		// Move up one directory
+		parentDir := filepath.Dir(currentDir)
+
+		// Check if we've hit the root directory
+		if parentDir == currentDir {
+			return Secret{}, errors.New("No monorepo configuration found in parent directories")
+		}
+
+		currentDir = parentDir
+	}
+}
+
 func RestoreSecretFromFile(manifestSecretFile string) (Secret, error) {
+	monorepoSecret, err := RestoreSecretFromMonorepo()
+	if err == nil {
+		return monorepoSecret, nil
+	}
+
 	var secret Secret
 	var hasSecret bool
 
@@ -232,7 +275,7 @@ func RestoreSecretFromFile(manifestSecretFile string) (Secret, error) {
 	}
 
 	if !hasSecret {
-		return Secret{}, errors.New("No valid .hxkey found (neither global nor local). Please init and app using `hx init`")
+		return Secret{}, errors.New("No valid .hxkey found (neither global, local, nor monorepo). Please init an app using `hx init`")
 	}
 
 	return secret, nil
@@ -291,6 +334,16 @@ func RestoreConfig() (Config, error) {
 func ExistsLocal() bool {
 	_, err := FS.Stat(ManifestConfigFile)
 	return !os.IsNotExist(err)
+}
+
+func ExistsInFolder(folder string) bool {
+	configPath := filepath.Join(folder, ManifestConfigFile)
+	configExists, err := FS.Stat(configPath)
+	if err != nil || configExists == nil {
+		return false
+	}
+
+	return true
 }
 
 func UpsertOrganizationID(organizationID string) error {

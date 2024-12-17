@@ -8,6 +8,7 @@ require (
 	github.com/fatih/color v1.17.0
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.9.0
+	go.uber.org/thriftrw v1.32.0
 	golang.org/x/term v0.0.0-20220526004731-065cf7ba2467
 )
 
