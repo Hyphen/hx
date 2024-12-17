@@ -2,18 +2,22 @@ package initialize
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/Hyphen/cli/cmd/initapp"
+	"github.com/Hyphen/cli/cmd/initproject"
 	"github.com/Hyphen/cli/internal/app"
+	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
+	"github.com/Hyphen/cli/pkg/gitutil"
 	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
-	"go.uber.org/thriftrw/ptr"
 )
 
 func runInitMonorepo(cmd *cobra.Command, args []string) {
@@ -34,81 +38,8 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	monorepoAppName, shouldContinue, err := getAppName(cmd, args)
-	if err != nil {
-		printer.Error(cmd, err)
-		return
-	}
-	if !shouldContinue {
-		return
-	}
-
-	monorepoAppAlternateId := getAppID(cmd, monorepoAppName)
-	if monorepoAppAlternateId == "" {
-		return
-	}
-
-	if manifest.ExistsLocal() {
-		response := prompt.PromptYesNo(cmd, "Config file exists. Do you want to overwrite it?", false)
-		if !response.Confirmed {
-			if response.IsFlag {
-				printer.Info("Operation cancelled due to --no flag.")
-			} else {
-				printer.Info("Operation cancelled.")
-			}
-			return
-		}
-	}
-
-	mc, err := manifest.RestoreConfig()
-	if err != nil {
-		printer.Error(cmd, err)
-		return
-	}
-
-	if mc.ProjectId == nil {
-		printer.Error(cmd, fmt.Errorf("No project found in .hx file"))
-		return
-	}
-
-	// Create monorepo app
-	newApp, err := appService.CreateApp(orgID, *mc.ProjectId, monorepoAppAlternateId, monorepoAppName, false)
-	if err != nil {
-		if !errors.Is(err, errors.ErrConflict) {
-			printer.Error(cmd, err)
-			return
-		}
-
-		existingApp, handleErr := handleExistingApp(cmd, *appService, orgID, monorepoAppAlternateId)
-		if handleErr != nil {
-			printer.Error(cmd, handleErr)
-			return
-		}
-		if existingApp == nil {
-			printer.Info("Operation cancelled.")
-			return
-		}
-
-		newApp = *existingApp
-	}
-
-	// Initialize monorepo config and secret
-	mcl := manifest.Config{
-		ProjectId:          mc.ProjectId,
-		ProjectAlternateId: mc.ProjectAlternateId,
-		ProjectName:        mc.ProjectName,
-		OrganizationId:     mc.OrganizationId,
-		AppName:            &newApp.Name,
-		AppAlternateId:     &newApp.AlternateId,
-		AppId:              &newApp.ID,
-		IsMonorepo:         ptr.Bool(true),
-	}
-
-	ml, err := manifest.LocalInitialize(mcl)
-	if err != nil {
-		printer.Error(cmd, err)
-		return
-	}
+	initproject.IsMonorepo = true
+	initproject.RunInitProject(cmd, args)
 
 	// Get apps to initialize
 	appsOfMonorepoDir, err := prompt.PromptForMonorepoApps(cmd)
@@ -117,10 +48,16 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	m, err := manifest.Restore()
+	if err != nil {
+		printer.Error(cmd, err)
+		return
+	}
+
 	// Initialize each app
 	for _, appDir := range appsOfMonorepoDir {
 		printer.Info(fmt.Sprintf("Initializing app %s", appDir))
-		err := initializeMonorepoApp(cmd, appDir, orgID, mcl, appService, envService, ml.Secret)
+		err := initializeMonorepoApp(cmd, appDir, orgID, m.Config, appService, envService, m.Secret)
 		if err != nil {
 			printer.Error(cmd, fmt.Errorf("failed to initialize app %s: %w", appDir, err))
 			continue
@@ -133,16 +70,16 @@ func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc m
 	appName := filepath.Base(appDir)
 
 	// Generate app ID
-	appAlternateId := generateDefaultAppId(appName)
+	appAlternateId := initapp.GenerateDefaultAppId(appName)
 
 	// Create the app in Hyphen
-	newApp, err := appService.CreateApp(orgID, *mc.ProjectId, appAlternateId, appName, false)
+	newApp, err := appService.CreateApp(orgID, *mc.ProjectId, appAlternateId, appName)
 	if err != nil {
 		if !errors.Is(err, errors.ErrConflict) {
 			return err
 		}
 
-		existingApp, handleErr := handleExistingApp(cmd, *appService, orgID, appAlternateId)
+		existingApp, handleErr := initapp.HandleExistingApp(cmd, *appService, orgID, appAlternateId)
 		if handleErr != nil {
 			return handleErr
 		}
@@ -182,26 +119,123 @@ func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc m
 		return err
 	}
 
-	// Create environment files
 	for _, e := range environments {
 		envName := strings.ToLower(e.Name)
 		envID := e.ID
-		err = createAndPushEmptyEnvFile(cmd, envService, ml, orgID, newApp.ID, envID, envName)
+		err = CreateAndPushEmptyEnvFileMonorepo(cmd, envService, ml, orgID, newApp.ID, envID, envName, appDir)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = createAndPushEmptyEnvFile(cmd, envService, ml, orgID, newApp.ID, "default", "default")
+	err = CreateAndPushEmptyEnvFileMonorepo(cmd, envService, ml, orgID, newApp.ID, "default", "default", appDir)
 	if err != nil {
 		return err
 	}
 
-	err = createGitignoredFile(cmd, filepath.Join(appDir, ".env.local"))
+	err = CreateGitignoredFileMonorepo(cmd, filepath.Join(appDir, ".env.local"), ".env.local")
 	if err != nil {
 		return err
 	}
 
-	printInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
+	initapp.PrintInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
+	return nil
+}
+
+func CreateAndPushEmptyEnvFileMonorepo(cmd *cobra.Command, envService *env.EnvService, m manifest.Manifest, orgID, appID, envID, envName, appDir string) error {
+	envFileName, err := env.GetFileName(envName)
+	if err != nil {
+		return err
+	}
+
+	// Use filepath.Join to create the full path including appDir
+	fullEnvPath := filepath.Join(appDir, envFileName)
+
+	// Ensure the directory exists
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", appDir, err)
+	}
+
+	err = CreateGitignoredFileMonorepo(cmd, fullEnvPath, envFileName)
+	if err != nil {
+		return err
+	}
+
+	// Build an Env struct from that new empty file
+	envStruct, err := env.GetLocalEncryptedEnv(envName, &appDir, m)
+	if err != nil {
+		return err
+	}
+
+	version := 1
+	envStruct.Version = &version
+
+	if err := envService.PutEnvironmentEnv(orgID, appID, envID, m.SecretKeyId, envStruct); err != nil {
+		if !errors.Is(err, errors.ErrConflict) {
+			return err
+		}
+		envStruct, err = envService.GetEnvironmentEnv(orgID, appID, envID, &m.SecretKeyId, nil)
+		if err != nil {
+			return err
+		}
+		version = *envStruct.Version
+	}
+
+	db, err := database.Restore()
+	if err != nil {
+		return err
+	}
+
+	newEnvDcrypted, err := envStruct.DecryptData(m.GetSecretKey())
+	if err != nil {
+		return err
+	}
+
+	secretKey := database.SecretKey{
+		ProjectId: *m.ProjectId,
+		AppId:     *m.AppId,
+		EnvName:   envName,
+	}
+
+	if err := db.UpsertSecret(secretKey, newEnvDcrypted, version); err != nil {
+		return fmt.Errorf("failed to save local environment: %w", err)
+	}
+
+	return nil
+}
+
+func CreateGitignoredFileMonorepo(cmd *cobra.Command, fullPath, fileName string) error {
+	// Ensure the directory exists
+	dir := filepath.Dir(fullPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dir, err)
+	}
+
+	// check if the file already exists.
+	if _, err := os.Stat(fullPath); err == nil {
+		// do not recreate. file exists already.
+		return nil
+	}
+
+	// Create the file
+	file, err := os.Create(fullPath)
+	if err != nil {
+		printer.Error(cmd, fmt.Errorf("error creating %s: %w", fullPath, err))
+		return err
+	}
+	defer file.Close()
+
+	// Write '# KEY=Value' to the file
+	_, err = file.WriteString("# Example\n# KEY=Value\n")
+	if err != nil {
+		printer.Error(cmd, fmt.Errorf("error writing to %s: %w", fullPath, err))
+		return err
+	}
+
+	if err := gitutil.EnsureGitignore(fileName); err != nil {
+		printer.Error(cmd, fmt.Errorf("error adding %s to .gitignore: %w. Please do this manually if you wish", fileName, err))
+		// don't error here. Keep going.
+	}
+
 	return nil
 }

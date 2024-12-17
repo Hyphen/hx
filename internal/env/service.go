@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 
 	"github.com/Hyphen/cli/internal/manifest"
@@ -287,10 +288,13 @@ func GetLocalEnvContents(envName string) (string, error) {
 	return e.Data, nil
 }
 
-func GetLocalEncryptedEnv(envName string, m manifest.Manifest) (Env, error) {
+func GetLocalEncryptedEnv(envName string, envCompletePath *string, m manifest.Manifest) (Env, error) {
 	envFile, err := GetFileName(envName)
 	if err != nil {
 		return Env{}, err
+	}
+	if envCompletePath != nil {
+		envFile = path.Join(*envCompletePath, envFile)
 	}
 
 	e, err := New(envFile)

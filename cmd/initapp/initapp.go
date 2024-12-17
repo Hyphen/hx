@@ -50,16 +50,17 @@ Examples:
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runInit(cmd, args)
+		RunInitApp(cmd, args)
 
 	},
 }
 
 func init() {
+	printer = cprint.NewCPrinter(flags.VerboseFlag)
 	InitCmd.Flags().StringVarP(&appIDFlag, "id", "i", "", "App ID (optional)")
 }
 
-func runInit(cmd *cobra.Command, args []string) {
+func RunInitApp(cmd *cobra.Command, args []string) {
 	printer = cprint.NewCPrinter(flags.VerboseFlag)
 
 	if err := isValidDirectory(cmd); err != nil {
@@ -77,7 +78,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	appName, shouldContinue, err := getAppName(cmd, args)
+	appName, shouldContinue, err := GetAppName(cmd, args)
 	if err != nil {
 		printer.Error(cmd, err)
 		return
@@ -187,7 +188,7 @@ func runInit(cmd *cobra.Command, args []string) {
 	PrintInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
 }
 
-func getAppName(cmd *cobra.Command, args []string) (string, bool, error) {
+func GetAppName(cmd *cobra.Command, args []string) (string, bool, error) {
 	if len(args) > 0 {
 		return args[0], true, nil
 	}
@@ -230,7 +231,7 @@ func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 	}
 
 	// Build an Env struct from that new empty file
-	envStruct, err := env.GetLocalEncryptedEnv(envName, m)
+	envStruct, err := env.GetLocalEncryptedEnv(envName, nil, m)
 	if err != nil {
 		return err
 	}

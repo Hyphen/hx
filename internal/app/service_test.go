@@ -74,7 +74,7 @@ func TestCreateApp(t *testing.T) {
 
 	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
 
-	app, err := service.CreateApp("org1", "project1", "alt_new", "New app", false)
+	app, err := service.CreateApp("org1", "project1", "alt_new", "New app")
 
 	assert.NoError(t, err)
 	assert.Equal(t, "new_app", app.ID)
@@ -192,7 +192,7 @@ func TestAppService_HTTPClientError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "network error")
 
-	_, err = service.CreateApp("org1", "project1", "alt1", "Test app", false)
+	_, err = service.CreateApp("org1", "project1", "alt1", "Test app")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "network error")
 
@@ -232,7 +232,7 @@ func TestAppService_ReadBodyError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to read response body")
 
-	_, err = service.CreateApp("org1", "project1", "alt1", "Test app", false)
+	_, err = service.CreateApp("org1", "project1", "alt1", "Test app")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to read response body")
 
@@ -259,7 +259,7 @@ func TestAppService_NewRequestError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to create request")
 
-	_, err = service.CreateApp("org1", "project1", "alt1", "Test app", false)
+	_, err = service.CreateApp("org1", "project1", "alt1", "Test app")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Failed to create request")
 

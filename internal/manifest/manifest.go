@@ -58,6 +58,7 @@ func (m *Manifest) GetSecretKey() *secretkey.SecretKey {
 	return secretkey.FromBase64(m.SecretKey)
 }
 
+// It will detect if its an app of a monorepo, and will not create the .hxkey
 func LocalInitialize(mc Config) (Manifest, error) {
 	err := InitializeConfig(mc, ManifestConfigFile)
 	if err != nil {

@@ -91,7 +91,7 @@ func RunPush(args []string, secretKeyId int64) error {
 		return err
 	}
 	for _, envName := range envsToPush {
-		e, err := env.GetLocalEncryptedEnv(envName, manifest)
+		e, err := env.GetLocalEncryptedEnv(envName, nil, manifest)
 		if err != nil {
 			printer.Error(nil, err)
 			continue

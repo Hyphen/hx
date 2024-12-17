@@ -14,9 +14,11 @@ import (
 	"github.com/Hyphen/cli/pkg/gitutil"
 	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
+	"go.uber.org/thriftrw/ptr"
 )
 
 var projectIDFlag string
+var IsMonorepo bool
 var printer *cprint.CPrinter
 
 var InitProjectCmd = &cobra.Command{
@@ -45,14 +47,15 @@ Examples:
   hyphen init-project "My New Project" --id my-custom-project-id
 `,
 	Args: cobra.MaximumNArgs(1),
-	Run:  runInitProject,
+	Run:  RunInitProject,
 }
 
 func init() {
 	InitProjectCmd.Flags().StringVarP(&projectIDFlag, "id", "i", "", "Project ID (optional)")
+	InitProjectCmd.Flags().BoolVarP(&IsMonorepo, "monorepo", "m", false, "Initialize a monorepo project")
 }
 
-func runInitProject(cmd *cobra.Command, args []string) {
+func RunInitProject(cmd *cobra.Command, args []string) {
 	printer = cprint.NewCPrinter(flags.VerboseFlag)
 
 	if err := isValidDirectory(cmd); err != nil {
@@ -69,7 +72,7 @@ func runInitProject(cmd *cobra.Command, args []string) {
 
 	projectService := projects.NewService(orgID)
 
-	projectName, shouldContinue, err := getProjectName(cmd, args)
+	projectName, shouldContinue, err := GetProjectName(cmd, args)
 	if err != nil {
 		printer.Error(cmd, err)
 		return
@@ -78,7 +81,7 @@ func runInitProject(cmd *cobra.Command, args []string) {
 	if !shouldContinue {
 		return
 	}
-	projectAlternateId := getProjectID(cmd, projectName)
+	projectAlternateId := GetProjectID(cmd, projectName)
 	if projectAlternateId == "" {
 		return
 	}
@@ -107,7 +110,7 @@ func runInitProject(cmd *cobra.Command, args []string) {
 			return
 		}
 
-		existingProject, handleErr := handleExistingProject(cmd, projectService, projectAlternateId)
+		existingProject, handleErr := HandleExistingProject(cmd, projectService, projectAlternateId)
 		if handleErr != nil {
 			printer.Error(cmd, handleErr)
 			return
@@ -126,6 +129,7 @@ func runInitProject(cmd *cobra.Command, args []string) {
 		ProjectName:        &createdProject.Name,
 		OrganizationId:     orgID,
 	}
+	mcl.IsMonorepo = ptr.Bool(IsMonorepo)
 
 	_, err = manifest.LocalInitialize(mcl)
 	if err != nil {
@@ -136,11 +140,11 @@ func runInitProject(cmd *cobra.Command, args []string) {
 	if err := gitutil.EnsureGitignore(manifest.ManifestSecretFile); err != nil {
 		printer.Error(cmd, fmt.Errorf("error adding .hxkey to .gitignore: %w. Please do this manually if you wish", err))
 	}
-	printInitializationSummary(createdProject.Name, createdProject.AlternateID, *createdProject.ID, orgID)
+	PrintInitializationSummary(createdProject.Name, createdProject.AlternateID, *createdProject.ID, orgID)
 }
 
-func getProjectID(cmd *cobra.Command, projectName string) string {
-	defaultProjectAlternateId := generateDefaultProjectId(projectName)
+func GetProjectID(cmd *cobra.Command, projectName string) string {
+	defaultProjectAlternateId := GenerateDefaultProjectId(projectName)
 	projectAlternateId := projectIDFlag
 	if projectAlternateId == "" {
 		projectAlternateId = defaultProjectAlternateId
@@ -179,11 +183,11 @@ func getProjectID(cmd *cobra.Command, projectName string) string {
 	return projectAlternateId
 }
 
-func generateDefaultProjectId(projectName string) string {
+func GenerateDefaultProjectId(projectName string) string {
 	return strings.ToLower(strings.ReplaceAll(projectName, " ", "-"))
 }
 
-func printInitializationSummary(projectName, projectAlternateId, projectID, orgID string) {
+func PrintInitializationSummary(projectName, projectAlternateId, projectID, orgID string) {
 	printer.Success("Project successfully initialized")
 	printer.Print("") // Print an empty line for spacing
 	printer.PrintDetail("Project Name", projectName)
@@ -210,7 +214,7 @@ func isValidDirectory(cmd *cobra.Command) error {
 	return nil
 }
 
-func handleExistingProject(cmd *cobra.Command, projectService projects.ProjectService, projectAlternateId string) (*projects.Project, error) {
+func HandleExistingProject(cmd *cobra.Command, projectService projects.ProjectService, projectAlternateId string) (*projects.Project, error) {
 	response := prompt.PromptYesNo(cmd, fmt.Sprintf("A project with ID '%s' already exists. Do you want to use this existing project?", projectAlternateId), true)
 	if !response.Confirmed {
 		return nil, nil
@@ -225,7 +229,7 @@ func handleExistingProject(cmd *cobra.Command, projectService projects.ProjectSe
 	return &existingProject, nil
 }
 
-func getProjectName(cmd *cobra.Command, args []string) (string, bool, error) {
+func GetProjectName(cmd *cobra.Command, args []string) (string, bool, error) {
 	if len(args) > 0 {
 		return args[0], true, nil
 	}

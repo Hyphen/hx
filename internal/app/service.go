@@ -14,7 +14,7 @@ import (
 
 type AppServicer interface {
 	GetListApps(organizationID, projectID string, pageSize, pageNum int) ([]App, error)
-	CreateApp(organizationID, projectID, alternateID, name string, isMonorepo bool) (App, error)
+	CreateApp(organizationID, projectID, alternateID, name string) (App, error)
 	GetApp(organizationID, appID string) (App, error)
 	DeleteApp(organizationID, appID string) error
 }
@@ -70,7 +70,7 @@ func (ps *AppService) GetListApps(organizationID, projectID string, pageSize, pa
 	return response.Data, nil
 }
 
-func (ps *AppService) CreateApp(organizationID, projectId, alternateID, name string, isMonoRepo bool) (App, error) {
+func (ps *AppService) CreateApp(organizationID, projectId, alternateID, name string) (App, error) {
 	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/apps", ps.baseUrl, organizationID, projectId)
 
 	payload := struct {
