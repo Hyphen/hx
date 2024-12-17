@@ -66,11 +66,60 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 }
 
 func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc manifest.Config, appService *app.AppService, envService *env.EnvService, monorepoSecret manifest.Secret) error {
-	// Get the app name from directory
-	appName := filepath.Base(appDir)
+	// Get the app name from directory and prompt for confirmation/new name
+	defaultAppName := filepath.Base(appDir)
+	response := prompt.PromptYesNo(cmd, fmt.Sprintf("Use the directory name '%s' as the app name?", defaultAppName), true)
 
-	// Generate app ID
-	appAlternateId := initapp.GenerateDefaultAppId(appName)
+	var appName string
+	if !response.Confirmed {
+		if response.IsFlag {
+			return fmt.Errorf("operation cancelled due to --no flag for app: %s", defaultAppName)
+		}
+
+		// Prompt for a new app name
+		promptedName, err := prompt.PromptString(cmd, "What would you like the app name to be?")
+		if err != nil {
+			return err
+		}
+		appName = promptedName
+	} else {
+		appName = defaultAppName
+	}
+
+	// Generate and prompt for app ID
+	defaultAppAlternateId := initapp.GenerateDefaultAppId(appName)
+	err := app.CheckAppId(defaultAppAlternateId)
+	var appAlternateId string
+
+	if err != nil {
+		suggestedID := strings.TrimSpace(strings.Split(err.Error(), ":")[1])
+		response := prompt.PromptYesNo(cmd, fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]?", suggestedID), true)
+
+		if !response.Confirmed {
+			if response.IsFlag {
+				return fmt.Errorf("operation cancelled due to --no flag for app ID: %s", defaultAppAlternateId)
+			}
+
+			// Prompt for a custom app ID
+			for {
+				promptedID, err := prompt.PromptString(cmd, "Enter a custom app ID:")
+				if err != nil {
+					return err
+				}
+
+				err = app.CheckAppId(promptedID)
+				if err == nil {
+					appAlternateId = promptedID
+					break
+				}
+				printer.Warning("Invalid app ID. Please try again.")
+			}
+		} else {
+			appAlternateId = suggestedID
+		}
+	} else {
+		appAlternateId = defaultAppAlternateId
+	}
 
 	// Create the app in Hyphen
 	newApp, err := appService.CreateApp(orgID, *mc.ProjectId, appAlternateId, appName)
@@ -90,7 +139,7 @@ func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc m
 		newApp = *existingApp
 	}
 
-	// Create app config
+	// Rest of the function remains the same...
 	mcl := manifest.Config{
 		ProjectId:          mc.ProjectId,
 		ProjectAlternateId: mc.ProjectAlternateId,
