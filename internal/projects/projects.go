@@ -11,6 +11,7 @@ type Project struct {
 	ID          *string `json:"id,omitempty"`
 	AlternateID string  `json:"alternateId"`
 	Name        string  `json:"name"`
+	IsMonorepo  bool    `json:"isMonorepo"`
 }
 
 func CheckProjectId(appId string) error {

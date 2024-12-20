@@ -41,26 +41,29 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 	initproject.IsMonorepo = true
 	initproject.RunInitProject(cmd, args)
 
-	// Get apps to initialize
-	appsOfMonorepoDir, err := prompt.PromptForMonorepoApps(cmd)
-	if err != nil {
-		printer.Error(cmd, err)
-		return
-	}
-
 	m, err := manifest.Restore()
 	if err != nil {
 		printer.Error(cmd, err)
 		return
 	}
 
-	// Initialize each app
-	for _, appDir := range appsOfMonorepoDir {
-		printer.Info(fmt.Sprintf("Initializing app %s", appDir))
-		err := initializeMonorepoApp(cmd, appDir, orgID, m.Config, appService, envService, m.Secret)
+	for {
+		appPath, err := prompt.PromptString(cmd, "Provide the path to an application:")
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to initialize app %s: %w", appDir, err))
+			printer.Error(cmd, err)
+			return
+		}
+
+		printer.Info(fmt.Sprintf("Initializing app %s", appPath))
+		err = initializeMonorepoApp(cmd, appPath, orgID, m.Config, appService, envService, m.Secret)
+		if err != nil {
+			printer.Error(cmd, fmt.Errorf("failed to initialize app %s: %w", appPath, err))
 			continue
+		}
+
+		moreApps := prompt.PromptYesNo(cmd, "Do you have another?", false)
+		if !moreApps.Confirmed {
+			break
 		}
 	}
 }
