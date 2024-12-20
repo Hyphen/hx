@@ -54,10 +54,35 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 			return
 		}
 
-		printer.Info(fmt.Sprintf("Initializing app %s", appPath))
-		err = initializeMonorepoApp(cmd, appPath, orgID, m.Config, appService, envService, m.Secret)
+		cleanPath := filepath.Clean(appPath)
+
+		if strings.HasPrefix(cleanPath, "..") || strings.Contains(cleanPath, "../") {
+			printer.Error(cmd, fmt.Errorf("invalid path: cannot reference parent directories"))
+			continue
+		}
+
+		currentDir, err := os.Getwd()
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to initialize app %s: %w", appPath, err))
+			printer.Error(cmd, fmt.Errorf("failed to get current directory: %w", err))
+			return
+		}
+
+		absPath, err := filepath.Abs(cleanPath)
+		if err != nil {
+			printer.Error(cmd, fmt.Errorf("invalid path: %w", err))
+			continue
+		}
+
+		// Ensure the path is under current directory
+		if !strings.HasPrefix(absPath, currentDir) {
+			printer.Error(cmd, fmt.Errorf("invalid path: must be within current directory"))
+			continue
+		}
+
+		printer.Info(fmt.Sprintf("Initializing app %s", cleanPath))
+		err = initializeMonorepoApp(cmd, cleanPath, orgID, m.Config, appService, envService, m.Secret)
+		if err != nil {
+			printer.Error(cmd, fmt.Errorf("failed to initialize app %s: %w", cleanPath, err))
 			continue
 		}
 
