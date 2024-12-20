@@ -47,7 +47,9 @@ Examples:
   hyphen init-project "My New Project" --id my-custom-project-id
 `,
 	Args: cobra.MaximumNArgs(1),
-	Run:  RunInitProject,
+	Run: func(cmd *cobra.Command, args []string) {
+		RunInitProject(cmd, args)
+	},
 }
 
 func init() {
@@ -61,13 +63,13 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 	if err := isValidDirectory(cmd); err != nil {
 		printer.Error(cmd, err)
 		printer.Info("Please change to a project directory and try again.")
-		return
+		os.Exit(1)
 	}
 
 	orgID, err := flags.GetOrganizationID()
 	if err != nil {
 		printer.Error(cmd, err)
-		return
+		os.Exit(1)
 	}
 
 	projectService := projects.NewService(orgID)
@@ -75,15 +77,15 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 	projectName, shouldContinue, err := GetProjectName(cmd, args)
 	if err != nil {
 		printer.Error(cmd, err)
-		return
+		os.Exit(1)
 	}
-	//If the operation is canceled
 	if !shouldContinue {
-		return
+		os.Exit(0)
 	}
+
 	projectAlternateId := GetProjectID(cmd, projectName)
 	if projectAlternateId == "" {
-		return
+		os.Exit(0)
 	}
 
 	if manifest.ExistsLocal() {
@@ -94,30 +96,31 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 			} else {
 				printer.Info("Operation cancelled.")
 			}
-			return
+			os.Exit(0)
 		}
 	}
 
 	newProject := projects.Project{
 		Name:        projectName,
 		AlternateID: projectAlternateId,
+		IsMonorepo:  IsMonorepo,
 	}
 
 	createdProject, err := projectService.CreateProject(newProject)
 	if err != nil {
 		if !errors.Is(err, errors.ErrConflict) {
 			printer.Error(cmd, err)
-			return
+			os.Exit(1)
 		}
 
 		existingProject, handleErr := HandleExistingProject(cmd, projectService, projectAlternateId)
 		if handleErr != nil {
 			printer.Error(cmd, handleErr)
-			return
+			os.Exit(1)
 		}
 		if existingProject == nil {
 			printer.Info("Operation cancelled.")
-			return
+			os.Exit(0)
 		}
 
 		createdProject = *existingProject
@@ -134,7 +137,7 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 	_, err = manifest.LocalInitialize(mcl)
 	if err != nil {
 		printer.Error(cmd, err)
-		return
+		os.Exit(1)
 	}
 
 	if err := gitutil.EnsureGitignore(manifest.ManifestSecretFile); err != nil {
