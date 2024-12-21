@@ -86,6 +86,11 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 			continue
 		}
 
+		if err := manifest.AddMemberToLocalWorkspace(cleanPath); err != nil {
+			printer.Error(cmd, fmt.Errorf("failed to add member to local workspace: %w", err))
+			continue
+		}
+
 		moreApps := prompt.PromptYesNo(cmd, "Do you have another?", false)
 		if !moreApps.Confirmed {
 			break

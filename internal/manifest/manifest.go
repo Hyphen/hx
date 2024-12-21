@@ -34,7 +34,16 @@ type Config struct {
 	ExpiryTime         *int64      `json:"expiry_time,omitempty"`
 	HyphenAPIKey       *string     `json:"hyphen_api_key,omitempty"`
 	IsMonorepo         *bool       `json:"is_monorepo,omitempty"`
+	Workspace          *Workspace  `json:"workspace,omitempty"`
 	Database           interface{} `json:"database,omitempty"`
+}
+
+type Workspace struct {
+	Members []string `json:"members"`
+}
+
+func (w *Workspace) AddMember(memberDir string) {
+	w.Members = append(w.Members, memberDir)
 }
 
 type Manifest struct {
@@ -122,6 +131,41 @@ func UpsertGlobalConfig(mc Config) error {
 		return errors.Wrap(err, "Failed to save manifest")
 	}
 
+	return nil
+}
+
+func UpsertLocalWorkspace(workspace Workspace) error {
+	localConfig, err := RestoreLocalConfig()
+	if err != nil {
+		return errors.Wrap(err, "Failed to restore local config")
+	}
+	localConfig.Workspace = &workspace
+	jsonData, err := json.MarshalIndent(localConfig, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "Failed to marshal manifest to JSON")
+	}
+	if err := FS.WriteFile(ManifestConfigFile, jsonData, 0644); err != nil {
+		return errors.Wrap(err, "Failed to save manifest")
+	}
+	return nil
+}
+
+func AddMemberToLocalWorkspace(memberDir string) error {
+	localConfig, err := RestoreLocalConfig()
+	if err != nil {
+		return errors.Wrap(err, "Failed to restore local config")
+	}
+	if localConfig.Workspace == nil {
+		localConfig.Workspace = &Workspace{}
+	}
+	localConfig.Workspace.AddMember(memberDir)
+	jsonData, err := json.MarshalIndent(localConfig, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "Failed to marshal manifest to JSON")
+	}
+	if err := FS.WriteFile(ManifestConfigFile, jsonData, 0644); err != nil {
+		return errors.Wrap(err, "Failed to save manifest")
+	}
 	return nil
 }
 
