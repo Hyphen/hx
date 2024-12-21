@@ -38,6 +38,13 @@ type Config struct {
 	Database           interface{} `json:"database,omitempty"`
 }
 
+func (c *Config) IsMonorepoProject() bool {
+	if c.IsMonorepo != nil && *c.IsMonorepo {
+		return true
+	}
+	return false
+}
+
 type Workspace struct {
 	Members []string `json:"members"`
 }
@@ -276,7 +283,7 @@ func RestoreSecretFromMonorepo() (Secret, error) {
 		config, err := readAndUnmarshalConfigJSON[Config](configPath)
 
 		// If we can read the config and it's a monorepo
-		if err == nil && config.IsMonorepo != nil && *config.IsMonorepo {
+		if err == nil && config.IsMonorepoProject() {
 			// Look for .hxkey in the same directory
 			secretPath := filepath.Join(currentDir, ManifestSecretFile)
 			secret, err := readAndUnmarshalConfigJSON[Secret](secretPath)
