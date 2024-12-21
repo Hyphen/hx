@@ -2,6 +2,7 @@ package push
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/Hyphen/cli/internal/database"
@@ -54,6 +55,54 @@ func RunPush(args []string, secretKeyId int64) error {
 		return err
 	}
 
+	// Check if this is a monorepo
+	if manifest.IsMonorepoProject() && manifest.Workspace != nil {
+		// Store current directory
+		currentDir, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get current directory: %w", err)
+		}
+
+		// Push for each workspace member
+		for _, memberDir := range manifest.Workspace.Members {
+			if !Silent {
+				printer.Print(fmt.Sprintf("Pushing for workspace member: %s", memberDir))
+			}
+
+			// Change to member directory
+			err = os.Chdir(memberDir)
+			if err != nil {
+				printer.Warning(fmt.Sprintf("Failed to change to directory %s: %s", memberDir, err))
+				continue
+			}
+
+			// Run push for this member
+			err = pushForMember(args, secretKeyId)
+			if err != nil {
+				printer.Warning(fmt.Sprintf("Failed to push for member %s: %s", memberDir, err))
+			}
+
+			// Change back to original directory
+			err = os.Chdir(currentDir)
+			if err != nil {
+				return fmt.Errorf("failed to return to original directory: %w", err)
+			}
+		}
+
+		return nil
+	}
+
+	// If not a monorepo, proceed with regular push
+	return pushForMember(args, secretKeyId)
+}
+
+// pushForMember contains the original push logic
+func pushForMember(args []string, secretKeyId int64) error {
+	manifest, err := manifest.Restore()
+	if err != nil {
+		return err
+	}
+
 	db, err := database.Restore()
 	if err != nil {
 		return err
@@ -90,6 +139,7 @@ func RunPush(args []string, secretKeyId int64) error {
 	if err := service.checkIfLocalEnvsExistAsEnvironments(envsToPush, orgId, projectId); err != nil {
 		return err
 	}
+
 	for _, envName := range envsToPush {
 		e, err := env.GetLocalEncryptedEnv(envName, nil, manifest)
 		if err != nil {

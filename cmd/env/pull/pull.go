@@ -58,6 +58,49 @@ func RunPull(args []string, forceFlag bool) error {
 		return err
 	}
 
+	// Check if this is a monorepo
+	if manifest.IsMonorepoProject() && manifest.Workspace != nil {
+		// Store current directory
+		currentDir, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get current directory: %w", err)
+		}
+
+		// Pull for each workspace member
+		for _, memberDir := range manifest.Workspace.Members {
+			if !Silent {
+				printer.Print(fmt.Sprintf("Pulling for workspace member: %s", memberDir))
+			}
+
+			// Change to member directory
+			err = os.Chdir(memberDir)
+			if err != nil {
+				printer.Warning(fmt.Sprintf("Failed to change to directory %s: %s", memberDir, err))
+				continue
+			}
+
+			// Run pull for this member
+			err = pullForMember(args, forceFlag)
+			if err != nil {
+				printer.Warning(fmt.Sprintf("Failed to pull for member %s: %s", memberDir, err))
+			}
+
+			// Change back to original directory
+			err = os.Chdir(currentDir)
+			if err != nil {
+				return fmt.Errorf("failed to return to original directory: %w", err)
+			}
+		}
+
+		return nil
+	}
+
+	// If not a monorepo, proceed with regular pull
+	return pullForMember(args, forceFlag)
+}
+
+// pullForMember contains the original pull logic
+func pullForMember(args []string, forceFlag bool) error {
 	db, err := database.Restore()
 	if err != nil {
 		return err
@@ -76,6 +119,11 @@ func RunPull(args []string, forceFlag bool) error {
 	}
 
 	projectId, err := flags.GetProjectID()
+	if err != nil {
+		return err
+	}
+
+	manifest, err := manifest.Restore()
 	if err != nil {
 		return err
 	}
