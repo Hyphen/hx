@@ -74,17 +74,9 @@ func LocalInitialize(mc Config) (Manifest, error) {
 		return Manifest{}, errors.Wrap(err, "Failed to initialize manifest config")
 	}
 
-	var ms Secret
-	if _, err := os.Stat(ManifestSecretFile); err == nil {
-		ms, err = RestoreSecretFromFile(ManifestSecretFile)
-		if err != nil {
-			return Manifest{}, errors.Wrap(err, "Failed to restore manifest secret from file")
-		}
-	} else {
-		ms, err = InitializeSecret(ManifestSecretFile)
-		if err != nil {
-			return Manifest{}, errors.Wrap(err, "Failed to initialize manifest secret")
-		}
+	ms, err := loadSecret()
+	if err != nil {
+		return Manifest{}, fmt.Errorf("failed to load manifest secret: %w", err)
 	}
 
 	m := Manifest{
@@ -93,6 +85,24 @@ func LocalInitialize(mc Config) (Manifest, error) {
 	}
 
 	return m, nil
+}
+func loadSecret() (Secret, error) {
+	// Try loading from manifest file first
+	if _, err := os.Stat(ManifestSecretFile); err == nil {
+		secret, err := RestoreSecretFromFile(ManifestSecretFile)
+		if err == nil {
+			return secret, nil
+		}
+	}
+
+	// Try loading from monorepo
+	secret, err := RestoreSecretFromMonorepo()
+	if err == nil {
+		return secret, nil
+	}
+
+	// Finally, try initializing new secret
+	return InitializeSecret(ManifestSecretFile)
 }
 
 func GlobalInitializeConfig(mc Config) error {
