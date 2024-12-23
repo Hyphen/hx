@@ -132,6 +132,9 @@ func GetGlobalDirectory() string {
 func UpsertGlobalConfig(mc Config) error {
 	globDir := GetGlobalDirectory()
 
+	mc.IsMonorepo = nil //this should always be nil in the global config
+	mc.Workspace = nil  //this should always be nil in the global config
+
 	if err := FS.MkdirAll(globDir, 0755); err != nil {
 		return errors.Wrap(err, "Failed to create global directory")
 	}
