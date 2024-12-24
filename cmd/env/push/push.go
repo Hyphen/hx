@@ -56,7 +56,7 @@ func RunPush(args []string, secretKeyId int64) error {
 	}
 
 	// Check if this is a monorepo
-	if manifest.IsMonorepoProject() && manifest.Workspace != nil {
+	if manifest.IsMonorepoProject() && manifest.Project != nil {
 		// Store current directory
 		currentDir, err := os.Getwd()
 		if err != nil {
@@ -64,7 +64,7 @@ func RunPush(args []string, secretKeyId int64) error {
 		}
 
 		// Push for each workspace member
-		for _, memberDir := range manifest.Workspace.Members {
+		for _, memberDir := range manifest.Project.Apps {
 			if !Silent {
 				printer.Print(fmt.Sprintf("Pushing for workspace member: %s", memberDir))
 			}

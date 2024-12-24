@@ -34,7 +34,7 @@ type Config struct {
 	ExpiryTime         *int64      `json:"expiry_time,omitempty"`
 	HyphenAPIKey       *string     `json:"hyphen_api_key,omitempty"`
 	IsMonorepo         *bool       `json:"is_monorepo,omitempty"`
-	Workspace          *Workspace  `json:"workspace,omitempty"`
+	Project            *Project    `json:"workspace,omitempty"`
 	Database           interface{} `json:"database,omitempty"`
 }
 
@@ -45,12 +45,12 @@ func (c *Config) IsMonorepoProject() bool {
 	return false
 }
 
-type Workspace struct {
-	Members []string `json:"members"`
+type Project struct {
+	Apps []string `json:"members"`
 }
 
-func (w *Workspace) AddMember(memberDir string) {
-	w.Members = append(w.Members, memberDir)
+func (w *Project) AddMember(memberDir string) {
+	w.Apps = append(w.Apps, memberDir)
 }
 
 type Manifest struct {
@@ -133,7 +133,7 @@ func UpsertGlobalConfig(mc Config) error {
 	globDir := GetGlobalDirectory()
 
 	mc.IsMonorepo = nil //this should always be nil in the global config
-	mc.Workspace = nil  //this should always be nil in the global config
+	mc.Project = nil    //this should always be nil in the global config
 
 	if err := FS.MkdirAll(globDir, 0755); err != nil {
 		return errors.Wrap(err, "Failed to create global directory")
@@ -154,12 +154,12 @@ func UpsertGlobalConfig(mc Config) error {
 	return nil
 }
 
-func UpsertLocalWorkspace(workspace Workspace) error {
+func UpsertLocalWorkspace(workspace Project) error {
 	localConfig, err := RestoreLocalConfig()
 	if err != nil {
 		return errors.Wrap(err, "Failed to restore local config")
 	}
-	localConfig.Workspace = &workspace
+	localConfig.Project = &workspace
 	jsonData, err := json.MarshalIndent(localConfig, "", "  ")
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal manifest to JSON")
@@ -175,10 +175,10 @@ func AddMemberToLocalWorkspace(memberDir string) error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to restore local config")
 	}
-	if localConfig.Workspace == nil {
-		localConfig.Workspace = &Workspace{}
+	if localConfig.Project == nil {
+		localConfig.Project = &Project{}
 	}
-	localConfig.Workspace.AddMember(memberDir)
+	localConfig.Project.AddMember(memberDir)
 	jsonData, err := json.MarshalIndent(localConfig, "", "  ")
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal manifest to JSON")

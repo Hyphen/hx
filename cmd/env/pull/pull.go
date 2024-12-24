@@ -59,7 +59,7 @@ func RunPull(args []string, forceFlag bool) error {
 	}
 
 	// Check if this is a monorepo
-	if manifest.IsMonorepoProject() && manifest.Workspace != nil {
+	if manifest.IsMonorepoProject() && manifest.Project != nil {
 		// Store current directory
 		currentDir, err := os.Getwd()
 		if err != nil {
@@ -67,7 +67,7 @@ func RunPull(args []string, forceFlag bool) error {
 		}
 
 		// Pull for each workspace member
-		for _, memberDir := range manifest.Workspace.Members {
+		for _, memberDir := range manifest.Project.Apps {
 			if !Silent {
 				printer.Print(fmt.Sprintf("Pulling for workspace member: %s", memberDir))
 			}
