@@ -32,7 +32,7 @@ func Error(cmd *cobra.Command, err error, verbose bool) {
 	if verbose {
 		errorDetails := color.New(color.FgWhite).SprintFunc()
 
-		cmd.PrintErrf("%s %s\n", red("❕error - "), errorDetails(err.Error()))
+		cmd.PrintErrf("%s %s\n", red("❗error - "), errorDetails(err.Error()))
 	} else {
 		fmt.Println("ERROR:", err.Error())
 	}
