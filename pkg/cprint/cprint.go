@@ -31,7 +31,8 @@ func NewCPrinter(verbose bool) *CPrinter {
 func Error(cmd *cobra.Command, err error, verbose bool) {
 	if verbose {
 		errorDetails := color.New(color.FgWhite).SprintFunc()
-		cmd.PrintErrf("%s %s\n", red("ERROR:"), errorDetails(err.Error()))
+
+		cmd.PrintErrf("%s %s\n", red("❕error - "), errorDetails(err.Error()))
 	} else {
 		fmt.Println("ERROR:", err.Error())
 	}
@@ -124,11 +125,11 @@ func PrintDetail(label, value string, verbose bool) {
 
 // CPrinter methods
 func (p *CPrinter) Error(cmd *cobra.Command, err error) {
-	Error(cmd, err, p.verbose)
+	Error(cmd, err, true) //issues/168 introduce always emoji
 }
 
 func (p *CPrinter) Info(message string) {
-	Info(message, p.verbose)
+	Info(message, true) //issues/168 introduce always emoji
 }
 
 func (p *CPrinter) YellowPrint(message string) {
@@ -148,7 +149,7 @@ func (p *CPrinter) PrintNorm(message string) {
 }
 
 func (p *CPrinter) Success(message string) {
-	Success(message, p.verbose)
+	Success(message, true) //issues/168 introduce always emoji
 }
 
 func (p *CPrinter) Warning(message string) {
