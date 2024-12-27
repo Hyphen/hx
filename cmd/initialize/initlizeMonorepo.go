@@ -56,11 +56,6 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 
 		cleanPath := filepath.Clean(appPath)
 
-		if strings.HasPrefix(cleanPath, "..") || strings.Contains(cleanPath, "../") {
-			printer.Error(cmd, fmt.Errorf("invalid path: cannot reference parent directories"))
-			continue
-		}
-
 		if _, err := os.Stat(cleanPath); os.IsNotExist(err) {
 			printer.Error(cmd, fmt.Errorf("directory does not exist: %s", cleanPath))
 			continue
@@ -78,8 +73,9 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		// Ensure the path is under current directory
-		if !strings.HasPrefix(absPath, currentDir) {
+		// Check if path is within current directory using filepath.Rel
+		relPath, err := filepath.Rel(currentDir, absPath)
+		if err != nil || strings.HasPrefix(relPath, "..") {
 			printer.Error(cmd, fmt.Errorf("invalid path: must be within current directory"))
 			continue
 		}
