@@ -272,7 +272,7 @@ func printPushSummary(envsToPush []string, envsPushed []string, skippedEnvs []st
 		if len(envsPushed) > 0 {
 			printer.Success(fmt.Sprintf("%s %s", "pushed: ", strings.Join(envsPushed, ", ")))
 		} else {
-			printer.Info("No environments were pushed, everything is up to date.")
+			printer.Success("pushed: everything is up to date")
 		}
 		if flags.VerboseFlag {
 			if len(skippedEnvs) > 0 {
