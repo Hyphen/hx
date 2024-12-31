@@ -34,7 +34,7 @@ type Config struct {
 	ExpiryTime         *int64      `json:"expiry_time,omitempty"`
 	HyphenAPIKey       *string     `json:"hyphen_api_key,omitempty"`
 	IsMonorepo         *bool       `json:"is_monorepo,omitempty"`
-	Project            *Project    `json:"workspace,omitempty"`
+	Project            *Project    `json:"project,omitempty"`
 	Database           interface{} `json:"database,omitempty"`
 }
 
@@ -46,11 +46,11 @@ func (c *Config) IsMonorepoProject() bool {
 }
 
 type Project struct {
-	Apps []string `json:"members"`
+	Apps []string `json:"app"`
 }
 
-func (w *Project) AddMember(memberDir string) {
-	w.Apps = append(w.Apps, memberDir)
+func (w *Project) AddApp(appDir string) {
+	w.Apps = append(w.Apps, appDir)
 }
 
 type Manifest struct {
@@ -170,7 +170,7 @@ func UpsertLocalWorkspace(workspace Project) error {
 	return nil
 }
 
-func AddMemberToLocalWorkspace(memberDir string) error {
+func AddAppToLocalProject(appDir string) error {
 	localConfig, err := RestoreLocalConfig()
 	if err != nil {
 		return errors.Wrap(err, "Failed to restore local config")
@@ -178,7 +178,7 @@ func AddMemberToLocalWorkspace(memberDir string) error {
 	if localConfig.Project == nil {
 		localConfig.Project = &Project{}
 	}
-	localConfig.Project.AddMember(memberDir)
+	localConfig.Project.AddApp(appDir)
 	jsonData, err := json.MarshalIndent(localConfig, "", "  ")
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal manifest to JSON")

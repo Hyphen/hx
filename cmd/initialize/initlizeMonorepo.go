@@ -57,42 +57,42 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 		cleanPath := filepath.Clean(appPath)
 
 		if _, err := os.Stat(cleanPath); os.IsNotExist(err) {
-			printer.Error(cmd, fmt.Errorf("directory does not exist: %s", cleanPath))
+			printer.Error(cmd, fmt.Errorf("Directory does not exist: %s", cleanPath))
 			continue
 		}
 
 		currentDir, err := os.Getwd()
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to get current directory: %w", err))
+			printer.Error(cmd, fmt.Errorf("Failed to get current directory: %w", err))
 			return
 		}
 
 		absPath, err := filepath.Abs(cleanPath)
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("invalid path: %w", err))
+			printer.Error(cmd, fmt.Errorf("Invalid path: %w", err))
 			continue
 		}
 
 		// Check if path is within current directory using filepath.Rel
 		relPath, err := filepath.Rel(currentDir, absPath)
 		if err != nil || strings.HasPrefix(relPath, "..") {
-			printer.Error(cmd, fmt.Errorf("invalid path: must be within current directory"))
+			printer.Error(cmd, fmt.Errorf("Invalid path: must be within current directory"))
 			continue
 		}
 
 		printer.Info(fmt.Sprintf("Initializing app %s", cleanPath))
 		err = initializeMonorepoApp(cmd, cleanPath, orgID, m.Config, appService, envService, m.Secret)
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to initialize app %s: %w", cleanPath, err))
+			printer.Error(cmd, fmt.Errorf("Failed to initialize app %s: %w", cleanPath, err))
 			continue
 		}
 
-		if err := manifest.AddMemberToLocalWorkspace(cleanPath); err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to add member to local workspace: %w", err))
+		if err := manifest.AddAppToLocalProject(cleanPath); err != nil {
+			printer.Error(cmd, fmt.Errorf("Failed to add app to local project: %w", err))
 			continue
 		}
 
-		moreApps := prompt.PromptYesNo(cmd, "Do you have another?", false)
+		moreApps := prompt.PromptYesNo(cmd, "Do you have another app?", false)
 		if !moreApps.Confirmed {
 			break
 		}
@@ -107,7 +107,7 @@ func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc m
 	var appName string
 	if !response.Confirmed {
 		if response.IsFlag {
-			return fmt.Errorf("operation cancelled due to --no flag for app: %s", defaultAppName)
+			return fmt.Errorf("Operation cancelled due to --no flag for app: %s", defaultAppName)
 		}
 
 		// Prompt for a new app name
@@ -131,7 +131,7 @@ func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc m
 
 		if !response.Confirmed {
 			if response.IsFlag {
-				return fmt.Errorf("operation cancelled due to --no flag for app ID: %s", defaultAppAlternateId)
+				return fmt.Errorf("Operation cancelled due to --no flag for app ID: %s", defaultAppAlternateId)
 			}
 
 			// Prompt for a custom app ID
@@ -167,7 +167,7 @@ func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc m
 			return handleErr
 		}
 		if existingApp == nil {
-			return fmt.Errorf("operation cancelled for app: %s", appName)
+			return fmt.Errorf("Operation cancelled for app: %s", appName)
 		}
 
 		newApp = *existingApp
@@ -235,7 +235,7 @@ func CreateAndPushEmptyEnvFileMonorepo(cmd *cobra.Command, envService *env.EnvSe
 
 	// Ensure the directory exists
 	if err := os.MkdirAll(appDir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory %s: %w", appDir, err)
+		return fmt.Errorf("Failed to create directory %s: %w", appDir, err)
 	}
 
 	err = CreateGitignoredFileMonorepo(cmd, fullEnvPath, envFileName)
@@ -280,7 +280,7 @@ func CreateAndPushEmptyEnvFileMonorepo(cmd *cobra.Command, envService *env.EnvSe
 	}
 
 	if err := db.UpsertSecret(secretKey, newEnvDecrypted, version); err != nil {
-		return fmt.Errorf("failed to save local environment: %w", err)
+		return fmt.Errorf("Failed to save local environment: %w", err)
 	}
 
 	return nil
@@ -290,7 +290,7 @@ func CreateGitignoredFileMonorepo(cmd *cobra.Command, fullPath, fileName string)
 	// Ensure the directory exists
 	dir := filepath.Dir(fullPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory %s: %w", dir, err)
+		return fmt.Errorf("Failed to create directory %s: %w", dir, err)
 	}
 
 	// check if the file already exists.
@@ -302,7 +302,7 @@ func CreateGitignoredFileMonorepo(cmd *cobra.Command, fullPath, fileName string)
 	// Create the file
 	file, err := os.Create(fullPath)
 	if err != nil {
-		printer.Error(cmd, fmt.Errorf("error creating %s: %w", fullPath, err))
+		printer.Error(cmd, fmt.Errorf("Error creating %s: %w", fullPath, err))
 		return err
 	}
 	defer file.Close()
@@ -310,12 +310,12 @@ func CreateGitignoredFileMonorepo(cmd *cobra.Command, fullPath, fileName string)
 	// Write '# KEY=Value' to the file
 	_, err = file.WriteString("# Example\n# KEY=Value\n")
 	if err != nil {
-		printer.Error(cmd, fmt.Errorf("error writing to %s: %w", fullPath, err))
+		printer.Error(cmd, fmt.Errorf("Error writing to %s: %w", fullPath, err))
 		return err
 	}
 
 	if err := gitutil.EnsureGitignore(fileName); err != nil {
-		printer.Error(cmd, fmt.Errorf("error adding %s to .gitignore: %w. Please do this manually if you wish", fileName, err))
+		printer.Error(cmd, fmt.Errorf("Error adding %s to .gitignore: %w. Please do this manually if you wish", fileName, err))
 		// don't error here. Keep going.
 	}
 
