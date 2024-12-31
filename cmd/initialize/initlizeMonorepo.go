@@ -56,8 +56,8 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 
 		cleanPath := filepath.Clean(appPath)
 
-		if strings.HasPrefix(cleanPath, "..") || strings.Contains(cleanPath, "../") {
-			printer.Error(cmd, fmt.Errorf("Invalid path: cannot reference parent directories"))
+		if _, err := os.Stat(cleanPath); os.IsNotExist(err) {
+			printer.Error(cmd, fmt.Errorf("Directory does not exist: %s", cleanPath))
 			continue
 		}
 
@@ -69,12 +69,13 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 
 		absPath, err := filepath.Abs(cleanPath)
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("invalid path: %w", err))
+			printer.Error(cmd, fmt.Errorf("Invalid path: %w", err))
 			continue
 		}
 
-		// Ensure the path is under current directory
-		if !strings.HasPrefix(absPath, currentDir) {
+		// Check if path is within current directory using filepath.Rel
+		relPath, err := filepath.Rel(currentDir, absPath)
+		if err != nil || strings.HasPrefix(relPath, "..") {
 			printer.Error(cmd, fmt.Errorf("Invalid path: must be within current directory"))
 			continue
 		}
@@ -86,7 +87,12 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		moreApps := prompt.PromptYesNo(cmd, "Do you have another?", false)
+		if err := manifest.AddAppToLocalProject(cleanPath); err != nil {
+			printer.Error(cmd, fmt.Errorf("Failed to add app to local project: %w", err))
+			continue
+		}
+
+		moreApps := prompt.PromptYesNo(cmd, "Do you have another app?", false)
 		if !moreApps.Confirmed {
 			break
 		}
