@@ -59,30 +59,30 @@ func RunPull(args []string, forceFlag bool) error {
 	}
 
 	// Check if this is a monorepo
-	if manifest.IsMonorepoProject() && manifest.Workspace != nil {
+	if manifest.IsMonorepoProject() && manifest.Project != nil {
 		// Store current directory
 		currentDir, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("failed to get current directory: %w", err)
 		}
 
-		// Pull for each workspace member
-		for _, memberDir := range manifest.Workspace.Members {
+		// Pull for each workspace app
+		for _, appDir := range manifest.Project.Apps {
 			if !Silent {
-				printer.Print(fmt.Sprintf("Pulling for workspace member: %s", memberDir))
+				printer.Print(fmt.Sprintf("Pulling for workspace app: %s", appDir))
 			}
 
-			// Change to member directory
-			err = os.Chdir(memberDir)
+			// Change to app directory
+			err = os.Chdir(appDir)
 			if err != nil {
-				printer.Warning(fmt.Sprintf("Failed to change to directory %s: %s", memberDir, err))
+				printer.Warning(fmt.Sprintf("Failed to change to directory %s: %s", appDir, err))
 				continue
 			}
 
-			// Run pull for this member
-			err = pullForMember(args, forceFlag)
+			// Run pull for this app
+			err = pullForApp(args, forceFlag)
 			if err != nil {
-				printer.Warning(fmt.Sprintf("Failed to pull for member %s: %s", memberDir, err))
+				printer.Warning(fmt.Sprintf("Failed to pull for app %s: %s", appDir, err))
 			}
 
 			// Change back to original directory
@@ -96,11 +96,11 @@ func RunPull(args []string, forceFlag bool) error {
 	}
 
 	// If not a monorepo, proceed with regular pull
-	return pullForMember(args, forceFlag)
+	return pullForApp(args, forceFlag)
 }
 
-// pullForMember contains the original pull logic
-func pullForMember(args []string, forceFlag bool) error {
+// pullForApp contains the original pull logic
+func pullForApp(args []string, forceFlag bool) error {
 	db, err := database.Restore()
 	if err != nil {
 		return err

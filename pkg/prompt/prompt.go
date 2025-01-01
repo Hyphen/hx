@@ -63,7 +63,7 @@ func PromptString(cmd *cobra.Command, prompt string) (string, error) {
 
 	noFlag, _ := cmd.Flags().GetBool("no")
 	if noFlag {
-		return "", fmt.Errorf("operation cancelled due to --no flag")
+		return "", fmt.Errorf("Operation cancelled due to --no flag")
 	}
 
 	reader := bufio.NewReader(os.Stdin)
@@ -86,7 +86,7 @@ func PromptPassword(cmd *cobra.Command, prompt string) (string, error) {
 	fmt.Print(prompt)
 	noFlag, _ := cmd.Flags().GetBool("no")
 	if noFlag {
-		return "", fmt.Errorf("operation cancelled due to --no flag")
+		return "", fmt.Errorf("Oeration cancelled due to --no flag")
 	}
 
 	byteKey, err := term.ReadPassword(int(syscall.Stdin))
@@ -103,7 +103,7 @@ func PromptDir(cmd *cobra.Command, prompt string, mustExist bool) (string, error
 
 	noFlag, _ := cmd.Flags().GetBool("no")
 	if noFlag {
-		return "", fmt.Errorf("operation cancelled due to --no flag")
+		return "", fmt.Errorf("Operation cancelled due to --no flag")
 	}
 
 	reader := bufio.NewReader(os.Stdin)
