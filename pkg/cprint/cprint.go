@@ -38,56 +38,32 @@ func Error(cmd *cobra.Command, err error, verbose bool) {
 	}
 }
 
-func Info(message string, verbose bool) {
-	if verbose {
-		fmt.Printf("%s %s\n", cyan("ℹ"), white(message))
-	} else {
-		fmt.Println(message)
-	}
+func Info(message string) {
+	fmt.Printf("%s %s\n", cyan("ℹ"), white(message))
 }
 
-func YellowPrint(message string, verbose bool) {
-	if verbose {
-		fmt.Printf("%s\n", yellow(message))
-	} else {
-		fmt.Println(message)
-	}
+func YellowPrint(message string) {
+	fmt.Printf("%s\n", yellow(message))
 }
 
-func GreenPrint(message string, verbose bool) {
-	if verbose {
-		fmt.Printf("%s\n", green(message))
-	} else {
-		fmt.Println(message)
-	}
+func GreenPrint(message string) {
+	fmt.Printf("%s\n", green(message))
 }
 
-func Print(message string, verbose bool) {
-	if verbose {
-		fmt.Printf("%s\n", white(message))
-	} else {
-		fmt.Println(message)
-	}
+func Print(message string) {
+	fmt.Printf("%s\n", white(message))
 }
 
 func PrintNorm(message string) {
 	fmt.Println(message)
 }
 
-func Success(message string, verbose bool) {
-	if verbose {
-		fmt.Printf("%s %s\n", green("✅"), white(message))
-	} else {
-		fmt.Println(message)
-	}
+func Success(message string) {
+	fmt.Printf("%s %s\n", green("✅"), white(message))
 }
 
-func Warning(message string, verbose bool) {
-	if verbose {
-		fmt.Printf("%s %s\n", yellow("⚠"), white(message))
-	} else {
-		fmt.Println("WARNING:", message)
-	}
+func Warning(message string) {
+	fmt.Printf("%s %s\n", yellow("⚠"), white(message))
 }
 
 func OrganizationInfo(orgID string, verbose bool) {
@@ -100,48 +76,36 @@ func OrganizationInfo(orgID string, verbose bool) {
 }
 
 func Prompt(message string, verbose bool) {
-	if verbose {
-		fmt.Print(yellow(message))
-	} else {
-		fmt.Print(message)
-	}
+	fmt.Print(yellow(message))
 }
 
-func PrintHeader(message string, verbose bool) {
-	if verbose {
-		fmt.Printf("\n%s\n", yellow(message))
-	} else {
-		fmt.Println(message)
-	}
+func PrintHeader(message string) {
+	fmt.Printf("\n%s\n", yellow(message))
 }
 
-func PrintDetail(label, value string, verbose bool) {
-	if verbose {
-		fmt.Printf("   %s %s\n", white(label+":"), cyan(value))
-	} else {
-		fmt.Printf("%s: %s\n", label, value)
-	}
+func PrintDetail(label, value string) {
+	fmt.Printf("   %s %s\n", white(label+":"), cyan(value))
 }
 
 // CPrinter methods
 func (p *CPrinter) Error(cmd *cobra.Command, err error) {
-	Error(cmd, err, true) //issues/168 introduce always emoji
+	Error(cmd, err, true)
 }
 
 func (p *CPrinter) Info(message string) {
-	Info(message, true) //issues/168 introduce always emoji
+	Info(message)
 }
 
 func (p *CPrinter) YellowPrint(message string) {
-	YellowPrint(message, p.verbose)
+	YellowPrint(message)
 }
 
 func (p *CPrinter) GreenPrint(message string) {
-	GreenPrint(message, p.verbose)
+	GreenPrint(message)
 }
 
 func (p *CPrinter) Print(message string) {
-	Print(message, p.verbose)
+	Print(message)
 }
 
 func (p *CPrinter) PrintNorm(message string) {
@@ -149,11 +113,11 @@ func (p *CPrinter) PrintNorm(message string) {
 }
 
 func (p *CPrinter) Success(message string) {
-	Success(message, true) //issues/168 introduce always emoji
+	Success(message) //issues/168 introduce always emoji
 }
 
 func (p *CPrinter) Warning(message string) {
-	Warning(message, p.verbose)
+	Warning(message)
 }
 
 func (p *CPrinter) OrganizationInfo(orgID string) {
@@ -165,9 +129,9 @@ func (p *CPrinter) Prompt(message string) {
 }
 
 func (p *CPrinter) PrintHeader(message string) {
-	PrintHeader(message, p.verbose)
+	PrintHeader(message)
 }
 
 func (p *CPrinter) PrintDetail(label, value string) {
-	PrintDetail(label, value, p.verbose)
+	PrintDetail(label, value)
 }
