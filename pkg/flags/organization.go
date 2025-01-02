@@ -21,7 +21,7 @@ func GetOrganizationID() (string, error) {
 	}
 
 	if !isGlobalOrgIdSameAsLocal() {
-		cprint.Warning("The app organization ID is different from the global organization ID. This could lead to unexpected behavior.", VerboseFlag)
+		cprint.Warning("The app organization ID is different from the global organization ID. This could lead to unexpected behavior.")
 	}
 
 	return m.OrganizationId, nil

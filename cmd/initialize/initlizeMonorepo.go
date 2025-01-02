@@ -61,6 +61,11 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 			continue
 		}
 
+		if _, err := os.Stat(cleanPath); os.IsNotExist(err) {
+			printer.Error(cmd, fmt.Errorf("directory does not exist: %s", cleanPath))
+			continue
+		}
+
 		currentDir, err := os.Getwd()
 		if err != nil {
 			printer.Error(cmd, fmt.Errorf("Failed to get current directory: %w", err))
