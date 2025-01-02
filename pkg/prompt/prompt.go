@@ -86,7 +86,7 @@ func PromptPassword(cmd *cobra.Command, prompt string) (string, error) {
 	fmt.Print(prompt)
 	noFlag, _ := cmd.Flags().GetBool("no")
 	if noFlag {
-		return "", fmt.Errorf("Oeration cancelled due to --no flag")
+		return "", fmt.Errorf("Operation cancelled due to --no flag")
 	}
 
 	byteKey, err := term.ReadPassword(int(syscall.Stdin))
