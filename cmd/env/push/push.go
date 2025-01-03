@@ -2,6 +2,7 @@ package push
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/Hyphen/cli/internal/database"
@@ -54,6 +55,54 @@ func RunPush(args []string, secretKeyId int64) error {
 		return err
 	}
 
+	// Check if this is a monorepo
+	if manifest.IsMonorepoProject() && manifest.Project != nil {
+		// Store current directory
+		currentDir, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get current directory: %w", err)
+		}
+
+		// Push for each workspace member
+		for _, memberDir := range manifest.Project.Apps {
+			if !Silent {
+				printer.Print(fmt.Sprintf("Pushing for workspace member: %s", memberDir))
+			}
+
+			// Change to member directory
+			err = os.Chdir(memberDir)
+			if err != nil {
+				printer.Warning(fmt.Sprintf("Failed to change to directory %s: %s", memberDir, err))
+				continue
+			}
+
+			// Run push for this member
+			err = pushForMember(args, secretKeyId)
+			if err != nil {
+				printer.Warning(fmt.Sprintf("Failed to push for member %s: %s", memberDir, err))
+			}
+
+			// Change back to original directory
+			err = os.Chdir(currentDir)
+			if err != nil {
+				return fmt.Errorf("failed to return to original directory: %w", err)
+			}
+		}
+
+		return nil
+	}
+
+	// If not a monorepo, proceed with regular push
+	return pushForMember(args, secretKeyId)
+}
+
+// pushForMember contains the original push logic
+func pushForMember(args []string, secretKeyId int64) error {
+	manifest, err := manifest.Restore()
+	if err != nil {
+		return err
+	}
+
 	db, err := database.Restore()
 	if err != nil {
 		return err
@@ -78,6 +127,7 @@ func RunPush(args []string, secretKeyId int64) error {
 
 	var envsToPush []string
 	var envsPushed []string
+	var skippedEnvs []string
 	if len(args) == 1 {
 		envsToPush = append(envsToPush, args[0])
 	} else {
@@ -90,13 +140,14 @@ func RunPush(args []string, secretKeyId int64) error {
 	if err := service.checkIfLocalEnvsExistAsEnvironments(envsToPush, orgId, projectId); err != nil {
 		return err
 	}
+
 	for _, envName := range envsToPush {
 		e, err := env.GetLocalEncryptedEnv(envName, nil, manifest)
 		if err != nil {
 			printer.Error(nil, err)
 			continue
 		}
-		err, skippable := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey(), manifest, secretKeyId)
+		err, skippable := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey(), manifest, secretKeyId, &skippedEnvs)
 		if err != nil {
 			printer.Error(nil, err)
 			continue
@@ -106,7 +157,7 @@ func RunPush(args []string, secretKeyId int64) error {
 	}
 
 	if !Silent {
-		printPushSummary(envsToPush, envsPushed)
+		printPushSummary(envsToPush, envsPushed, skippedEnvs)
 	}
 	return nil
 }
@@ -123,7 +174,7 @@ func newService(envService env.EnvServicer, db database.Database) *service {
 	}
 }
 
-func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secretkey.SecretKeyer, m manifest.Manifest, secretKeyId int64) (err error, skippable bool) {
+func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secretkey.SecretKeyer, m manifest.Manifest, secretKeyId int64, skippedEnvs *[]string) (err error, skippable bool) {
 	// Check local environment
 	currentLocalEnv, exists := s.db.GetSecret(database.SecretKey{
 		ProjectId: *m.ProjectId,
@@ -136,9 +187,7 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 			return err, false
 		}
 		if skippable && m.SecretKeyId == secretKeyId {
-			if !Silent {
-				printer.Info(fmt.Sprintf("Local %s environment is already up to date - skipping", envName))
-			}
+			*skippedEnvs = append(*skippedEnvs, envName)
 			return nil, true
 		}
 	}
@@ -219,17 +268,24 @@ func (s *service) getLocalEnvsNamesFromFiles() ([]string, error) {
 	return envs, nil
 }
 
-func printPushSummary(envsToPush []string, envsPushed []string) {
+func printPushSummary(envsToPush []string, envsPushed []string, skippedEnvs []string) {
 	if len(envsToPush) > 1 {
-		printer.PrintDetail("Local environments", strings.Join(envsToPush, ", "))
 		if len(envsPushed) > 0 {
-			printer.PrintDetail("Environments pushed", strings.Join(envsPushed, ", "))
+			printer.Success(fmt.Sprintf("%s %s", "pushed: ", strings.Join(envsPushed, ", ")))
 		} else {
-			printer.PrintDetail("Environments pushed", "None")
+			printer.Success("pushed: everything is up to date")
+		}
+		if flags.VerboseFlag {
+			if len(skippedEnvs) > 0 {
+				printer.PrintDetail("skipped", strings.Join(skippedEnvs, ", "))
+			} else {
+				printer.PrintDetail("skipped", "None")
+			}
 		}
 	} else {
 		if len(envsToPush) == 1 && len(envsPushed) == 1 {
 			printer.Success(fmt.Sprintf("Successfully pushed environment '%s'", envsToPush[0]))
 		}
 	}
+
 }

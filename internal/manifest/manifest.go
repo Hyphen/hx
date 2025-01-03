@@ -34,7 +34,23 @@ type Config struct {
 	ExpiryTime         *int64      `json:"expiry_time,omitempty"`
 	HyphenAPIKey       *string     `json:"hyphen_api_key,omitempty"`
 	IsMonorepo         *bool       `json:"is_monorepo,omitempty"`
+	Project            *Project    `json:"project,omitempty"`
 	Database           interface{} `json:"database,omitempty"`
+}
+
+func (c *Config) IsMonorepoProject() bool {
+	if c.IsMonorepo != nil && *c.IsMonorepo {
+		return true
+	}
+	return false
+}
+
+type Project struct {
+	Apps []string `json:"app"`
+}
+
+func (w *Project) AddApp(appDir string) {
+	w.Apps = append(w.Apps, appDir)
 }
 
 type Manifest struct {
@@ -65,17 +81,9 @@ func LocalInitialize(mc Config) (Manifest, error) {
 		return Manifest{}, errors.Wrap(err, "Failed to initialize manifest config")
 	}
 
-	var ms Secret
-	if _, err := os.Stat(ManifestSecretFile); err == nil {
-		ms, err = RestoreSecretFromFile(ManifestSecretFile)
-		if err != nil {
-			return Manifest{}, errors.Wrap(err, "Failed to restore manifest secret from file")
-		}
-	} else {
-		ms, err = InitializeSecret(ManifestSecretFile)
-		if err != nil {
-			return Manifest{}, errors.Wrap(err, "Failed to initialize manifest secret")
-		}
+	ms, err := loadSecret()
+	if err != nil {
+		return Manifest{}, fmt.Errorf("failed to load manifest secret: %w", err)
 	}
 
 	m := Manifest{
@@ -84,6 +92,24 @@ func LocalInitialize(mc Config) (Manifest, error) {
 	}
 
 	return m, nil
+}
+func loadSecret() (Secret, error) {
+	// Try loading from manifest file first
+	if _, err := os.Stat(ManifestSecretFile); err == nil {
+		secret, err := RestoreSecretFromFile(ManifestSecretFile)
+		if err == nil {
+			return secret, nil
+		}
+	}
+
+	// Try loading from monorepo
+	secret, err := RestoreSecretFromMonorepo()
+	if err == nil {
+		return secret, nil
+	}
+
+	// Finally, try initializing new secret
+	return InitializeSecret(ManifestSecretFile)
 }
 
 func GlobalInitializeConfig(mc Config) error {
@@ -106,6 +132,9 @@ func GetGlobalDirectory() string {
 func UpsertGlobalConfig(mc Config) error {
 	globDir := GetGlobalDirectory()
 
+	mc.IsMonorepo = nil //this should always be nil in the global config
+	mc.Project = nil    //this should always be nil in the global config
+
 	if err := FS.MkdirAll(globDir, 0755); err != nil {
 		return errors.Wrap(err, "Failed to create global directory")
 	}
@@ -122,6 +151,41 @@ func UpsertGlobalConfig(mc Config) error {
 		return errors.Wrap(err, "Failed to save manifest")
 	}
 
+	return nil
+}
+
+func UpsertLocalWorkspace(workspace Project) error {
+	localConfig, err := RestoreLocalConfig()
+	if err != nil {
+		return errors.Wrap(err, "Failed to restore local config")
+	}
+	localConfig.Project = &workspace
+	jsonData, err := json.MarshalIndent(localConfig, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "Failed to marshal manifest to JSON")
+	}
+	if err := FS.WriteFile(ManifestConfigFile, jsonData, 0644); err != nil {
+		return errors.Wrap(err, "Failed to save manifest")
+	}
+	return nil
+}
+
+func AddAppToLocalProject(appDir string) error {
+	localConfig, err := RestoreLocalConfig()
+	if err != nil {
+		return errors.Wrap(err, "Failed to restore local config")
+	}
+	if localConfig.Project == nil {
+		localConfig.Project = &Project{}
+	}
+	localConfig.Project.AddApp(appDir)
+	jsonData, err := json.MarshalIndent(localConfig, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "Failed to marshal manifest to JSON")
+	}
+	if err := FS.WriteFile(ManifestConfigFile, jsonData, 0644); err != nil {
+		return errors.Wrap(err, "Failed to save manifest")
+	}
 	return nil
 }
 
@@ -222,7 +286,7 @@ func RestoreSecretFromMonorepo() (Secret, error) {
 		config, err := readAndUnmarshalConfigJSON[Config](configPath)
 
 		// If we can read the config and it's a monorepo
-		if err == nil && config.IsMonorepo != nil && *config.IsMonorepo {
+		if err == nil && config.IsMonorepoProject() {
 			// Look for .hxkey in the same directory
 			secretPath := filepath.Join(currentDir, ManifestSecretFile)
 			secret, err := readAndUnmarshalConfigJSON[Secret](secretPath)
