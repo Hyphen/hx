@@ -83,14 +83,14 @@ jobs:
 
       - name: Upload binaries for Unix-like systems
         if: runner.os != 'Windows'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: hyphen-${{ env.VERSION }}-${{ matrix.arch }}
           path: hyphen-${{ env.VERSION }}-${{ matrix.arch }}
 
       - name: Upload binaries for Windows
         if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: hyphen-${{ env.VERSION }}-${{ matrix.arch }}
           path: artifacts/hyphen-${{ env.VERSION }}-${{ matrix.arch }}.exe
