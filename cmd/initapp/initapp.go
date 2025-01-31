@@ -10,6 +10,7 @@ import (
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -69,10 +70,22 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	orgID, err := flags.GetOrganizationID()
+	if err != nil {
+		printer.Error(cmd, err)
+		return
+	}
 	appService := app.NewService()
 	envService := env.NewService()
+	projectService := projects.NewService(orgID)
 
-	orgID, err := flags.GetOrganizationID()
+	projectID, err := flags.GetProjectID()
+	if err != nil {
+		printer.Error(cmd, err)
+		return
+	}
+
+	p, err := projectService.GetProject(projectID)
 	if err != nil {
 		printer.Error(cmd, err)
 		return
@@ -111,12 +124,7 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	if mc.ProjectId == nil {
-		printer.Error(cmd, fmt.Errorf("No project found in .hx file"))
-		return
-	}
-
-	newApp, err := appService.CreateApp(orgID, *mc.ProjectId, appAlternateId, appName)
+	newApp, err := appService.CreateApp(orgID, *p.ID, appAlternateId, appName)
 	if err != nil {
 		if !errors.Is(err, errors.ErrConflict) {
 			printer.Error(cmd, err)
@@ -137,9 +145,9 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 	}
 
 	mcl := manifest.Config{
-		ProjectId:          mc.ProjectId,
-		ProjectAlternateId: mc.ProjectAlternateId,
-		ProjectName:        mc.ProjectName,
+		ProjectId:          p.ID,
+		ProjectAlternateId: &p.AlternateID,
+		ProjectName:        &p.Name,
 		OrganizationId:     mc.OrganizationId,
 		AppName:            &newApp.Name,
 		AppAlternateId:     &newApp.AlternateId,
