@@ -315,7 +315,7 @@ func CreateGitignoredFile(cmd *cobra.Command, fileName string) error {
 
 func GetAppID(cmd *cobra.Command, appName string) string {
 	defaultAppAlternateId := GenerateDefaultAppId(appName)
-	appAlternateId := appIDFlag
+	appAlternateId, _ := cmd.Flags().GetString("id")
 	if appAlternateId == "" {
 		appAlternateId = defaultAppAlternateId
 	}
