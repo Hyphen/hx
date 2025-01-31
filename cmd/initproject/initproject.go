@@ -156,7 +156,7 @@ func GetProjectID(cmd *cobra.Command, projectName string) string {
 	err := projects.CheckProjectId(projectAlternateId)
 	if err != nil {
 		suggestedID := strings.TrimSpace(strings.Split(err.Error(), ":")[1])
-		response := prompt.PromptYesNo(cmd, fmt.Sprintf("Invalid app ID. Do you want to use the suggested ID [%s]?", suggestedID), true)
+		response := prompt.PromptYesNo(cmd, fmt.Sprintf("Invalid project ID. Do you want to use the suggested ID [%s]?", suggestedID), true)
 
 		if !response.Confirmed {
 			if response.IsFlag {
@@ -166,7 +166,7 @@ func GetProjectID(cmd *cobra.Command, projectName string) string {
 				// Prompt for a custom project ID
 				for {
 					var err error
-					projectAlternateId, err = prompt.PromptString(cmd, "Enter a custom app ID:")
+					projectAlternateId, err = prompt.PromptString(cmd, "Enter a custom project ID:")
 					if err != nil {
 						printer.Error(cmd, err)
 						return ""
@@ -176,7 +176,7 @@ func GetProjectID(cmd *cobra.Command, projectName string) string {
 					if err == nil {
 						return projectAlternateId
 					}
-					printer.Warning("Invalid app ID. Please try again.")
+					printer.Warning("Invalid project ID. Please try again.")
 				}
 			}
 		} else {
