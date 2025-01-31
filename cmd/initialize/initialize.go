@@ -15,30 +15,40 @@ var printer *cprint.CPrinter
 
 var InitCmd = &cobra.Command{
 	Use:   "init <app name>",
-	Short: "Initialize a new Hyphen application in the current directory",
+	Short: "Initialize a new Hyphen application or monorepo project in the current directory",
 	Long: `
-The init command sets up a new Hyphen application in your current directory.
+The init command sets up a new Hyphen application or monorepo project in your current directory.
 
 This command will:
-- Create a new application in Hyphen
+- Create a new application or project in Hyphen
 - Generate a local configuration file
 - Set up environment files for each project environment
 - Update .gitignore to exclude sensitive files
 
 If no app name is provided, it will prompt to use the current directory name.
 
+For single applications:
 The command will guide you through:
 - Confirming or entering an application name
 - Generating or providing an app ID
 - Creating necessary local files
 
-After initialization, you'll receive a summary of the new application, including its name, 
-ID, and associated organization.
+For monorepos (using --monorepo flag):
+The command will guide you through:
+- Setting up a project structure
+- Adding multiple applications within the project
+- Configuring each application with its own settings
+- Creating environment files for each application
+
+After initialization, you'll receive a summary of the new application(s), including name(s), 
+ID(s), and associated organization.
 
 Examples:
-  hyphen init
-  hyphen init "My New App"
-  hyphen init "My New App" --id my-custom-app-id
+  hyphen init                                    # Initialize single app
+  hyphen init "My New App"                       # Initialize single app with name
+  hyphen init "My New App" --id my-custom-app-id # Initialize single app with custom ID
+  hyphen init --monorepo                         # Initialize monorepo project
+  hyphen init "My Project" --monorepo            # Initialize monorepo with project name
 `,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -46,7 +56,6 @@ Examples:
 			runInitMonorepo(cmd, args)
 		} else {
 			initapp.RunInitApp(cmd, args)
-
 		}
 	},
 }
