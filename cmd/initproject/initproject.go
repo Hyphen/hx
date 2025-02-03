@@ -74,20 +74,27 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 
 	projectService := projects.NewService(orgID)
 
-	projectName, shouldContinue, err := GetProjectName(cmd, args)
-	if err != nil {
-		printer.Error(cmd, err)
-		os.Exit(1)
-	}
-	if !shouldContinue {
-		os.Exit(0)
-	}
+	pid, _ := cmd.Flags().GetString("id")
 
-	projectAlternateId := GetProjectID(cmd, projectName)
-	if projectAlternateId == "" {
-		os.Exit(0)
-	}
+	var proj *projects.Project
+	if pid != "" {
+		exists, err := projectService.DoesProjectExist(pid)
+		if err != nil {
+			printer.Error(cmd, err)
+			os.Exit(1)
+		}
 
+		if exists {
+			proj, err = HandleExistingProject(cmd, projectService, pid)
+		} else {
+			proj, err = CreateNewProject(cmd, args, projectService)
+		}
+
+		if err != nil {
+			printer.Error(cmd, err)
+			os.Exit(1)
+		}
+	}
 	if manifest.ExistsLocal() {
 		response := prompt.PromptYesNo(cmd, "Config file exists. Do you want to overwrite it?", false)
 		if !response.Confirmed {
@@ -100,36 +107,10 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	newProject := projects.Project{
-		Name:        projectName,
-		AlternateID: projectAlternateId,
-		IsMonorepo:  IsMonorepo,
-	}
-
-	createdProject, err := projectService.CreateProject(newProject)
-	if err != nil {
-		if !errors.Is(err, errors.ErrConflict) {
-			printer.Error(cmd, err)
-			os.Exit(1)
-		}
-
-		existingProject, handleErr := HandleExistingProject(cmd, projectService, projectAlternateId)
-		if handleErr != nil {
-			printer.Error(cmd, handleErr)
-			os.Exit(1)
-		}
-		if existingProject == nil {
-			printer.Info("Operation cancelled.")
-			os.Exit(0)
-		}
-
-		createdProject = *existingProject
-	}
-
 	mcl := manifest.Config{
-		ProjectId:          createdProject.ID,
-		ProjectAlternateId: &createdProject.AlternateID,
-		ProjectName:        &createdProject.Name,
+		ProjectId:          proj.ID,
+		ProjectAlternateId: &proj.AlternateID,
+		ProjectName:        &proj.Name,
 		OrganizationId:     orgID,
 	}
 	mcl.IsMonorepo = ptr.Bool(IsMonorepo)
@@ -143,7 +124,7 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 	if err := gitutil.EnsureGitignore(manifest.ManifestSecretFile); err != nil {
 		printer.Error(cmd, fmt.Errorf("error adding .hxkey to .gitignore: %w. Please do this manually if you wish", err))
 	}
-	PrintInitializationSummary(createdProject.Name, createdProject.AlternateID, *createdProject.ID, orgID)
+	PrintInitializationSummary(proj.Name, proj.AlternateID, *proj.ID, orgID)
 }
 
 func GetProjectID(cmd *cobra.Command, projectName string) string {
@@ -229,6 +210,10 @@ func HandleExistingProject(cmd *cobra.Command, projectService projects.ProjectSe
 		return nil, err
 	}
 
+	if IsMonorepo && !existingProject.IsMonorepo {
+		return nil, errors.New("Existing project is not a monorepo project")
+	}
+
 	printer.Info(fmt.Sprintf("Using existing project '%s' (%s)", existingProject.Name, existingProject.AlternateID))
 	return &existingProject, nil
 }
@@ -262,4 +247,49 @@ func GetProjectName(cmd *cobra.Command, args []string) (string, bool, error) {
 	}
 
 	return dirName, true, nil
+}
+
+func CreateNewProject(cmd *cobra.Command, args []string, ps projects.ProjectService) (*projects.Project, error) {
+
+	projectName, shouldContinue, err := GetProjectName(cmd, args)
+	if err != nil {
+		printer.Error(cmd, err)
+		os.Exit(1)
+	}
+	if !shouldContinue {
+		os.Exit(0)
+	}
+
+	projectAlternateId := GetProjectID(cmd, projectName)
+	if projectAlternateId == "" {
+		os.Exit(0)
+	}
+
+	newProject := projects.Project{
+		Name:        projectName,
+		AlternateID: projectAlternateId,
+		IsMonorepo:  IsMonorepo,
+	}
+
+	createdProject, err := ps.CreateProject(newProject)
+	if err != nil {
+		if !errors.Is(err, errors.ErrConflict) {
+			printer.Error(cmd, err)
+			os.Exit(1)
+		}
+
+		existingProject, handleErr := HandleExistingProject(cmd, ps, projectAlternateId)
+		if handleErr != nil {
+			printer.Error(cmd, handleErr)
+			os.Exit(1)
+		}
+		if existingProject == nil {
+			printer.Info("Operation cancelled.")
+			os.Exit(0)
+		}
+
+		createdProject = *existingProject
+	}
+
+	return &createdProject, nil
 }

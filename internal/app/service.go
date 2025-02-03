@@ -17,6 +17,7 @@ type AppServicer interface {
 	CreateApp(organizationID, projectID, alternateID, name string) (App, error)
 	GetApp(organizationID, appID string) (App, error)
 	DeleteApp(organizationID, appID string) error
+	DoesAppExist(organizationID, appID string) (bool, error)
 }
 
 type AppService struct {
@@ -166,4 +167,29 @@ func (ps *AppService) DeleteApp(organizationID, appID string) error {
 	}
 
 	return nil
+}
+
+func (ps *AppService) DoesAppExist(organizationID, appID string) (bool, error) {
+	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/", ps.baseUrl, organizationID, appID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, errors.Wrap(err, "Failed to create request")
+	}
+
+	resp, err := ps.httpClient.Do(req)
+	if err != nil {
+		return false, errors.Wrap(err, "Request failed")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		return true, nil
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return false, nil
+	}
+
+	return false, errors.HandleHTTPError(resp)
 }
