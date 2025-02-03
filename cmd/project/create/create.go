@@ -3,15 +3,19 @@ package create
 import (
 	"fmt"
 	"strings"
-	"unicode"
 
+	"github.com/Hyphen/cli/cmd/initproject"
 	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
 
-var printer *cprint.CPrinter
+var (
+	printer       *cprint.CPrinter
+	isMonorepo    bool
+	projectIDFlag string
+)
 
 var ProjectCreateCmd = &cobra.Command{
 	Use:   "create [name]",
@@ -20,30 +24,17 @@ var ProjectCreateCmd = &cobra.Command{
 The project create command sets up a new project within your Hyphen organization.
 
 Usage:
-  hyphen project create [name]
+  hyphen project create [name] [--monorepo] [--id project-id]
 
 This command allows you to:
 - Create a new project with a specified name
-- Automatically generate an alternate ID based on the project name
-
-The project name:
-- Can include spaces and special characters
-- Will be trimmed of leading/trailing spaces and quotes
-
-The alternate ID:
-- Is automatically generated from the project name
-- Contains only alphanumeric characters and hyphens
-- Replaces spaces with hyphens and removes other special characters
-
-After creation, you'll receive a summary of the new project, including its:
-- Name
-- ID (assigned by Hyphen)
-- Alternate ID (generated from the name)
+- Create a monorepo project using the --monorepo flag
+- Specify a custom project ID using the --id flag
 
 Example:
   hyphen project create "My New Project"
-
-This will create a project named "My New Project" with an alternate ID like "my-new-project".
+  hyphen project create "My Monorepo Project" --monorepo
+  hyphen project create "Custom ID Project" --id my-custom-id
 `,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -60,23 +51,26 @@ This will create a project named "My New Project" with an alternate ID like "my-
 		name = strings.Trim(name, "\"")
 		name = strings.Trim(name, "'")
 
-		// Ensure the alternate ID is alphanumeric and replaces spaces with hyphens
-		alternateId := strings.Map(func(r rune) rune {
-			if unicode.IsLetter(r) || unicode.IsDigit(r) {
-				return r
-			} else if r == ' ' {
-				return '-'
-			}
-			return -1 // Strip out any other non-alphanumeric characters
-		}, name)
+		alternateId := initproject.GetProjectID(cmd, name)
+		if alternateId == "" {
+			return
+		}
 
 		service := projects.NewService(orgId)
+
+		// Check if project exists first
+		_, err = service.GetProject(alternateId)
+		if err == nil {
+			printer.Error(cmd, fmt.Errorf("project with ID '%s' already exists", alternateId))
+			return
+		}
+
 		project := projects.Project{
 			Name:        name,
 			AlternateID: alternateId,
+			IsMonorepo:  isMonorepo,
 		}
 
-		// Call the service to create the project
 		newProject, err := service.CreateProject(project)
 		if err != nil {
 			printer.Error(cmd, fmt.Errorf("failed to create project: %w", err))
@@ -84,9 +78,14 @@ This will create a project named "My New Project" with an alternate ID like "my-
 		}
 
 		printer.GreenPrint(fmt.Sprintf("Project '%s' created successfully!", name))
-
 		printer.PrintDetail("Name", newProject.Name)
 		printer.PrintDetail("ID", *newProject.ID)
 		printer.PrintDetail("AlternateID", newProject.AlternateID)
+		printer.PrintDetail("Monorepo", fmt.Sprintf("%t", newProject.IsMonorepo))
 	},
+}
+
+func init() {
+	ProjectCreateCmd.Flags().BoolVarP(&isMonorepo, "monorepo", "m", false, "Create the project as a monorepo")
+	ProjectCreateCmd.Flags().StringVarP(&projectIDFlag, "id", "i", "", "Specify a custom project ID")
 }
