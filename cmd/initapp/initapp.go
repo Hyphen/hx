@@ -91,21 +91,6 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	appName, shouldContinue, err := GetAppName(cmd, args)
-	if err != nil {
-		printer.Error(cmd, err)
-		return
-	}
-	//If the operation is canceled
-	if !shouldContinue {
-		return
-	}
-
-	appAlternateId := GetAppID(cmd, appName)
-	if appAlternateId == "" {
-		return
-	}
-
 	if manifest.ExistsLocal() {
 		response := prompt.PromptYesNo(cmd, "Config file exists. Do you want to overwrite it?", false)
 		if !response.Confirmed {
@@ -124,24 +109,31 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	newApp, err := appService.CreateApp(orgID, *p.ID, appAlternateId, appName)
-	if err != nil {
-		if !errors.Is(err, errors.ErrConflict) {
+	aid, _ := cmd.Flags().GetString("id")
+
+	var newApp *app.App
+	if aid != "" {
+		exists, err := appService.DoesAppExist(orgID, aid)
+		if err != nil {
 			printer.Error(cmd, err)
-			return
+			os.Exit(1)
 		}
 
-		existingApp, handleErr := HandleExistingApp(cmd, *appService, orgID, appAlternateId)
-		if handleErr != nil {
-			printer.Error(cmd, handleErr)
-			return
+		if exists {
+			newApp, err = HandleExistingApp(cmd, *appService, orgID, aid)
+			if err != nil {
+				printer.Error(cmd, err)
+				os.Exit(1)
+			}
 		}
-		if existingApp == nil {
-			printer.Info("Operation cancelled.")
-			return
-		}
+	}
 
-		newApp = *existingApp
+	if newApp == nil {
+		newApp, err = CreateNewApp(cmd, *appService, orgID, args, p)
+		if err != nil {
+			printer.Error(cmd, err)
+			os.Exit(1)
+		}
 	}
 
 	mcl := manifest.Config{
@@ -397,4 +389,44 @@ func HandleExistingApp(cmd *cobra.Command, appService app.AppService, orgID, app
 
 	printer.Info(fmt.Sprintf("Using existing app '%s' (%s)", existingApp.Name, existingApp.AlternateId))
 	return &existingApp, nil
+}
+
+func CreateNewApp(cmd *cobra.Command, appService app.AppService, orgID string, args []string, p projects.Project) (*app.App, error) {
+
+	appName, shouldContinue, err := GetAppName(cmd, args)
+	if err != nil {
+		return nil, err
+	}
+	//If the operation is canceled
+	if !shouldContinue {
+		printer.Error(cmd, err)
+		os.Exit(1)
+	}
+
+	appAlternateId := GetAppID(cmd, appName)
+	if appAlternateId == "" {
+		os.Exit(0)
+	}
+
+	newApp, err := appService.CreateApp(orgID, *p.ID, appAlternateId, appName)
+	if err != nil {
+		if !errors.Is(err, errors.ErrConflict) {
+			printer.Error(cmd, err)
+			os.Exit(1)
+		}
+
+		existingApp, handleErr := HandleExistingApp(cmd, appService, orgID, appAlternateId)
+		if handleErr != nil {
+			printer.Error(cmd, handleErr)
+			os.Exit(1)
+		}
+		if existingApp == nil {
+			printer.Info("Operation cancelled.")
+			os.Exit(0)
+		}
+
+		newApp = *existingApp
+	}
+
+	return &newApp, nil
 }

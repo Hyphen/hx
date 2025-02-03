@@ -16,6 +16,7 @@ type ProjectServicer interface {
 	ListProjects() ([]Project, error)
 	GetProject(projectID string) (Project, error)
 	CreateProject(project Project) (Project, error)
+	DoesProjectExist(projectID string) (bool, error)
 }
 
 type ProjectService struct {
@@ -148,4 +149,29 @@ func (ps *ProjectService) CreateProject(project Project) (Project, error) {
 	}
 
 	return createdProject, nil
+}
+
+func (ps *ProjectService) DoesProjectExist(projectID string) (bool, error) {
+	url := fmt.Sprintf("%s/%s", ps.baseUrl, projectID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, errors.Wrap(err, "Failed to create request")
+	}
+
+	resp, err := ps.httpClient.Do(req)
+	if err != nil {
+		return false, errors.Wrap(err, "Request failed")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		return true, nil
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return false, nil
+	}
+
+	return false, errors.HandleHTTPError(resp)
 }
