@@ -148,7 +148,8 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 
 func GetProjectID(cmd *cobra.Command, projectName string) string {
 	defaultProjectAlternateId := GenerateDefaultProjectId(projectName)
-	projectAlternateId := projectIDFlag
+	projectAlternateId, _ := cmd.Flags().GetString("id")
+
 	if projectAlternateId == "" {
 		projectAlternateId = defaultProjectAlternateId
 	}
