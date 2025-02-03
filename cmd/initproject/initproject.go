@@ -86,10 +86,14 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 
 		if exists {
 			proj, err = HandleExistingProject(cmd, projectService, pid)
-		} else {
-			proj, err = CreateNewProject(cmd, args, projectService)
+			if err != nil {
+				printer.Error(cmd, err)
+				os.Exit(1)
+			}
 		}
-
+	}
+	if proj == nil {
+		proj, err = CreateNewProject(cmd, args, projectService)
 		if err != nil {
 			printer.Error(cmd, err)
 			os.Exit(1)
