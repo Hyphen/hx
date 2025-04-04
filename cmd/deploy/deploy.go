@@ -145,16 +145,7 @@ Use 'hyphen link --help' for more information about available flags.
 				timestamp := time.UnixMilli(data.Timestamp)
 				formattedTime := timestamp.Format("15:04:05")
 				log := fmt.Sprintf("[%s] %s: %s", formattedTime, data.Level, data.Message)
-				switch data.Level {
-				case "info":
-					printer.Info(log)
-				case "warn":
-					printer.Warning(log)
-				case "error":
-					printer.YellowPrint(log)
-				default:
-					printer.Print(log)
-				}
+				printer.PrintVerbose(log)
 			} else if _, ok := typeCheck["type"]; ok {
 				var data RunMessageData
 				err = json.Unmarshal(wsMessage.Data, &data)
