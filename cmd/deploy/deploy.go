@@ -154,14 +154,30 @@ Use 'hyphen link --help' for more information about available flags.
 				}
 				switch data.Type {
 				case "run":
+					if data.Status == "pending" {
+						// Update the top-level run variable
+						run, _ = service.GetDeploymentRun(orgId, selectedDeployment.ID, data.RunId)
+					}
 					printer.Print(fmt.Sprintf("[👟] Run %s", data.Status))
 					if data.Status == "succeeded" {
 						break messageListener
 					}
 				case "step":
-					printer.Print(fmt.Sprintf("[🪜] Step %s", data.Status))
+					result, found := FindStepOrTaskByID(run.Pipeline, data.Id)
+					if !found {
+						continue
+					}
+					if step, ok := result.(Deployment.Step); ok {
+						printer.Print(fmt.Sprintf("[🪜] %s: %s", step.Name, data.Status))
+					}
 				case "task":
-					printer.Print(fmt.Sprintf("[📃] Task %s", data.Status))
+					result, found := FindStepOrTaskByID(run.Pipeline, data.Id)
+					if !found {
+						continue
+					}
+					if task, ok := result.(Deployment.Task); ok {
+						printer.Print(fmt.Sprintf("[📃] Task %s: %s", task.Type, data.Status))
+					}
 				default:
 					// ignore unknown types
 				}
@@ -196,4 +212,33 @@ type RunMessageData struct {
 	RunId  string `json:"RunId"`
 	Id     string `json:"id"`
 	Status string `json:"status"`
+}
+
+func FindStepOrTaskByID(pipeline Deployment.Pipeline, id string) (interface{}, bool) {
+	// Helper function to recursively search steps
+	var searchSteps func(steps []Deployment.Step) (interface{}, bool)
+	searchSteps = func(steps []Deployment.Step) (interface{}, bool) {
+		for _, step := range steps {
+			// Check if the current step matches the ID
+			if step.ID == id {
+				return step, true
+			}
+
+			// Check tasks within the step
+			for _, task := range step.Tasks {
+				if task.ID == id {
+					return task, true
+				}
+			}
+
+			// Recursively search in parallel steps
+			if result, found := searchSteps(step.ParallelSteps); found {
+				return result, true
+			}
+		}
+		return nil, false
+	}
+
+	// Start searching from the top-level steps
+	return searchSteps(pipeline.Steps)
 }

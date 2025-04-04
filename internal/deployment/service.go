@@ -64,6 +64,38 @@ func (ds *DeploymentService) CreateRun(organizationId, deploymentId string) (*De
 	return &deploymentRun, nil
 }
 
+func (ds *DeploymentService) GetDeploymentRun(organizationId, deploymentId, runId string) (*DeploymentRun, error) {
+	url := fmt.Sprintf("%s/api/organizations/%s/deployments/%s/runs/%s", ds.baseUrl, organizationId, deploymentId, runId)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := ds.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, errors.HandleHTTPError(resp)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to read response body")
+	}
+
+	var deploymentRun DeploymentRun
+	err = json.Unmarshal(body, &deploymentRun)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to parse JSON response")
+	}
+
+	return &deploymentRun, nil
+}
+
 func (ds *DeploymentService) SearchDeployments(organizationId, nameOrId string, pageSize, pageNum int) ([]Deployment, error) {
 	queryParams := url.Values{}
 	queryParams.Set("pageNum", fmt.Sprintf("%d", pageNum))
