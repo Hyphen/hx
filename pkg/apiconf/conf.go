@@ -9,9 +9,19 @@ import (
 
 func GetBaseApixUrl() string {
 	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
-		return "https://dev-api.hyphen.ai"
+		// TODO: change this back
+		return "http://localhost:4000"
+		// return "https://dev-api.hyphen.ai"
 	}
 	return "https://api.hyphen.ai"
+}
+
+func GetBaseAppUrl() string {
+	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
+		return "http://localhost:3000"
+		// return "https://dev-app.hyphen.ai"
+	}
+	return "https://app.hyphen.ai"
 }
 
 func GetBaseAuthUrl() string {
