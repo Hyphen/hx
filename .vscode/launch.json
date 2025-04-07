@@ -18,6 +18,6 @@
       "deploy", "wopr dev"
     ],
     "showLog": true,
-    // "console": "integratedTerminal"
+    "console": "integratedTerminal"
   }]
 }

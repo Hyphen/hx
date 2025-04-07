@@ -11,6 +11,7 @@ import (
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/Hyphen/cli/pkg/prompt"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
 
@@ -98,120 +99,110 @@ Use 'hyphen link --help' for more information about available flags.
 		}
 		printer.Print(fmt.Sprintf("Run Details: %s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID))
 
-		client := httputil.NewHyphenHTTPClient()
-		conn, err := client.GetWebsocketConnection("ws://localhost:4000/api/websockets/eventStream")
-		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
-			return
+		statusModel := Deployment.StatusModel{
+			OrganizationId: orgId,
+			DeploymentId:   selectedDeployment.ID,
+			RunId:          run.ID,
+			Pipeline:       run.Pipeline,
+			Service:        *service,
 		}
-		defer conn.Close()
+		statusDisplay := tea.NewProgram(statusModel)
 
-		printer.Info("Streaming logs...")
-
-		conn.WriteJSON(
-			map[string]interface{}{
-				"eventStreamTopic": "deploymentRun",
-				"organizationId":   orgId,
-			},
-		)
-	messageListener:
-		for {
-			_, message, err := conn.ReadMessage()
+		go func() {
+			client := httputil.NewHyphenHTTPClient()
+			conn, err := client.GetWebsocketConnection("ws://localhost:4000/api/websockets/eventStream")
 			if err != nil {
-				printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
-				break
+				printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
+				return
 			}
+			defer conn.Close()
+			conn.WriteJSON(
+				map[string]interface{}{
+					"eventStreamTopic": "deploymentRun",
+					"organizationId":   orgId,
+				},
+			)
+		messageListener:
+			for {
+				_, message, err := conn.ReadMessage()
+				if err != nil {
+					printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
+					break
+				}
 
-			var wsMessage WebSocketMessage
-			err = json.Unmarshal(message, &wsMessage)
-			if err != nil {
-				continue
-			}
-
-			var typeCheck map[string]interface{}
-			err = json.Unmarshal(wsMessage.Data, &typeCheck)
-			if err != nil {
-				printer.Error(cmd, fmt.Errorf("error unmarshalling Data for type check: %w", err))
-				continue
-			}
-
-			if _, ok := typeCheck["level"]; ok {
-				var data LogMessageData
-				err = json.Unmarshal(wsMessage.Data, &data)
+				var wsMessage Deployment.WebSocketMessage
+				err = json.Unmarshal(message, &wsMessage)
 				if err != nil {
 					continue
 				}
 
-				timestamp := time.UnixMilli(data.Timestamp)
-				formattedTime := timestamp.Format("15:04:05")
-				log := fmt.Sprintf("[%s] %s: %s", formattedTime, data.Level, data.Message)
-				printer.PrintVerbose(log)
-			} else if _, ok := typeCheck["type"]; ok {
-				var data RunMessageData
-				err = json.Unmarshal(wsMessage.Data, &data)
+				var typeCheck map[string]interface{}
+				err = json.Unmarshal(wsMessage.Data, &typeCheck)
 				if err != nil {
+					printer.Error(cmd, fmt.Errorf("error unmarshalling Data for type check: %w", err))
 					continue
 				}
-				switch data.Type {
-				case "run":
-					if data.Status == "pending" {
-						// Update the top-level run variable
-						run, _ = service.GetDeploymentRun(orgId, selectedDeployment.ID, data.RunId)
+
+				if _, ok := typeCheck["level"]; ok {
+					var data Deployment.LogMessageData
+					err = json.Unmarshal(wsMessage.Data, &data)
+					if err != nil {
+						continue
 					}
-					printer.Print(fmt.Sprintf("[👟] Run %s", data.Status))
-					if data.Status == "succeeded" {
+
+					timestamp := time.UnixMilli(data.Timestamp)
+					formattedTime := timestamp.Format("15:04:05")
+					log := fmt.Sprintf("[%s] %s: %s", formattedTime, data.Level, data.Message)
+					printer.PrintVerbose(log)
+				} else if _, ok := typeCheck["type"]; ok {
+					var data Deployment.RunMessageData
+					err = json.Unmarshal(wsMessage.Data, &data)
+					if err != nil {
+						continue
+					}
+
+					statusDisplay.Send(data)
+
+					if data.Type == "run" && (data.Status == "succeeded" || data.Status == "failed" || data.Status == "canceled") {
+						statusDisplay.Quit()
 						break messageListener
 					}
-				case "step":
-					result, found := FindStepOrTaskByID(run.Pipeline, data.Id)
-					if !found {
-						continue
-					}
-					if step, ok := result.(Deployment.Step); ok {
-						printer.Print(fmt.Sprintf("[🪜] %s: %s", step.Name, data.Status))
-					}
-				case "task":
-					result, found := FindStepOrTaskByID(run.Pipeline, data.Id)
-					if !found {
-						continue
-					}
-					if task, ok := result.(Deployment.Task); ok {
-						printer.Print(fmt.Sprintf("[📃] Task %s: %s", task.Type, data.Status))
-					}
-				default:
-					// ignore unknown types
+
+					// switch data.Type {
+					// case "run":
+					// 	if data.Status == "pending" {
+					// 		// Update the top-level run variable
+					// 		run, _ = service.GetDeploymentRun(orgId, selectedDeployment.ID, data.RunId)
+					// 	}
+					// 	printer.Print(fmt.Sprintf("[👟] Run %s", data.Status))
+					// 	if data.Status == "succeeded" {
+					// 		break messageListener
+					// 	}
+					// case "step":
+					// 	result, found := FindStepOrTaskByID(run.Pipeline, data.Id)
+					// 	if !found {
+					// 		continue
+					// 	}
+					// 	if step, ok := result.(Deployment.Step); ok {
+					// 		printer.Print(fmt.Sprintf("[🪜] %s: %s", step.Name, data.Status))
+					// 	}
+					// case "task":
+					// 	result, found := FindStepOrTaskByID(run.Pipeline, data.Id)
+					// 	if !found {
+					// 		continue
+					// 	}
+					// 	if task, ok := result.(Deployment.Task); ok {
+					// 		printer.Print(fmt.Sprintf("[📃] Task %s: %s", task.Type, data.Status))
+					// 	}
+					// default:
+					// 	// ignore unknown types
+					// }
 				}
 			}
-		}
+		}()
+		statusDisplay.Run()
+
 	},
-}
-
-type WebSocketMessage struct {
-	EventStreamTopic string          `json:"eventStreamTopic"`
-	OrganizationId   string          `json:"organizationId"`
-	Data             json.RawMessage `json:"data"`
-}
-
-// Define the first data type (current structure)
-type LogMessageData struct {
-	Level        string   `json:"level"`
-	Message      string   `json:"message"`
-	RunId        string   `json:"runId"`
-	Timestamp    int64    `json:"timestamp"`
-	Id           string   `json:"id"`
-	Parents      []string `json:"parents"`
-	Organization struct {
-		Id   string `json:"id"`
-		Name string `json:"name"`
-	} `json:"organization"`
-}
-
-// Define the second data type (new structure)
-type RunMessageData struct {
-	Type   string `json:"type"`
-	RunId  string `json:"RunId"`
-	Id     string `json:"id"`
-	Status string `json:"status"`
 }
 
 func FindStepOrTaskByID(pipeline Deployment.Pipeline, id string) (interface{}, bool) {
