@@ -2,11 +2,11 @@ package build
 
 import (
 	"fmt"
-	"os/exec"
 
 	"github.com/Hyphen/cli/internal/build"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/dockerutil"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
@@ -50,7 +50,7 @@ Use 'hyphen link --help' for more information about available flags.
 		}
 
 		// Check for docker
-		isDockerAvailable := CheckForDocker()
+		isDockerAvailable := dockerutil.IsDockerAvaliable()
 		if !isDockerAvailable {
 			printer.Error(cmd, fmt.Errorf("docker is not installed or not in PATH"))
 			return
@@ -58,20 +58,30 @@ Use 'hyphen link --help' for more information about available flags.
 		printer.Info("Docker is available. Proceeding with the build process.")
 
 		// Try to find a docker file to run
+		dockerfilePath, err := dockerutil.FindDockerFile()
+		if err != nil || dockerfilePath == "" {
+			printer.Error(cmd, fmt.Errorf("no docker file found. Dynamic builds are not supported yet"))
+			return
+		}
+
+		registerUrl := "deploydevelopmentregistry.azurecr.io"
 		commitSha := "1b3d5f"
-		dockerFile := "us-docker.pkg.dev/hyphenai/public/deploy-demo"
+		//imageUrl := "us-docker.pkg.dev/hyphenai/public/deploy-demo"
+
 		// Run build on the docker file
 
+		name, dockerBuildOutput, err := dockerutil.Build(dockerfilePath, *manifest.AppAlternateId, commitSha)
+		if err != nil {
+			printer.Error(cmd, fmt.Errorf("failed to build docker image: %w", err))
+			return
+		}
+
+		printer.Info(dockerBuildOutput)
 		// push the image to a register
 
-		// Tell Hyphen about the build
-		service.CreateBuild(manifest.OrganizationId, *manifest.AppId, commitSha, dockerFile)
-	},
-}
+		containerUrl, err := dockerutil.Push(name, registerUrl)
 
-func CheckForDocker() bool {
-	if _, err := exec.LookPath("docker"); err != nil {
-		return false
-	}
-	return true
+		// Tell Hyphen about the build
+		service.CreateBuild(manifest.OrganizationId, *manifest.AppId, commitSha, containerUrl)
+	},
 }
