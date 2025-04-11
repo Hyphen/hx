@@ -1,4 +1,4 @@
-package Deployment
+package deployment
 
 import (
 	"encoding/json"

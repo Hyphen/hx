@@ -31,7 +31,7 @@ Usage:
 Examples:
 hyphen deploy deploy-dev
 
-Use 'hyphen link --help' for more information about available flags.
+Use 'hyphen deploy --help' for more information about available flags.
 `,
 	Args: cobra.RangeArgs(0, 1),
 	Run: func(cmd *cobra.Command, args []string) {

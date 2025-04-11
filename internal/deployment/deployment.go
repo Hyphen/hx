@@ -1,24 +1,21 @@
-package Deployment
+package deployment
+
+import common "github.com/Hyphen/cli/internal"
 
 type Deployment struct {
-	ID           string                `json:"id"`
-	Name         string                `json:"name"`
-	Description  string                `json:"description"`
-	Organization OrganizationReference `json:"organization"`
-}
-
-type OrganizationReference struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID           string                       `json:"id"`
+	Name         string                       `json:"name"`
+	Description  string                       `json:"description"`
+	Organization common.OrganizationReference `json:"organization"`
 }
 
 type DeploymentRun struct {
-	ID                 string                `json:"id"`
-	Status             string                `json:"status"`
-	DeploymentId       string                `json:"deploymentId"`
-	DeploymentSnapshot Deployment            `json:"deploymentSnapshot"`
-	Organization       OrganizationReference `json:"organization"`
-	Pipeline           Pipeline              `json:"pipeline"`
+	ID                 string                       `json:"id"`
+	Status             string                       `json:"status"`
+	DeploymentId       string                       `json:"deploymentId"`
+	DeploymentSnapshot Deployment                   `json:"deploymentSnapshot"`
+	Organization       common.OrganizationReference `json:"organization"`
+	Pipeline           Pipeline                     `json:"pipeline"`
 }
 
 type Step struct {
