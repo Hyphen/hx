@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/Hyphen/cli/internal/build"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
@@ -22,6 +23,12 @@ type DeploymentService struct {
 	httpClient httputil.Client
 }
 
+type AppSources struct {
+	AppId    string         `json:"appId"`
+	Artifact build.Artifact `json:"artifact,omitempty"`
+	BuildId  string         `json:"buildId,omitempty"`
+}
+
 func NewService() *DeploymentService {
 	baseUrl := apiconf.GetBaseApixUrl()
 	return &DeploymentService{
@@ -30,10 +37,13 @@ func NewService() *DeploymentService {
 	}
 }
 
-func (ds *DeploymentService) CreateRun(organizationId, deploymentId string) (*DeploymentRun, error) {
+func (ds *DeploymentService) CreateRun(organizationId, deploymentId string, appSources []AppSources) (*DeploymentRun, error) {
 	url := fmt.Sprintf("%s/api/organizations/%s/deployments/%s/runs", ds.baseUrl, organizationId, deploymentId)
 	//app_67af84d8cf5902a8f372bbcc
-	requestBody := []byte("{\"artifacts\":[{\"appId\":\"app_67af84d8cf5902a8f372bbcc\",\"image\":\"us-docker.pkg.dev/hyphenai/public/deploy-demo\"}]}")
+	//requestBody := []byte("{\"artifacts\":[{\"appId\":\"app_67af84d8cf5902a8f372bbcc\",\"image\":\"us-docker.pkg.dev/hyphenai/public/deploy-demo\"}]}")
+	requestBody, _ := json.Marshal(map[string]interface{}{
+		"artifacts": appSources,
+	})
 
 	req, err := http.NewRequest("POST", url, io.NopCloser(bytes.NewReader(requestBody)))
 	if err != nil {

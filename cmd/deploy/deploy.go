@@ -3,8 +3,8 @@ package deploy
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
+	"github.com/Hyphen/cli/internal/build"
 	Deployment "github.com/Hyphen/cli/internal/deployment"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
@@ -16,6 +16,7 @@ import (
 )
 
 var (
+	noBuild bool
 	printer *cprint.CPrinter
 )
 
@@ -90,9 +91,38 @@ Use 'hyphen deploy --help' for more information about available flags.
 			}
 		}
 
+		appSources := []Deployment.AppSources{
+			// {
+			// 	AppId: "app_67af84d8cf5902a8f372bbcc",
+			// 	Artifact: Deployment.Artifact{
+			// 		Type: "Docker",
+			// 		Image: Deployment.Image{
+			// 			//URI: "us-docker.pkg.dev/hyphenai/public/deploy-demo",
+			// 			URI: "deploydevelopmentregistry.azurecr.io/wopr:0f3f7c3",
+			// 		},
+			// 	},
+			// },
+		}
+
+		if noBuild {
+			// check for build ID
+		} else {
+			service := build.NewService()
+			result, err := service.RunBuild(printer, flags.VerboseFlag)
+			if err != nil {
+				printer.Error(cmd, err)
+				return
+			}
+			appSources = append(appSources, Deployment.AppSources{
+				AppId:    result.App.ID,
+				Artifact: result.Artifact,
+			},
+			)
+		}
+
 		printer.Print(fmt.Sprintf("Triggering a run of: %s", selectedDeployment.Name))
 
-		run, err := service.CreateRun(orgId, selectedDeployment.ID)
+		run, err := service.CreateRun(orgId, selectedDeployment.ID, appSources)
 		if err != nil {
 			printer.Error(cmd, fmt.Errorf("failed to create run: %w", err))
 			return
@@ -150,10 +180,11 @@ Use 'hyphen deploy --help' for more information about available flags.
 						continue
 					}
 
-					timestamp := time.UnixMilli(data.Timestamp)
-					formattedTime := timestamp.Format("15:04:05")
-					log := fmt.Sprintf("[%s] %s: %s", formattedTime, data.Level, data.Message)
-					printer.PrintVerbose(log)
+					// TODO: this should go in a second pane or something
+					// timestamp := time.UnixMilli(data.Timestamp)
+					// formattedTime := timestamp.Format("15:04:05")
+					// log := fmt.Sprintf("[%s] %s: %s", formattedTime, data.Level, data.Message)
+					// printer.PrintVerbose(log)
 				} else if _, ok := typeCheck["type"]; ok {
 					var data Deployment.RunMessageData
 					err = json.Unmarshal(wsMessage.Data, &data)
@@ -167,36 +198,6 @@ Use 'hyphen deploy --help' for more information about available flags.
 						statusDisplay.Quit()
 						break messageListener
 					}
-
-					// switch data.Type {
-					// case "run":
-					// 	if data.Status == "pending" {
-					// 		// Update the top-level run variable
-					// 		run, _ = service.GetDeploymentRun(orgId, selectedDeployment.ID, data.RunId)
-					// 	}
-					// 	printer.Print(fmt.Sprintf("[👟] Run %s", data.Status))
-					// 	if data.Status == "succeeded" {
-					// 		break messageListener
-					// 	}
-					// case "step":
-					// 	result, found := FindStepOrTaskByID(run.Pipeline, data.Id)
-					// 	if !found {
-					// 		continue
-					// 	}
-					// 	if step, ok := result.(Deployment.Step); ok {
-					// 		printer.Print(fmt.Sprintf("[🪜] %s: %s", step.Name, data.Status))
-					// 	}
-					// case "task":
-					// 	result, found := FindStepOrTaskByID(run.Pipeline, data.Id)
-					// 	if !found {
-					// 		continue
-					// 	}
-					// 	if task, ok := result.(Deployment.Task); ok {
-					// 		printer.Print(fmt.Sprintf("[📃] Task %s: %s", task.Type, data.Status))
-					// 	}
-					// default:
-					// 	// ignore unknown types
-					// }
 				}
 			}
 		}()
@@ -232,4 +233,8 @@ func FindStepOrTaskByID(pipeline Deployment.Pipeline, id string) (interface{}, b
 
 	// Start searching from the top-level steps
 	return searchSteps(pipeline.Steps)
+}
+
+func init() {
+	DeployCmd.Flags().BoolVar(&noBuild, "no-build", false, "Skip the build step")
 }
