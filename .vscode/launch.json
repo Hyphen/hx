@@ -15,7 +15,8 @@
       "HYPHEN_DEV": "true"
     },
     "args": [
-      "deploy", "wopr dev"
+      //"deploy", "wopr dev","--no-build" //"--verbose" //, "--no-build"
+     "build", //"--verbose"
     ],
     "showLog": true,
     "console": "integratedTerminal"

@@ -225,10 +225,16 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string,
 	}
 	printer.PrintVerbose("Docker image built successfully")
 
-	// make sure we are logged into the registry
-	err = dockerutil.Login(containerRegistry.Url, containerRegistry.Auth.Username, containerRegistry.Auth.Password)
-	if err != nil {
-		return nil, fmt.Errorf("failed to login to docker registry: %w", err)
+	// check to see if we need to login into the registry so we don't stomp creds
+	needsLogin := !dockerutil.IsLoggedIn(containerRegistry.Url)
+
+	if needsLogin {
+		// make sure we are logged into the registry
+		err = dockerutil.Login(containerRegistry.Url, containerRegistry.Auth.Username, containerRegistry.Auth.Password)
+		if err != nil {
+			return nil, fmt.Errorf("failed to login to docker registry: %w", err)
+		}
+		defer dockerutil.Logout(containerRegistry.Url)
 	}
 
 	// push the image to a register

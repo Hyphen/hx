@@ -1,6 +1,8 @@
 package dockerutil
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,6 +42,51 @@ func Login(registryUrl, username, password string) error {
 		return err
 	}
 	return nil
+}
+
+func Logout(registryUrl string) error {
+	fmt.Println("logging out")
+	cmd := exec.Command("docker", "logout", registryUrl)
+
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func IsLoggedIn(registryUrl string) bool {
+	// Get the path to the Docker config file
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	dockerConfigPath := filepath.Join(homeDir, ".docker", "config.json")
+
+	// Open the Docker config file
+	file, err := os.Open(dockerConfigPath)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+
+	// Parse the JSON content
+	var config map[string]interface{}
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		return false
+	}
+
+	// Check for the "auths" property and the registry URL
+	auths, ok := config["auths"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+
+	if _, exists := auths[registryUrl]; exists {
+		return true
+	}
+
+	return false
 }
 
 func Build(dockerFilePath, name, tag string, verbose bool) (string, string, error) {
