@@ -2,8 +2,10 @@ package deployment
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -43,8 +45,13 @@ type StatusModel struct {
 	Service        DeploymentService
 }
 
+var (
+	spinIcon = spinner.New()
+)
+
 func (m StatusModel) Init() tea.Cmd {
-	return nil
+	spinIcon.Spinner = spinner.Line
+	return spinIcon.Tick
 }
 
 func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -54,6 +61,10 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q", "esc":
 			return m, tea.Quit
 		}
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		spinIcon, cmd = spinIcon.Update(msg)
+		return m, cmd
 	case RunMessageData:
 		switch msg.Type {
 		case "run":
@@ -114,7 +125,7 @@ func getMarkerBasedOnStatus(status string) string {
 	case "Error":
 		return "[✗]"
 	case "Running":
-		return "[~]"
+		return fmt.Sprintf("[%s]", spinIcon.View())
 	default:
 		return "[ ]" // Default marker for unknown status
 	}
