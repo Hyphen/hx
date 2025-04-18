@@ -43,6 +43,7 @@ type StatusModel struct {
 	DeploymentId   string
 	RunId          string
 	Service        DeploymentService
+	AppUrl         string
 }
 
 var (
@@ -88,7 +89,11 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m StatusModel) View() string {
-	return m.RenderTree(m.Pipeline)
+	result := "-------------------------------------------------\n"
+	result += m.AppUrl + "\n"
+	result += "-------------------------------------------------\n"
+	result += m.RenderTree(m.Pipeline)
+	return result
 }
 
 func (m StatusModel) RenderTree(pipeLine Pipeline) string {

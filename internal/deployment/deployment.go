@@ -2,11 +2,26 @@ package deployment
 
 import common "github.com/Hyphen/cli/internal"
 
+type DeploymentAppSettings struct {
+	ProjectEnvironment common.ProjectEnvironmentReference `json:"projectEnvironment"`
+	Scale              string                             `json:"scale"`
+	Hostname           string                             `json:"hostname"`
+	Availability       string                             `json:"availability"`
+	Path               string                             `json:"path"`
+}
+
+type DeploymentApp struct {
+	Project            common.ProjectReference `json:"project"`
+	App                common.AppReference     `json:"app"`
+	DeploymentSettings DeploymentAppSettings   `json:"deploymentSettings"`
+}
+
 type Deployment struct {
 	ID           string                       `json:"id"`
 	Name         string                       `json:"name"`
 	Description  string                       `json:"description"`
 	Organization common.OrganizationReference `json:"organization"`
+	Apps         []DeploymentApp              `json:"apps"`
 }
 
 type DeploymentRun struct {

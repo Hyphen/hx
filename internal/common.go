@@ -22,6 +22,12 @@ type ProjectEnvironmentWithWildCardReference struct {
 	Name string `json:"name"`
 }
 
+type ProjectEnvironmentReference struct {
+	ID            string `json:"id"`
+	AlternativeId string `json:"alternativeId"`
+	Name          string `json:"name"`
+}
+
 type PaginatedResponse[T any] struct {
 	Data     []T `json:"data"`
 	PageNum  int `json:"pageNum,omitempty"`

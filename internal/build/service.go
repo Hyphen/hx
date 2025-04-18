@@ -20,14 +20,14 @@ import (
 
 type BuildService struct {
 	baseUrl    string
-	httpClinet httputil.Client
+	httpClient httputil.Client
 }
 
 func NewService() *BuildService {
 	baseUrl := apiconf.GetBaseApixUrl()
 	return &BuildService{
 		baseUrl:    baseUrl,
-		httpClinet: httputil.NewHyphenHTTPClient(),
+		httpClient: httputil.NewHyphenHTTPClient(),
 	}
 }
 
@@ -76,9 +76,14 @@ type Connection[T AzureContainerRegistryConfiguration] struct {
 	Project                 common.ProjectReference           `json:"project"`
 }
 
-func (bs *BuildService) CreateBuild(organizationId, appId, commitSha, dockerUri string) (*Build, error) {
+func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commitSha, dockerUri string) (*Build, error) {
+
 	///api/organizations/{organizationId}/apps/{appId}/builds/
-	url := bs.baseUrl + "/api/organizations/" + organizationId + "/apps/" + appId + "/builds"
+	queryParams := url.Values{}
+	if environmentId != "" {
+		queryParams.Add("environmentId", environmentId)
+	}
+	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/builds?%s", bs.baseUrl, organizationId, appId, queryParams.Encode())
 
 	build := NewBuild{
 		Tags:      []string{},
@@ -103,7 +108,7 @@ func (bs *BuildService) CreateBuild(organizationId, appId, commitSha, dockerUri 
 		return nil, err
 	}
 
-	resp, err := bs.httpClinet.Do(req)
+	resp, err := bs.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -127,18 +132,18 @@ func (bs *BuildService) CreateBuild(organizationId, appId, commitSha, dockerUri 
 }
 
 func (bs *BuildService) FindRegistryConnection(organizationId, projectId string) (*ContainerRegistry, error) {
-	///api/organizations/{organizationId}/deployments/containerRegisteries
+	///api/organizations/{organizationId}/deployments/containerRegistries
 	queryParams := url.Values{}
 	queryParams.Add("projectId", projectId)
 
-	hyphenUrl := fmt.Sprintf("%s/api/organizations/%s/deployments/containerRegisteries?%s", bs.baseUrl, organizationId, queryParams.Encode())
+	hyphenUrl := fmt.Sprintf("%s/api/organizations/%s/deployments/containerRegistries?%s", bs.baseUrl, organizationId, queryParams.Encode())
 
 	req, err := http.NewRequest("GET", hyphenUrl, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := bs.httpClinet.Do(req)
+	resp, err := bs.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +174,7 @@ func (bs *BuildService) FindRegistryConnection(organizationId, projectId string)
 
 }
 
-func (bs *BuildService) RunBuild(printer *cprint.CPrinter, verbose bool) (*Build, error) {
+func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string, verbose bool) (*Build, error) {
 	// TODO: this probably shouldn't error if there is no hxkey
 	// file it just means they aren't using env or are using the new
 	// cert store service.
@@ -213,14 +218,12 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, verbose bool) (*Build
 	commitSha = commitSha[:7]
 
 	// Run build on the docker file
-	printer.PrintVerbose("Building docker image")
-	name, dockerBuildOutput, err := dockerutil.Build(dockerfilePath, *manifest.AppAlternateId, commitSha, verbose)
+	printer.Print(fmt.Sprintf("Building %s", *manifest.AppAlternateId))
+	name, _, err := dockerutil.Build(dockerfilePath, *manifest.AppAlternateId, commitSha, verbose)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build docker image: %w", err)
 	}
 	printer.PrintVerbose("Docker image built successfully")
-
-	printer.Info(dockerBuildOutput)
 
 	// make sure we are logged into the registry
 	err = dockerutil.Login(containerRegistry.Url, containerRegistry.Auth.Username, containerRegistry.Auth.Password)
@@ -229,6 +232,7 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, verbose bool) (*Build
 	}
 
 	// push the image to a register
+	printer.Print("Uploading artifact")
 	containerUrl, err := dockerutil.Push(name, containerRegistry.Url)
 
 	if err != nil {
@@ -236,7 +240,7 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, verbose bool) (*Build
 	}
 
 	// Tell Hyphen about the build
-	build, err := bs.CreateBuild(manifest.OrganizationId, *manifest.AppId, commitSha, containerUrl)
+	build, err := bs.CreateBuild(manifest.OrganizationId, *manifest.AppId, environmentId, commitSha, containerUrl)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create build: %w", err)

@@ -107,8 +107,12 @@ Use 'hyphen deploy --help' for more information about available flags.
 		if noBuild {
 			// check for build ID
 		} else {
+			// TODO: right now we are only supporting building one app at a time
+			// we'll need to come back and fix this SOON
+			firstApp := selectedDeployment.Apps[0]
+
 			service := build.NewService()
-			result, err := service.RunBuild(printer, flags.VerboseFlag)
+			result, err := service.RunBuild(printer, firstApp.DeploymentSettings.ProjectEnvironment.ID, flags.VerboseFlag)
 			if err != nil {
 				printer.Error(cmd, err)
 				return
@@ -127,7 +131,6 @@ Use 'hyphen deploy --help' for more information about available flags.
 			printer.Error(cmd, fmt.Errorf("failed to create run: %w", err))
 			return
 		}
-		printer.Print(fmt.Sprintf("Run Details: %s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID))
 
 		statusModel := Deployment.StatusModel{
 			OrganizationId: orgId,
@@ -135,6 +138,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 			RunId:          run.ID,
 			Pipeline:       run.Pipeline,
 			Service:        *service,
+			AppUrl:         fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID),
 		}
 		statusDisplay := tea.NewProgram(statusModel)
 

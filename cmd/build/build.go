@@ -29,7 +29,7 @@ Use 'hyphen link --help' for more information about available flags.
 	Run: func(cmd *cobra.Command, args []string) {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		service := build.NewService()
-		build, err := service.RunBuild(printer, flags.VerboseFlag)
+		build, err := service.RunBuild(printer, "", flags.VerboseFlag)
 
 		if err != nil {
 			printer.Error(cmd, err)
