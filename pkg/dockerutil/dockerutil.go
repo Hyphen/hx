@@ -2,7 +2,6 @@ package dockerutil
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,7 +44,6 @@ func Login(registryUrl, username, password string) error {
 }
 
 func Logout(registryUrl string) error {
-	fmt.Println("logging out")
 	cmd := exec.Command("docker", "logout", registryUrl)
 
 	err := cmd.Run()

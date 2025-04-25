@@ -9,17 +9,30 @@ import (
 
 func GetBaseApixUrl() string {
 	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
-		// TODO: change this back
+		return "https://dev-api.hyphen.ai"
+	}
+	if strings.ToLower(os.Getenv("HYPHEN_Local")) == "true" {
 		return "http://localhost:4000"
-		// return "https://dev-api.hyphen.ai"
 	}
 	return "https://api.hyphen.ai"
 }
 
+func GetBaseWebsocketUrl() string {
+	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
+		return "wss://dev-api.hyphen.ai"
+	}
+	if strings.ToLower(os.Getenv("HYPHEN_Local")) == "true" {
+		return "ws://localhost:4000"
+	}
+	return "wss://api.hyphen.ai"
+}
+
 func GetBaseAppUrl() string {
 	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
+		return "https://dev-app.hyphen.ai"
+	}
+	if strings.ToLower(os.Getenv("HYPHEN_Local")) == "true" {
 		return "http://localhost:3000"
-		// return "https://dev-app.hyphen.ai"
 	}
 	return "https://app.hyphen.ai"
 }

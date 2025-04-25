@@ -16,7 +16,7 @@
     },
     "args": [
       //"deploy", "wopr dev","--no-build" //"--verbose" //, "--no-build"
-     "build", //"--verbose"
+     "build", "--verbose"
     ],
     "showLog": true,
     "console": "integratedTerminal"

@@ -124,7 +124,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 			)
 		}
 
-		printer.Print(fmt.Sprintf("Triggering a run of: %s", selectedDeployment.Name))
+		printer.Print(fmt.Sprintf("Running %s", selectedDeployment.Name))
 
 		run, err := service.CreateRun(orgId, selectedDeployment.ID, appSources)
 		if err != nil {
@@ -144,7 +144,8 @@ Use 'hyphen deploy --help' for more information about available flags.
 
 		go func() {
 			client := httputil.NewHyphenHTTPClient()
-			conn, err := client.GetWebsocketConnection("ws://localhost:4000/api/websockets/eventStream")
+			url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
+			conn, err := client.GetWebsocketConnection(url)
 			if err != nil {
 				printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
 				return
