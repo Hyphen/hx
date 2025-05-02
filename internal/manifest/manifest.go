@@ -93,6 +93,7 @@ func LocalInitialize(mc Config) (Manifest, error) {
 
 	return m, nil
 }
+
 func loadSecret() (Secret, error) {
 	// Try loading from manifest file first
 	if _, err := os.Stat(ManifestSecretFile); err == nil {
@@ -102,6 +103,7 @@ func loadSecret() (Secret, error) {
 		}
 	}
 
+	// TODO: this can be removed since RestoreSecretFromFile calls it...
 	// Try loading from monorepo
 	secret, err := RestoreSecretFromMonorepo()
 	if err == nil {
@@ -315,14 +317,14 @@ func RestoreSecretFromFile(manifestSecretFile string) (Secret, error) {
 	}
 
 	var secret Secret
-	var hasSecret bool
+	//var hasSecret bool
 
 	globalSecretFile := fmt.Sprintf("%s/%s", GetGlobalDirectory(), manifestSecretFile)
 
 	globalSecret, err := readAndUnmarshalConfigJSON[Secret](globalSecretFile)
 	if err == nil {
 		secret = globalSecret
-		hasSecret = true
+		//hasSecret = true
 	} else if !os.IsNotExist(err) {
 		return Secret{}, err
 	}
@@ -333,14 +335,14 @@ func RestoreSecretFromFile(manifestSecretFile string) (Secret, error) {
 		if mergeErr != nil {
 			return Secret{}, errors.Wrap(mergeErr, "Error merging your .hxkey secret(s)")
 		}
-		hasSecret = true
+		//hasSecret = true
 	} else if !os.IsNotExist(localSecretErr) {
 		return Secret{}, localSecretErr
 	}
 
-	if !hasSecret {
-		return Secret{}, errors.New("No valid .hxkey found (neither global, local, nor monorepo). Please init an app using `hx init`")
-	}
+	// if !hasSecret {
+	// 	return Secret{}, errors.New("No valid .hxkey found (neither global, local, nor monorepo). Please init an app using `hx init`")
+	// }
 
 	return secret, nil
 }

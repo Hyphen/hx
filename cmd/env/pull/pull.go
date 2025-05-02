@@ -8,6 +8,7 @@ import (
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/secretkey"
+	"github.com/Hyphen/cli/internal/vinz"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -106,7 +107,7 @@ func pullForApp(args []string, forceFlag bool) error {
 		return err
 	}
 
-	service := newService(env.NewService(), db)
+	service := newService(env.NewService(), db, vinz.NewService())
 
 	orgId, err := flags.GetOrganizationID()
 	if err != nil {
@@ -133,8 +134,10 @@ func pullForApp(args []string, forceFlag bool) error {
 		envName = args[0]
 	}
 
+	secretKey := service.getSecretKey(orgId, projectId, manifest)
+
 	if envName == "" { // ALL
-		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey(), manifest, forceFlag)
+		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, secretKey, manifest, forceFlag)
 		if err != nil {
 			return err
 		}
@@ -144,7 +147,7 @@ func pullForApp(args []string, forceFlag bool) error {
 		}
 		return nil
 	} else if envName == "default" {
-		if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
+		if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, secretKey, manifest, forceFlag); err != nil {
 			return err
 		}
 
@@ -157,7 +160,7 @@ func pullForApp(args []string, forceFlag bool) error {
 		if err != nil {
 			return err
 		}
-		if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
+		if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, secretKey, manifest, forceFlag); err != nil {
 			return err
 		}
 
@@ -174,15 +177,31 @@ func init() {
 }
 
 type service struct {
-	envService env.EnvServicer
-	db         database.Database
+	envService  env.EnvServicer
+	vinzService vinz.VinzServicer
+	db          database.Database
 }
 
-func newService(envService env.EnvServicer, db database.Database) *service {
+func newService(envService env.EnvServicer, db database.Database, vinzService vinz.VinzServicer) *service {
 	return &service{
 		envService,
+		vinzService,
 		db,
 	}
+}
+
+func (s *service) getSecretKey(orgId, projectId string, manifest manifest.Manifest) *secretkey.SecretKey {
+	secretKey, err := s.vinzService.GetKey(orgId, projectId)
+	if err != nil {
+		return nil
+	}
+
+	if secretKey.SecretKey == "" {
+		printer.Warning("Secret key is empty. Please check your configuration.")
+		return nil
+	}
+
+	return manifest.GetSecretKey()
 }
 
 func (s *service) checkForEnvironment(orgId, envName, projectId string) error {

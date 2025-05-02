@@ -9,6 +9,7 @@ import (
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/internal/secretkey"
+	"github.com/Hyphen/cli/internal/vinz"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
@@ -108,7 +109,7 @@ func pushForMember(args []string, secretKeyId int64) error {
 		return err
 	}
 
-	service := newService(env.NewService(), db)
+	service := newService(env.NewService(), db, vinz.NewService())
 
 	orgId, err := flags.GetOrganizationID()
 	if err != nil {
@@ -147,7 +148,7 @@ func pushForMember(args []string, secretKeyId int64) error {
 			printer.Error(nil, err)
 			continue
 		}
-		err, skippable := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey(), manifest, secretKeyId, &skippedEnvs)
+		err, skippable := service.putEnv(orgId, envName, appId, e, service.getSecretKey(orgId, projectId, manifest), manifest, secretKeyId, &skippedEnvs)
 		if err != nil {
 			printer.Error(nil, err)
 			continue
@@ -163,13 +164,15 @@ func pushForMember(args []string, secretKeyId int64) error {
 }
 
 type service struct {
-	envService env.EnvServicer
-	db         database.Database
+	envService  env.EnvServicer
+	vinzService vinz.VinzServicer
+	db          database.Database
 }
 
-func newService(envService env.EnvServicer, db database.Database) *service {
+func newService(envService env.EnvServicer, db database.Database, vinzService vinz.VinzServicer) *service {
 	return &service{
 		envService,
+		vinzService,
 		db,
 	}
 }
@@ -266,6 +269,20 @@ func (s *service) getLocalEnvsNamesFromFiles() ([]string, error) {
 		envs = append(envs, envName)
 	}
 	return envs, nil
+}
+
+func (s *service) getSecretKey(orgId, projectId string, manifest manifest.Manifest) *secretkey.SecretKey {
+	secretKey, err := s.vinzService.GetKey(orgId, projectId)
+	if err != nil {
+		return nil
+	}
+
+	if secretKey.SecretKey == "" {
+		printer.Warning("Secret key is empty. Please check your configuration.")
+		return nil
+	}
+
+	return manifest.GetSecretKey()
 }
 
 func printPushSummary(envsToPush []string, envsPushed []string, skippedEnvs []string) {

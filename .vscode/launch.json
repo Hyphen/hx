@@ -10,11 +10,12 @@
     "mode": "debug",
     "host": "127.0.0.1",
     "program": "${workspaceRoot}",
+    "cwd": "D:\\hyphen\\scratch\\wopr",
     "env": {
       "HYPHEN_DEV": "true"
     },
     "args": [
-      "link", "google.com"
+      "env", "pull"
     ],
     "showLog": true
   }]
