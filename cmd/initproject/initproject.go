@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/projects"
+	"github.com/Hyphen/cli/internal/secret"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -88,7 +89,7 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 		os.Exit(0)
 	}
 
-	if manifest.ExistsLocal() {
+	if config.ExistsLocal() {
 		response := prompt.PromptYesNo(cmd, "Config file exists. Do you want to overwrite it?", false)
 		if !response.Confirmed {
 			if response.IsFlag {
@@ -126,7 +127,7 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 		createdProject = *existingProject
 	}
 
-	mcl := manifest.Config{
+	mcl := config.Config{
 		ProjectId:          createdProject.ID,
 		ProjectAlternateId: &createdProject.AlternateID,
 		ProjectName:        &createdProject.Name,
@@ -134,13 +135,18 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 	}
 	mcl.IsMonorepo = ptr.Bool(IsMonorepo)
 
-	_, err = manifest.LocalInitialize(mcl)
+	err = config.InitializeConfig(mcl, config.ManifestConfigFile)
+	if err != nil {
+		printer.Error(cmd, err)
+		os.Exit(1)
+	}
+	_, err = secret.LoadSecret(orgID, *createdProject.ID, true)
 	if err != nil {
 		printer.Error(cmd, err)
 		os.Exit(1)
 	}
 
-	if err := gitutil.EnsureGitignore(manifest.ManifestSecretFile); err != nil {
+	if err := gitutil.EnsureGitignore(secret.ManifestSecretFile); err != nil {
 		printer.Error(cmd, fmt.Errorf("error adding .hxkey to .gitignore: %w. Please do this manually if you wish", err))
 	}
 	PrintInitializationSummary(createdProject.Name, createdProject.AlternateID, *createdProject.ID, orgID)

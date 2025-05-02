@@ -1,11 +1,9 @@
 package rotatekey
 
 import (
-	"fmt"
-
 	"github.com/Hyphen/cli/cmd/env/pull"
 	"github.com/Hyphen/cli/cmd/env/push"
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/secret"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -60,20 +58,15 @@ func runRotateKey(cmd *cobra.Command) error {
 		return err
 	}
 
-	currentManifest, err := manifest.Restore()
-	if err != nil {
-		return fmt.Errorf("failed to restore manifest: %w", err)
-	}
-
 	newManifestSecret, err := getNewManifestSecret()
 	if err != nil {
 		return err
 	}
 
-	manifest.UpsertLocalSecret(newManifestSecret)
+	secret.UpsertLocalSecret(newManifestSecret)
 
 	push.Silent = true
-	push.RunPush([]string{}, currentManifest.SecretKeyId)
+	push.RunPush([]string{})
 
 	printer.Success("Key rotation completed successfully.")
 	printer.Info("New encryption key has been generated and all environments have been updated.")
@@ -82,12 +75,12 @@ func runRotateKey(cmd *cobra.Command) error {
 	return nil
 }
 
-func getNewManifestSecret() (manifest.Secret, error) {
+func getNewManifestSecret() (secret.Secret, error) {
 	//generate new key
 	newSecretKey, err := secretkey.New()
 	if err != nil {
-		return manifest.Secret{}, err
+		return secret.Secret{}, err
 	}
 
-	return manifest.NewSecret(newSecretKey), nil
+	return secret.NewSecret(newSecretKey), nil
 }

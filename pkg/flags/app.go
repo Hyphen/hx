@@ -1,7 +1,7 @@
 package flags
 
 import (
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
@@ -10,7 +10,7 @@ func GetApplicationID() (string, error) {
 		return ApplicationFlag, nil
 	}
 
-	manifest, err := manifest.Restore()
+	manifest, err := config.RestoreConfig()
 	if err != nil {
 		return "", err
 	}

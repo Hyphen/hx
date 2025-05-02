@@ -7,9 +7,10 @@ import (
 	"strings"
 
 	"github.com/Hyphen/cli/internal/app"
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/secret"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -93,7 +94,7 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	if manifest.ExistsLocal() {
+	if config.ExistsLocal() {
 		response := prompt.PromptYesNo(cmd, "Config file exists. Do you want to overwrite it?", false)
 		if !response.Confirmed {
 			if response.IsFlag {
@@ -105,7 +106,7 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	mc, err := manifest.RestoreConfig()
+	mc, err := config.RestoreConfig()
 	if err != nil {
 		printer.Error(cmd, err)
 		return
@@ -136,7 +137,7 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		newApp = *existingApp
 	}
 
-	mcl := manifest.Config{
+	mcl := config.Config{
 		ProjectId:          mc.ProjectId,
 		ProjectAlternateId: mc.ProjectAlternateId,
 		ProjectName:        mc.ProjectName,
@@ -146,18 +147,24 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		AppId:              &newApp.ID,
 	}
 
-	ml, err := manifest.LocalInitialize(mcl)
+	err = config.InitializeConfig(mcl, config.ManifestConfigFile)
 	if err != nil {
 		printer.Error(cmd, err)
 		return
 	}
 
-	if err := gitutil.EnsureGitignore(manifest.ManifestSecretFile); err != nil {
+	ms, err := secret.LoadSecret(mcl.OrganizationId, *mcl.ProjectId, false)
+	if err != nil {
+		printer.Error(cmd, err)
+		return
+	}
+
+	if err := gitutil.EnsureGitignore(secret.ManifestSecretFile); err != nil {
 		printer.Error(cmd, fmt.Errorf("error adding .hxkey to .gitignore: %w. Please do this manually if you wish", err))
 	}
 
 	// List the environments for the project
-	environments, err := envService.ListEnvironments(orgID, *ml.ProjectId, 100, 1)
+	environments, err := envService.ListEnvironments(orgID, *mcl.ProjectId, 100, 1)
 	if err != nil {
 		printer.Error(cmd, err)
 		return
@@ -167,14 +174,14 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 	for _, e := range environments {
 		envName := strings.ToLower(e.Name)
 		envID := e.ID
-		err = CreateAndPushEmptyEnvFile(cmd, envService, ml, orgID, newApp.ID, envID, envName)
+		err = CreateAndPushEmptyEnvFile(cmd, envService, mcl, ms, orgID, newApp.ID, envID, envName)
 		if err != nil {
 			printer.Error(cmd, err)
 			return
 		}
 	}
 
-	err = CreateAndPushEmptyEnvFile(cmd, envService, ml, orgID, newApp.ID, "default", "default")
+	err = CreateAndPushEmptyEnvFile(cmd, envService, mcl, ms, orgID, newApp.ID, "default", "default")
 	if err != nil {
 		printer.Error(cmd, err)
 		return
@@ -219,7 +226,7 @@ func GetAppName(cmd *cobra.Command, args []string) (string, bool, error) {
 	return dirName, true, nil
 }
 
-func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m manifest.Manifest, orgID, appID, envID, envName string) error {
+func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, c config.Config, s secret.Secret, orgID, appID, envID, envName string) error {
 	envFileName, err := env.GetFileName(envName)
 	if err != nil {
 		return err
@@ -231,7 +238,7 @@ func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 	}
 
 	// Build an Env struct from that new empty file
-	envStruct, err := env.GetLocalEncryptedEnv(envName, nil, m)
+	envStruct, err := env.GetLocalEncryptedEnv(envName, nil, s)
 	if err != nil {
 		return err
 	}
@@ -239,12 +246,12 @@ func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 	version := 1
 	envStruct.Version = &version
 
-	if err := envService.PutEnvironmentEnv(orgID, appID, envID, m.SecretKeyId, envStruct); err != nil {
+	if err := envService.PutEnvironmentEnv(orgID, appID, envID, s.SecretKeyId, envStruct); err != nil {
 		//if its conflic it means it already exists so me can pull it
 		if !errors.Is(err, errors.ErrConflict) {
 			return err
 		}
-		envStruct, err = envService.GetEnvironmentEnv(orgID, appID, envID, &m.SecretKeyId, nil)
+		envStruct, err = envService.GetEnvironmentEnv(orgID, appID, envID, &s.SecretKeyId, nil)
 		if err != nil {
 			return err
 		}
@@ -257,14 +264,14 @@ func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, m
 		return err
 	}
 
-	newEnvDecrypted, err := envStruct.DecryptData(m.GetSecretKey())
+	newEnvDecrypted, err := envStruct.DecryptData(s.GetSecretKey())
 	if err != nil {
 		return err
 	}
 
 	secretKey := database.SecretKey{
-		ProjectId: *m.ProjectId,
-		AppId:     *m.AppId,
+		ProjectId: *c.ProjectId,
+		AppId:     *c.AppId,
 		EnvName:   envName,
 	}
 

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/pkg/errors"
 )
@@ -28,13 +28,13 @@ func NewHyphenHTTPClient() *HyphenClient {
 }
 
 func (hc *HyphenClient) Do(req *http.Request) (*http.Response, error) {
-	manifestConfig, err := manifest.RestoreConfig()
+	config, err := config.RestoreConfig()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to load .hx")
 	}
 
-	if manifestConfig.HyphenAPIKey != nil {
-		req.Header.Set("x-api-key", *manifestConfig.HyphenAPIKey)
+	if config.HyphenAPIKey != nil {
+		req.Header.Set("x-api-key", *config.HyphenAPIKey)
 	} else {
 		token, err := hc.oauthService.GetValidToken()
 		if err != nil {

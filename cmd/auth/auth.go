@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/internal/user"
@@ -72,14 +72,14 @@ func login(cmd *cobra.Command) error {
 		idToken = &token.IDToken
 		expiryTime = &token.ExpiryTime
 
-		mc := manifest.Config{
+		mc := config.Config{
 			HyphenAccessToken:  accessToken,
 			HyphenRefreshToken: refreshToken,
 			HypenIDToken:       idToken,
 			ExpiryTime:         expiryTime,
 		}
 
-		if err := manifest.UpsertGlobalConfig(mc); err != nil {
+		if err := config.UpsertGlobalConfig(mc); err != nil {
 			return fmt.Errorf("failed to save credentials: %w", err)
 		}
 
@@ -111,11 +111,11 @@ func login(cmd *cobra.Command) error {
 			apiKey = &flags.SetApiKeyFlag
 		}
 
-		mc := manifest.Config{
+		mc := config.Config{
 			HyphenAPIKey: apiKey,
 		}
 
-		if err := manifest.UpsertGlobalConfig(mc); err != nil {
+		if err := config.UpsertGlobalConfig(mc); err != nil {
 			return fmt.Errorf("failed to save credentials: %w", err)
 		}
 
@@ -142,7 +142,7 @@ func login(cmd *cobra.Command) error {
 
 	defaultProject := projectList[0]
 
-	mc := manifest.Config{
+	mc := config.Config{
 		ProjectId:          defaultProject.ID,
 		ProjectName:        &defaultProject.Name,
 		ProjectAlternateId: &defaultProject.AlternateID,
@@ -157,7 +157,7 @@ func login(cmd *cobra.Command) error {
 		AppAlternateId:     nil,
 	}
 
-	if err := manifest.GlobalInitializeConfig(mc); err != nil {
+	if err := config.GlobalInitializeConfig(mc); err != nil {
 		return err
 	}
 

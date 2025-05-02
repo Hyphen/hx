@@ -1,7 +1,7 @@
 package flags
 
 import (
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
@@ -10,14 +10,14 @@ func GetProjectID() (string, error) {
 		return ProjectFlag, nil
 	}
 
-	manifest, err := manifest.Restore()
+	config, err := config.RestoreConfig()
 	if err != nil {
 		return "", err
 	}
 
-	if manifest.ProjectId == nil {
+	if config.ProjectId == nil {
 		return "", errors.New("No Project ID provided and no default found in .hx file")
 	}
 
-	return *manifest.ProjectId, nil
+	return *config.ProjectId, nil
 }

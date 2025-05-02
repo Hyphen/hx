@@ -9,7 +9,7 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/secret"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
@@ -288,7 +288,7 @@ func GetLocalEnvContents(envName string) (string, error) {
 	return e.Data, nil
 }
 
-func GetLocalEncryptedEnv(envName string, envCompletePath *string, m manifest.Manifest) (Env, error) {
+func GetLocalEncryptedEnv(envName string, envCompletePath *string, s secret.Secret) (Env, error) {
 	envFile, err := GetFileName(envName)
 	if err != nil {
 		return Env{}, err
@@ -302,12 +302,12 @@ func GetLocalEncryptedEnv(envName string, envCompletePath *string, m manifest.Ma
 		return Env{}, err
 	}
 
-	envEncrytedData, err := e.EncryptData(m.GetSecretKey())
+	envEncrytedData, err := e.EncryptData(s.GetSecretKey())
 	if err != nil {
 		return Env{}, err
 	}
 	e.Data = envEncrytedData
-	e.SecretKeyId = &m.SecretKeyId
+	e.SecretKeyId = &s.SecretKeyId
 
 	return e, nil
 }

@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
@@ -66,7 +66,7 @@ func (db *Database) UpsertSecret(key SecretKey, data string, version int) error 
 }
 
 func Restore() (Database, error) {
-	m, err := manifest.Restore()
+	m, err := config.RestoreConfig()
 	if err != nil {
 		return Database{}, err
 	}
@@ -111,12 +111,12 @@ func Restore() (Database, error) {
 }
 
 func Save(db Database) error {
-	mc, err := manifest.RestoreConfig()
+	mc, err := config.RestoreConfig()
 	if err != nil {
 		return err
 	}
 	mc.Database = db
 
-	return manifest.UpsertGlobalConfig(mc)
+	return config.UpsertGlobalConfig(mc)
 
 }
