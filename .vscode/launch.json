@@ -10,12 +10,12 @@
     "mode": "debug",
     "host": "127.0.0.1",
     "program": "${workspaceRoot}",
-    "cwd": "D:\\hyphen\\scratch\\wopr",
+    "cwd": "D:\\hyphen\\scratch\\clortho\\zuul",
     "env": {
       "HYPHEN_DEV": "true"
     },
     "args": [
-      "env", "pull"
+      "init", "-y"
     ],
     "showLog": true
   }]

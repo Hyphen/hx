@@ -68,7 +68,7 @@ func LoadSecret(organizationId, projectIdOrAlternateId string, create bool) (Sec
 	}
 
 	// Finally, try initializing new secret
-	return InitializeSecret(ManifestSecretFile, organizationId, projectIdOrAlternateId)
+	return InitializeSecret(organizationId, projectIdOrAlternateId, ManifestSecretFile)
 }
 
 func InitializeSecret(organizationId, projectIdOrAlternateId, secretFile string) (Secret, error) {
