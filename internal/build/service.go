@@ -191,7 +191,7 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string,
 
 	// Check for docker
 	printer.PrintVerbose("Checking for docker CLI")
-	isDockerAvailable := dockerutil.IsDockerAvaliable()
+	isDockerAvailable := dockerutil.IsDockerAvailable()
 	if !isDockerAvailable {
 		return nil, fmt.Errorf("docker is not installed or not in PATH")
 	}

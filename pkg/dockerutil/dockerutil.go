@@ -5,9 +5,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
-func IsDockerAvaliable() bool {
+func IsDockerAvailable() bool {
 	if _, err := exec.LookPath("docker"); err != nil {
 		return false
 	}
@@ -20,7 +21,7 @@ func FindDockerFile() (string, error) {
 		if err != nil {
 			return err
 		}
-		if info.Name() == "Dockerfile" {
+		if strings.ToLower(info.Name()) == "dockerfile" {
 			dockerFileDir = filepath.Dir(path) // Get the directory of the Dockerfile
 			return filepath.SkipDir            // Stop searching further
 		}
