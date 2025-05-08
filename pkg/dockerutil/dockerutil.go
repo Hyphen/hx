@@ -92,11 +92,13 @@ func Build(dockerFilePath, name, tag string, verbose bool) (string, string, erro
 	if tag != "" {
 		nameTag = name + ":" + tag
 	}
-	cmd := exec.Command("docker", "build", "-t", nameTag, dockerFilePath)
+	// TODO: consider allowing platform to be passed in. However, the most common
+	// supported platform in the clouds is linux/amd64
+	cmd := exec.Command("docker", "build", "--platform linux/amd64", "-t", nameTag, dockerFilePath)
 
 	if verbose {
 		// TODO: we need to figure out how much we want to hide away
-		// perhaps only show this whent there is the verbose flag?
+		// perhaps only show this when there is the verbose flag?
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
