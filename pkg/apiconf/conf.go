@@ -30,8 +30,8 @@ func GetAuthClientID() string {
 
 func GetBaseVinzUrl() string {
 	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
-		//return "https://dev-vinz.hyphen.ai"
-		return "http://localhost:3113"
+		return "https://dev-vinz.hyphen.ai"
+		//return "http://localhost:3113"
 	}
 	return "https://vinz.hyphen.ai"
 }
