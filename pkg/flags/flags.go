@@ -11,4 +11,5 @@ var (
 	UseApiKeyFlag    bool
 	VerboseFlag      bool
 	YesFlag          bool
+	LocalSecret      bool
 )

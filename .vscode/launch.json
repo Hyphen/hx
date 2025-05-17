@@ -10,7 +10,7 @@
     "mode": "debug",
     "host": "127.0.0.1",
     "program": "${workspaceRoot}",
-    "cwd": "D:\\hyphen\\scratch\\clortho\\zuul",
+    "cwd": "D:\\hyphen\\scratch\\clortho\\foo2",
     "env": {
       "HYPHEN_DEV": "true"
     },

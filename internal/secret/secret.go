@@ -11,12 +11,12 @@ import (
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/internal/vinz"
 	"github.com/Hyphen/cli/pkg/errors"
+	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/fsutil"
 )
 
 var FS fsutil.FileSystem = fsutil.NewFileSystem()
 var vs vinz.VinzServicer = vinz.NewService()
-var USEVINZ = true
 
 var (
 	ManifestSecretFile = ".hxkey"
@@ -39,29 +39,18 @@ func (s *Secret) GetSecretKey() *secretkey.SecretKey {
 }
 
 func LoadSecret(organizationId, projectIdOrAlternateId string, create bool) (Secret, error) {
-	if USEVINZ {
-		secret, err := vs.GetKey(organizationId, projectIdOrAlternateId)
-		if err == nil {
-			//TODO: clean up and combine types
-			return Secret{
-				SecretKeyId: secret.SecretKeyId,
-				SecretKey:   secret.SecretKey,
-			}, nil
-		}
+	secret, err := vs.GetKey(organizationId, projectIdOrAlternateId)
+	if err == nil {
+		//TODO: clean up and combine types
+		return Secret{
+			SecretKeyId: secret.SecretKeyId,
+			SecretKey:   secret.SecretKey,
+		}, nil
 	}
 
 	// Try loading from manifest file first
 	if _, err := os.Stat(ManifestSecretFile); err == nil {
 		secret, err := RestoreSecretFromFile(ManifestSecretFile)
-		if err == nil {
-			return secret, nil
-		}
-	}
-
-	if create {
-		// TODO: this can be removed since RestoreSecretFromFile calls it...
-		// Try loading from monorepo
-		secret, err := RestoreSecretFromMonorepo()
 		if err == nil {
 			return secret, nil
 		}
@@ -84,18 +73,20 @@ func InitializeSecret(organizationId, projectIdOrAlternateId, secretFile string)
 		return Secret{}, errors.Wrap(err, "Error encoding JSON")
 	}
 
-	if USEVINZ {
-		vs.SaveKey(organizationId, projectIdOrAlternateId, vinz.Key{
-			SecretKeyId: ms.SecretKeyId,
-			SecretKey:   ms.SecretKey,
-		})
-	} else {
+	if flags.LocalSecret {
 		err = FS.WriteFile(secretFile, jsonData, 0644)
 		if err != nil {
 			return Secret{}, errors.Wrapf(err, "Error writing file: %s", secretFile)
 		}
+	} else {
+		_, err := vs.SaveKey(organizationId, projectIdOrAlternateId, vinz.Key{
+			SecretKeyId: ms.SecretKeyId,
+			SecretKey:   ms.SecretKey,
+		})
+		if err != nil {
+			return Secret{}, errors.Wrap(err, "Failed to save secret key")
+		}
 	}
-
 	return ms, nil
 }
 
