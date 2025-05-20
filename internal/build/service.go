@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	common "github.com/Hyphen/cli/internal"
 	"github.com/Hyphen/cli/internal/manifest"
@@ -77,7 +78,7 @@ type Connection[T AzureContainerRegistryConfiguration] struct {
 	Project                 common.ProjectReference           `json:"project"`
 }
 
-func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commitSha, dockerUri string) (*Build, error) {
+func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commitSha, dockerUri string, ports []string) (*Build, error) {
 
 	///api/organizations/{organizationId}/apps/{appId}/builds/
 	queryParams := url.Values{}
@@ -90,7 +91,8 @@ func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commit
 		Tags:      []string{},
 		CommitSha: commitSha,
 		Artifact: Artifact{
-			Type: "Docker",
+			Type:  "Docker",
+			Ports: ports,
 			Image: struct {
 				URI string `json:"uri"`
 			}{
@@ -226,6 +228,21 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string,
 	}
 	printer.PrintVerbose("Docker image built successfully")
 
+	inspectData, err := dockerutil.Inspect(name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect docker image: %w", err)
+	}
+
+	ports := make([]string, 0)
+	for port := range inspectData.Config.ExposedPorts {
+		// Remove "/tcp" or "/udp" suffix if present
+		if idx := strings.Index(port, "/"); idx != -1 {
+			ports = append(ports, port[:idx])
+		} else {
+			ports = append(ports, port)
+		}
+	}
+
 	// check to see if we need to login into the registry so we don't stomp creds
 	needsLogin := !dockerutil.IsLoggedIn(containerRegistry.Auth.Server)
 
@@ -247,7 +264,7 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string,
 	}
 
 	// Tell Hyphen about the build
-	build, err := bs.CreateBuild(manifest.OrganizationId, *manifest.AppId, environmentId, commitSha, containerUrl)
+	build, err := bs.CreateBuild(manifest.OrganizationId, *manifest.AppId, environmentId, commitSha, containerUrl, ports)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create build: %w", err)
