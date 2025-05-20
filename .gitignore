@@ -22,6 +22,7 @@ go.work
 
 # compiled files
 hx
+hxd
 
 # likely created files we don't want actually committed
 .hx

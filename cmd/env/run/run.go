@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/env"
-	"github.com/Hyphen/cli/internal/manifest"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -53,13 +53,13 @@ Examples:
 			return
 		}
 
-		manifest, err := manifest.Restore()
+		config, err := config.RestoreConfig()
 		if err != nil {
 			printer.Error(cmd, errors.Wrap(err, "Failed to restore manifest"))
 			return
 		}
 
-		mergedEnvVars, err := loadAndMergeEnvFiles(envName, manifest)
+		mergedEnvVars, err := loadAndMergeEnvFiles(envName, config)
 		if err != nil {
 			printer.Error(cmd, err)
 			return
@@ -72,22 +72,22 @@ Examples:
 	},
 }
 
-func loadAndMergeEnvFiles(envName string, m manifest.Manifest) ([]string, error) {
+func loadAndMergeEnvFiles(envName string, config config.Config) ([]string, error) {
 	var mergedVars []string
 
 	// Load .env file (default)
-	if err := loadAndAppendEnv("default", m, &mergedVars); err != nil && envName == "default" {
+	if err := loadAndAppendEnv("default", config, &mergedVars); err != nil && envName == "default" {
 		return nil, err // Return error if default is specifically requested and doesn't exist
 	}
 
 	// Load .env.local file (if exists)
-	if err := loadAndAppendEnv("local", m, &mergedVars); err != nil && envName == "local" {
+	if err := loadAndAppendEnv("local", config, &mergedVars); err != nil && envName == "local" {
 		return nil, err // Return error if local is specifically requested and doesn't exist
 	}
 
 	// Load .env.<environment> file (if provided)
 	if envName != "default" && envName != "local" {
-		if err := loadAndAppendEnv(envName, m, &mergedVars); err != nil {
+		if err := loadAndAppendEnv(envName, config, &mergedVars); err != nil {
 			return nil, err
 		}
 	}
@@ -95,7 +95,7 @@ func loadAndMergeEnvFiles(envName string, m manifest.Manifest) ([]string, error)
 	return mergedVars, nil
 }
 
-func loadAndAppendEnv(envName string, m manifest.Manifest, mergedVars *[]string) error {
+func loadAndAppendEnv(envName string, config config.Config, mergedVars *[]string) error {
 	envContents, err := env.GetLocalEnvContents(envName)
 	if err != nil {
 		if os.IsNotExist(err) {

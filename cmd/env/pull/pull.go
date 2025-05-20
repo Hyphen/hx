@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/secret"
 	"github.com/Hyphen/cli/internal/secretkey"
+	"github.com/Hyphen/cli/internal/vinz"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -53,13 +55,13 @@ After pulling, all environment variables will be locally available and ready for
 }
 
 func RunPull(args []string, forceFlag bool) error {
-	manifest, err := manifest.Restore()
+	config, err := config.RestoreConfig()
 	if err != nil {
 		return err
 	}
 
 	// Check if this is a monorepo
-	if manifest.IsMonorepoProject() && manifest.Project != nil {
+	if config.IsMonorepoProject() && config.Project != nil {
 		// Store current directory
 		currentDir, err := os.Getwd()
 		if err != nil {
@@ -67,7 +69,7 @@ func RunPull(args []string, forceFlag bool) error {
 		}
 
 		// Pull for each workspace app
-		for _, appDir := range manifest.Project.Apps {
+		for _, appDir := range config.Project.Apps {
 			if !Silent {
 				printer.Print(fmt.Sprintf("Pulling for workspace app: %s", appDir))
 			}
@@ -106,7 +108,7 @@ func pullForApp(args []string, forceFlag bool) error {
 		return err
 	}
 
-	service := newService(env.NewService(), db)
+	service := newService(env.NewService(), db, vinz.NewService())
 
 	orgId, err := flags.GetOrganizationID()
 	if err != nil {
@@ -123,7 +125,7 @@ func pullForApp(args []string, forceFlag bool) error {
 		return err
 	}
 
-	manifest, err := manifest.Restore()
+	config, err := config.RestoreConfig()
 	if err != nil {
 		return err
 	}
@@ -133,8 +135,14 @@ func pullForApp(args []string, forceFlag bool) error {
 		envName = args[0]
 	}
 
+	secret, err := secret.LoadSecret(*&config.OrganizationId, *config.ProjectId, true)
+	if err != nil {
+		return err
+	}
+	secretKey := service.getSecretKey(orgId, projectId, secret)
+
 	if envName == "" { // ALL
-		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, manifest.GetSecretKey(), manifest, forceFlag)
+		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, secretKey, config, secret, forceFlag)
 		if err != nil {
 			return err
 		}
@@ -144,7 +152,7 @@ func pullForApp(args []string, forceFlag bool) error {
 		}
 		return nil
 	} else if envName == "default" {
-		if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
+		if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, secretKey, config, secret, forceFlag); err != nil {
 			return err
 		}
 
@@ -157,7 +165,7 @@ func pullForApp(args []string, forceFlag bool) error {
 		if err != nil {
 			return err
 		}
-		if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, manifest.GetSecretKey(), manifest, forceFlag); err != nil {
+		if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, secretKey, config, secret, forceFlag); err != nil {
 			return err
 		}
 
@@ -174,15 +182,21 @@ func init() {
 }
 
 type service struct {
-	envService env.EnvServicer
-	db         database.Database
+	envService  env.EnvServicer
+	vinzService vinz.VinzServicer
+	db          database.Database
 }
 
-func newService(envService env.EnvServicer, db database.Database) *service {
+func newService(envService env.EnvServicer, db database.Database, vinzService vinz.VinzServicer) *service {
 	return &service{
 		envService,
+		vinzService,
 		db,
 	}
+}
+
+func (s *service) getSecretKey(orgId, projectId string, secret secret.Secret) *secretkey.SecretKey {
+	return secret.GetSecretKey()
 }
 
 func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
@@ -197,7 +211,7 @@ func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
 	return nil
 }
 
-func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretKey *secretkey.SecretKey, m manifest.Manifest, force bool) error {
+func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretKey *secretkey.SecretKey, config config.Config, secret secret.Secret, force bool) error {
 	envFileName, err := env.GetFileName(envName)
 	if err != nil {
 		return err
@@ -213,8 +227,8 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		}
 
 		currentLocalSecret, dbSecretExists := s.db.GetSecret(database.SecretKey{
-			ProjectId: *m.ProjectId,
-			AppId:     *m.AppId,
+			ProjectId: *config.ProjectId,
+			AppId:     *config.AppId,
 			EnvName:   envName,
 		})
 		if dbSecretExists {
@@ -226,7 +240,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		}
 	}
 
-	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName, &m.SecretKeyId, versionPtr)
+	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName, &secret.SecretKeyId, versionPtr)
 
 	// Case 1: Error occurred and no version specified
 	if err != nil && versionPtr == nil {
@@ -246,7 +260,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		}
 
 		// Retry without version
-		e, err = s.envService.GetEnvironmentEnv(orgId, appId, envName, &m.SecretKeyId, nil)
+		e, err = s.envService.GetEnvironmentEnv(orgId, appId, envName, &secret.SecretKeyId, nil)
 		if err != nil {
 			return err
 		}
@@ -259,8 +273,8 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 
 	if err := s.db.UpsertSecret(
 		database.SecretKey{
-			ProjectId: *m.ProjectId,
-			AppId:     *m.AppId,
+			ProjectId: *config.ProjectId,
+			AppId:     *config.AppId,
 			EnvName:   envName,
 		},
 		envDataDecrypted, *e.Version); err != nil {
@@ -274,7 +288,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 	return nil
 }
 
-func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *secretkey.SecretKey, m manifest.Manifest, force bool) ([]string, error) {
+func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *secretkey.SecretKey, config config.Config, secret secret.Secret, force bool) ([]string, error) {
 	allEnvs, err := s.envService.ListEnvs(orgId, appId, 100, 1)
 	if err != nil {
 		return nil, err
@@ -285,7 +299,7 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 		if e.ProjectEnv != nil {
 			envName = e.ProjectEnv.AlternateID
 		}
-		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secretkey, m, force); err != nil {
+		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secretkey, config, secret, force); err != nil {
 			if !Silent {
 				printer.Warning(fmt.Sprintf("Failed to pull environment %s: %s", envName, err))
 			}

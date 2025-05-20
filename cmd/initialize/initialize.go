@@ -6,6 +6,7 @@ import (
 
 	"github.com/Hyphen/cli/cmd/initapp"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
 
@@ -54,6 +55,7 @@ Examples:
 func init() {
 	InitCmd.Flags().StringVarP(&appIDFlag, "id", "i", "", "App ID (optional)")
 	InitCmd.Flags().BoolVarP(&isMonorepo, "monorepo", "m", false, "Initialize a monorepo")
+	InitCmd.Flags().BoolVarP(&flags.LocalSecret, "localSecret", "l", false, "Use local secret key file instead of Hyphen's secure key store")
 }
 
 func isValidDirectory(cmd *cobra.Command) error {

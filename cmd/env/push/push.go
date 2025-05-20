@@ -5,10 +5,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/secret"
 	"github.com/Hyphen/cli/internal/secretkey"
+	"github.com/Hyphen/cli/internal/vinz"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
@@ -39,24 +41,24 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
-		m, err := manifest.Restore()
-		if err != nil {
-			printer.Error(cmd, err)
-		}
-		if err := RunPush(args, m.SecretKeyId); err != nil {
+		if err := RunPush(args); err != nil {
 			printer.Error(cmd, err)
 		}
 	},
 }
 
-func RunPush(args []string, secretKeyId int64) error {
-	manifest, err := manifest.Restore()
+func RunPush(args []string) error {
+	config, err := config.RestoreConfig()
+	if err != nil {
+		return err
+	}
+	secret, err := secret.LoadSecret(config.OrganizationId, *config.ProjectId, true)
 	if err != nil {
 		return err
 	}
 
 	// Check if this is a monorepo
-	if manifest.IsMonorepoProject() && manifest.Project != nil {
+	if config.IsMonorepoProject() && config.Project != nil {
 		// Store current directory
 		currentDir, err := os.Getwd()
 		if err != nil {
@@ -64,7 +66,7 @@ func RunPush(args []string, secretKeyId int64) error {
 		}
 
 		// Push for each workspace member
-		for _, memberDir := range manifest.Project.Apps {
+		for _, memberDir := range config.Project.Apps {
 			if !Silent {
 				printer.Print(fmt.Sprintf("Pushing for workspace member: %s", memberDir))
 			}
@@ -77,7 +79,7 @@ func RunPush(args []string, secretKeyId int64) error {
 			}
 
 			// Run push for this member
-			err = pushForMember(args, secretKeyId)
+			err = pushForMember(args, secret.SecretKeyId)
 			if err != nil {
 				printer.Warning(fmt.Sprintf("Failed to push for member %s: %s", memberDir, err))
 			}
@@ -93,12 +95,16 @@ func RunPush(args []string, secretKeyId int64) error {
 	}
 
 	// If not a monorepo, proceed with regular push
-	return pushForMember(args, secretKeyId)
+	return pushForMember(args, secret.SecretKeyId)
 }
 
 // pushForMember contains the original push logic
 func pushForMember(args []string, secretKeyId int64) error {
-	manifest, err := manifest.Restore()
+	config, err := config.RestoreConfig()
+	if err != nil {
+		return err
+	}
+	secret, err := secret.LoadSecret(config.OrganizationId, *config.ProjectId, true)
 	if err != nil {
 		return err
 	}
@@ -108,7 +114,7 @@ func pushForMember(args []string, secretKeyId int64) error {
 		return err
 	}
 
-	service := newService(env.NewService(), db)
+	service := newService(env.NewService(), db, vinz.NewService())
 
 	orgId, err := flags.GetOrganizationID()
 	if err != nil {
@@ -142,12 +148,12 @@ func pushForMember(args []string, secretKeyId int64) error {
 	}
 
 	for _, envName := range envsToPush {
-		e, err := env.GetLocalEncryptedEnv(envName, nil, manifest)
+		e, err := env.GetLocalEncryptedEnv(envName, nil, secret)
 		if err != nil {
 			printer.Error(nil, err)
 			continue
 		}
-		err, skippable := service.putEnv(orgId, envName, appId, e, manifest.GetSecretKey(), manifest, secretKeyId, &skippedEnvs)
+		err, skippable := service.putEnv(orgId, envName, appId, e, secret, config, secretKeyId, &skippedEnvs)
 		if err != nil {
 			printer.Error(nil, err)
 			continue
@@ -163,22 +169,25 @@ func pushForMember(args []string, secretKeyId int64) error {
 }
 
 type service struct {
-	envService env.EnvServicer
-	db         database.Database
+	envService  env.EnvServicer
+	vinzService vinz.VinzServicer
+	db          database.Database
 }
 
-func newService(envService env.EnvServicer, db database.Database) *service {
+func newService(envService env.EnvServicer, db database.Database, vinzService vinz.VinzServicer) *service {
 	return &service{
 		envService,
+		vinzService,
 		db,
 	}
 }
 
-func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secretkey.SecretKeyer, m manifest.Manifest, secretKeyId int64, skippedEnvs *[]string) (err error, skippable bool) {
+func (s *service) putEnv(orgID, envName, appID string, e env.Env, secret secret.Secret, config config.Config, secretKeyId int64, skippedEnvs *[]string) (err error, skippable bool) {
+	secretKey := secret.GetSecretKey()
 	// Check local environment
 	currentLocalEnv, exists := s.db.GetSecret(database.SecretKey{
-		ProjectId: *m.ProjectId,
-		AppId:     *m.AppId,
+		ProjectId: *config.ProjectId,
+		AppId:     *config.AppId,
 		EnvName:   envName,
 	})
 	if exists {
@@ -186,7 +195,7 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 		if err != nil {
 			return err, false
 		}
-		if skippable && m.SecretKeyId == secretKeyId {
+		if skippable && secret.SecretKeyId == secretKeyId {
 			*skippedEnvs = append(*skippedEnvs, envName)
 			return nil, true
 		}
@@ -207,8 +216,8 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secretKey secr
 		return err, false
 	}
 	if err := s.db.UpsertSecret(database.SecretKey{
-		ProjectId: *m.ProjectId,
-		AppId:     *m.AppId,
+		ProjectId: *config.ProjectId,
+		AppId:     *config.AppId,
 		EnvName:   envName,
 	}, newEnvDcrypted, currentLocalEnv.Version+1); err != nil {
 		return fmt.Errorf("failed to save local %s environment: %w", envName, err), false

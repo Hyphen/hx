@@ -9,9 +9,10 @@ import (
 	"github.com/Hyphen/cli/cmd/initapp"
 	"github.com/Hyphen/cli/cmd/initproject"
 	"github.com/Hyphen/cli/internal/app"
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/secret"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -41,7 +42,13 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 	initproject.IsMonorepo = true
 	initproject.RunInitProject(cmd, args)
 
-	m, err := manifest.Restore()
+	c, err := config.RestoreConfig()
+	if err != nil {
+		printer.Error(cmd, err)
+		return
+	}
+
+	s, err := secret.LoadSecret(c.OrganizationId, *c.ProjectId, true)
 	if err != nil {
 		printer.Error(cmd, err)
 		return
@@ -86,13 +93,13 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 		}
 
 		printer.Info(fmt.Sprintf("Initializing app %s", cleanPath))
-		err = initializeMonorepoApp(cmd, cleanPath, orgID, m.Config, appService, envService, m.Secret)
+		err = initializeMonorepoApp(cmd, cleanPath, orgID, c, appService, envService, s)
 		if err != nil {
 			printer.Error(cmd, fmt.Errorf("Failed to initialize app %s: %w", cleanPath, err))
 			continue
 		}
 
-		if err := manifest.AddAppToLocalProject(cleanPath); err != nil {
+		if err := config.AddAppToLocalProject(cleanPath); err != nil {
 			printer.Error(cmd, fmt.Errorf("Failed to add app to local project: %w", err))
 			continue
 		}
@@ -104,7 +111,7 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 	}
 }
 
-func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc manifest.Config, appService *app.AppService, envService *env.EnvService, monorepoSecret manifest.Secret) error {
+func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc config.Config, appService *app.AppService, envService *env.EnvService, monorepoSecret secret.Secret) error {
 	// Get the app name from directory and prompt for confirmation/new name
 	defaultAppName := filepath.Base(appDir)
 	response := prompt.PromptYesNo(cmd, fmt.Sprintf("Use the directory name '%s' as the app name?", defaultAppName), true)
@@ -178,7 +185,7 @@ func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc m
 		newApp = *existingApp
 	}
 
-	mcl := manifest.Config{
+	mcl := config.Config{
 		ProjectId:          mc.ProjectId,
 		ProjectAlternateId: mc.ProjectAlternateId,
 		ProjectName:        mc.ProjectName,
@@ -189,19 +196,13 @@ func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc m
 	}
 
 	// Initialize only the config file in the app directory
-	err = manifest.InitializeConfig(mcl, filepath.Join(appDir, manifest.ManifestConfigFile))
+	err = config.InitializeConfig(mcl, filepath.Join(appDir, config.ManifestConfigFile))
 	if err != nil {
 		return err
 	}
 
-	// Create a manifest with the monorepo secret
-	ml := manifest.Manifest{
-		Config: mcl,
-		Secret: monorepoSecret,
-	}
-
 	// List environments for the project
-	environments, err := envService.ListEnvironments(orgID, *ml.ProjectId, 100, 1)
+	environments, err := envService.ListEnvironments(orgID, *mcl.ProjectId, 100, 1)
 	if err != nil {
 		return err
 	}
@@ -209,13 +210,13 @@ func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc m
 	for _, e := range environments {
 		envName := strings.ToLower(e.Name)
 		envID := e.ID
-		err = CreateAndPushEmptyEnvFileMonorepo(cmd, envService, ml, orgID, newApp.ID, envID, envName, appDir)
+		err = CreateAndPushEmptyEnvFileMonorepo(cmd, envService, mcl, monorepoSecret, orgID, newApp.ID, envID, envName, appDir)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = CreateAndPushEmptyEnvFileMonorepo(cmd, envService, ml, orgID, newApp.ID, "default", "default", appDir)
+	err = CreateAndPushEmptyEnvFileMonorepo(cmd, envService, mcl, monorepoSecret, orgID, newApp.ID, "default", "default", appDir)
 	if err != nil {
 		return err
 	}
@@ -229,7 +230,7 @@ func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc m
 	return nil
 }
 
-func CreateAndPushEmptyEnvFileMonorepo(cmd *cobra.Command, envService *env.EnvService, m manifest.Manifest, orgID, appID, envID, envName, appDir string) error {
+func CreateAndPushEmptyEnvFileMonorepo(cmd *cobra.Command, envService *env.EnvService, c config.Config, s secret.Secret, orgID, appID, envID, envName, appDir string) error {
 	envFileName, err := env.GetFileName(envName)
 	if err != nil {
 		return err
@@ -249,7 +250,7 @@ func CreateAndPushEmptyEnvFileMonorepo(cmd *cobra.Command, envService *env.EnvSe
 	}
 
 	// Build an Env struct from that new empty file
-	envStruct, err := env.GetLocalEncryptedEnv(envName, &appDir, m)
+	envStruct, err := env.GetLocalEncryptedEnv(envName, &appDir, s)
 	if err != nil {
 		return err
 	}
@@ -257,11 +258,11 @@ func CreateAndPushEmptyEnvFileMonorepo(cmd *cobra.Command, envService *env.EnvSe
 	version := 1
 	envStruct.Version = &version
 
-	if err := envService.PutEnvironmentEnv(orgID, appID, envID, m.SecretKeyId, envStruct); err != nil {
+	if err := envService.PutEnvironmentEnv(orgID, appID, envID, s.SecretKeyId, envStruct); err != nil {
 		if !errors.Is(err, errors.ErrConflict) {
 			return err
 		}
-		envStruct, err = envService.GetEnvironmentEnv(orgID, appID, envID, &m.SecretKeyId, nil)
+		envStruct, err = envService.GetEnvironmentEnv(orgID, appID, envID, &s.SecretKeyId, nil)
 		if err != nil {
 			return err
 		}
@@ -273,14 +274,14 @@ func CreateAndPushEmptyEnvFileMonorepo(cmd *cobra.Command, envService *env.EnvSe
 		return err
 	}
 
-	newEnvDecrypted, err := envStruct.DecryptData(m.GetSecretKey())
+	newEnvDecrypted, err := envStruct.DecryptData(s.GetSecretKey())
 	if err != nil {
 		return err
 	}
 
 	secretKey := database.SecretKey{
-		ProjectId: *m.ProjectId,
-		AppId:     *m.AppId,
+		ProjectId: *c.ProjectId,
+		AppId:     *c.AppId,
 		EnvName:   envName,
 	}
 

@@ -3,7 +3,7 @@ package setproject
 import (
 	"fmt"
 
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
@@ -25,9 +25,9 @@ var SetProjectCmd = &cobra.Command{
 		var err error
 
 		if globalFlag {
-			err = manifest.UpsertGlobalProjectID(projectID)
+			err = config.UpsertGlobalProjectID(projectID)
 		} else {
-			err = manifest.UpsertProjectID(projectID)
+			err = config.UpsertProjectID(projectID)
 		}
 
 		if err != nil {

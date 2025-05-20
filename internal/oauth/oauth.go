@@ -14,7 +14,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 )
@@ -223,7 +223,6 @@ func (s *OAuthService) StartOAuthServer() (*TokenResponse, error) {
 			return
 		}
 
-
 		http.Redirect(w, r, "https://hyphen.ai/cli?authenticated=true", http.StatusTemporaryRedirect)
 
 		tokenChan <- token
@@ -287,7 +286,7 @@ func (s *OAuthService) RefreshToken(refreshToken string) (*TokenResponse, error)
 }
 
 func (s *OAuthService) GetValidToken() (string, error) {
-	mc, err := manifest.RestoreConfig()
+	mc, err := config.RestoreConfig()
 	if err != nil {
 		return "", err
 	}
@@ -305,7 +304,7 @@ func (s *OAuthService) GetValidToken() (string, error) {
 		mc.HyphenRefreshToken = &tokenResponse.RefreshToken
 		mc.HypenIDToken = &tokenResponse.IDToken
 		mc.ExpiryTime = &tokenResponse.ExpiryTime
-		err = manifest.UpsertGlobalConfig(mc)
+		err = config.UpsertGlobalConfig(mc)
 		if err != nil {
 			return "", errors.Wrap(err, "Failed to save refreshed credentials")
 		}

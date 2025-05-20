@@ -3,7 +3,7 @@ package setorg
 import (
 	"fmt"
 
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -36,18 +36,18 @@ var SetOrgCmd = &cobra.Command{
 		defaultProject := projectList[0]
 
 		if globalFlag {
-			err = manifest.UpsertGlobalOrganizationID(orgID)
+			err = config.UpsertGlobalOrganizationID(orgID)
 		} else {
-			err = manifest.UpsertOrganizationID(orgID)
+			err = config.UpsertOrganizationID(orgID)
 		}
 		if err != nil {
 			return fmt.Errorf("failed to update organization ID: %w", err)
 		}
 
 		if globalFlag {
-			err = manifest.UpsertGlobalProjectID(*defaultProject.ID)
+			err = config.UpsertGlobalProjectID(*defaultProject.ID)
 		} else {
-			err = manifest.UpsertProjectID(*defaultProject.ID)
+			err = config.UpsertProjectID(*defaultProject.ID)
 		}
 		if err != nil {
 			return fmt.Errorf("failed to update project ID: %w", err)
