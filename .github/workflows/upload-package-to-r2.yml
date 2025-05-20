@@ -54,7 +54,7 @@ jobs:
           upload_file() {
             local source="$1"
             local destination="$2"
-            if aws s3 cp "$source" "$destination" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com; then
+            if aws s3 cp "$source" "$destination" --endpoint-url https://${{ env.CDN_R2_ACCOUNT_ID }}.r2.cloudflarestorage.com --checksum-algorithm CRC32; then
               echo "Successfully uploaded: $source to $destination"
             else
               echo "Error: Failed to upload $source to $destination"
