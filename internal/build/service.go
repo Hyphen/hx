@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	common "github.com/Hyphen/cli/internal"
-	"github.com/Hyphen/cli/internal/manifest"
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/dockerutil"
@@ -183,12 +183,12 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string,
 	// file it just means they aren't using env or are using the new
 	// cert store service.
 	// grab the manifest to get app details
-	manifest, err := manifest.Restore()
+	config, err := config.RestoreConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	if manifest.IsMonorepoProject() {
+	if config.IsMonorepoProject() {
 		return nil, fmt.Errorf("monorepo projects are not supported yet")
 	}
 
@@ -209,7 +209,7 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string,
 
 	// TODO: pull this from a deployment?
 
-	containerRegistry, err := bs.FindRegistryConnection(manifest.OrganizationId, *manifest.ProjectId)
+	containerRegistry, err := bs.FindRegistryConnection(config.OrganizationId, *config.ProjectId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find registry connection: %w", err)
 	}
@@ -222,8 +222,8 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string,
 	commitSha = commitSha[:7]
 
 	// Run build on the docker file
-	printer.Print(fmt.Sprintf("Building %s", *manifest.AppAlternateId))
-	name, _, err := dockerutil.Build(dockerfilePath, *manifest.AppAlternateId, commitSha, verbose)
+	printer.Print(fmt.Sprintf("Building %s", *config.AppAlternateId))
+	name, _, err := dockerutil.Build(dockerfilePath, *config.AppAlternateId, commitSha, verbose)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build docker image: %w", err)
 	}
@@ -267,7 +267,7 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string,
 	}
 
 	// Tell Hyphen about the build
-	build, err := bs.CreateBuild(manifest.OrganizationId, *manifest.AppId, environmentId, commitSha, containerUrl, ports)
+	build, err := bs.CreateBuild(config.OrganizationId, *config.AppId, environmentId, commitSha, containerUrl, ports)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create build: %w", err)

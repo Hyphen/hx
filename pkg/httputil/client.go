@@ -60,13 +60,13 @@ func (hc *HyphenClient) GetWebsocketConnection(websocketUrl string) (*websocket.
 
 	headers := http.Header{}
 
-	manifestConfig, err := manifest.RestoreConfig()
+	config, err := config.RestoreConfig()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to load .hx")
 	}
 
-	if manifestConfig.HyphenAPIKey != nil {
-		headers.Set("x-api-key", *manifestConfig.HyphenAPIKey)
+	if config.HyphenAPIKey != nil {
+		headers.Set("x-api-key", *config.HyphenAPIKey)
 	} else {
 		token, err := hc.oauthService.GetValidToken()
 		if err != nil {
