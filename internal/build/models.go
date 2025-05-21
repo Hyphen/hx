@@ -7,7 +7,7 @@ type Artifact struct {
 	Image struct {
 		URI string `json:"uri"`
 	} `json:"image"`
-	Ports []string `json:"ports"`
+	Ports []int `json:"ports"`
 }
 
 type Build struct {

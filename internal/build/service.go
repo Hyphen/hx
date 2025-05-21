@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	common "github.com/Hyphen/cli/internal"
@@ -78,7 +79,7 @@ type Connection[T AzureContainerRegistryConfiguration] struct {
 	Project                 common.ProjectReference           `json:"project"`
 }
 
-func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commitSha, dockerUri string, ports []string) (*Build, error) {
+func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commitSha, dockerUri string, ports []int) (*Build, error) {
 
 	///api/organizations/{organizationId}/apps/{appId}/builds/
 	queryParams := url.Values{}
@@ -233,13 +234,15 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string,
 		return nil, fmt.Errorf("failed to inspect docker image: %w", err)
 	}
 
-	ports := make([]string, 0)
+	ports := make([]int, 0)
 	for port := range inspectData.Config.ExposedPorts {
 		// Remove "/tcp" or "/udp" suffix if present
+		portStr := port
 		if idx := strings.Index(port, "/"); idx != -1 {
-			ports = append(ports, port[:idx])
-		} else {
-			ports = append(ports, port)
+			portStr = port[:idx]
+		}
+		if portInt, err := strconv.Atoi(portStr); err == nil {
+			ports = append(ports, portInt)
 		}
 	}
 
