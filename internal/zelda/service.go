@@ -105,7 +105,7 @@ func (zs *ZeldaService) ListDomains(organizationID string, pageSize, pageNum int
 }
 
 func (zs *ZeldaService) CreateQRCode(organizationID, codeId string) (QR, error) {
-	url := fmt.Sprintf("%s/%s/link/codes/%s/qr", zs.baseUrl, organizationID, codeId)
+	url := fmt.Sprintf("%s/%s/link/codes/%s/qrs", zs.baseUrl, organizationID, codeId)
 
 	payload := struct {
 		OrganizationID string `json:"organizationId,omitempty"`
@@ -146,4 +146,3 @@ func (zs *ZeldaService) CreateQRCode(organizationID, codeId string) (QR, error) 
 
 	return qr, nil
 }
-
