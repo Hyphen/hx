@@ -42,6 +42,7 @@ type Organization struct {
 type Member struct {
 	ID           string       `json:"id"`
 	Name         string       `json:"name"`
+	Email        string       `json:"email"`
 	Organization Organization `json:"organization"`
 	Rules        []Rule       `json:"rules"`
 }
