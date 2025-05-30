@@ -45,8 +45,11 @@ func (hc *HyphenClient) Do(req *http.Request) (*http.Response, error) {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
+	if req.Body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := hc.client.Do(req)
 	if err != nil {

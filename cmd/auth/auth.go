@@ -11,6 +11,7 @@ import (
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/prompt"
+	"github.com/Hyphen/cli/pkg/toggle"
 	"github.com/spf13/cobra"
 )
 
@@ -160,6 +161,8 @@ func login(cmd *cobra.Command) error {
 	if err := config.GlobalInitializeConfig(mc); err != nil {
 		return err
 	}
+
+	toggle.HandleAuth(executionContext)
 
 	printAuthenticationSummary(&executionContext, organizationID, *defaultProject.ID)
 	return nil
