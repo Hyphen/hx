@@ -20,6 +20,7 @@ import (
 	"github.com/Hyphen/cli/cmd/update"
 	"github.com/Hyphen/cli/cmd/version"
 	"github.com/Hyphen/cli/pkg/flags"
+	"github.com/Hyphen/cli/pkg/toggle"
 	"github.com/spf13/cobra"
 )
 
@@ -46,8 +47,6 @@ func init() {
 	rootCmd.AddCommand(project.ProjectCmd)
 	rootCmd.AddCommand(env.EnvCmd)
 	rootCmd.AddCommand(initproject.InitProjectCmd)
-	rootCmd.AddCommand(deploy.DeployCmd)
-	rootCmd.AddCommand(build.BuildCmd)
 
 	// Override the default completion command with a hidden no-op command
 	rootCmd.AddCommand(&cobra.Command{
@@ -71,6 +70,11 @@ func init() {
 }
 
 func Execute() {
+	canUseDeployments := toggle.GetBooleanValue("canUseDeployments", false)
+	if canUseDeployments {
+		rootCmd.AddCommand(deploy.DeployCmd)
+		rootCmd.AddCommand(build.BuildCmd)
+	}
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
