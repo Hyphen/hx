@@ -31,7 +31,7 @@ func init() {
 	}
 
 	// Set as global provider
-	openfeature.SetProvider(provider)
+	openfeature.SetProviderAndWait(provider)
 
 	// Create a client
 	client = openfeature.NewClient("hx")

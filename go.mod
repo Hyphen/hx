@@ -8,7 +8,7 @@ require (
 	dario.cat/mergo v1.0.2
 	github.com/aquasecurity/table v1.10.0
 	github.com/fatih/color v1.18.0
-	github.com/hyphen/openfeature-provider-go v1.0.2
+	github.com/hyphen/openfeature-provider-go v1.0.3
 	github.com/open-feature/go-sdk v1.14.1
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
