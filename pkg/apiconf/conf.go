@@ -14,6 +14,13 @@ func GetBaseApixUrl() string {
 	return "https://api.hyphen.ai"
 }
 
+func GetBaseAppUrl() string {
+	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
+		return "https://dev-app.hyphen.ai"
+	}
+	return "https://app.hyphen.ai"
+}
+
 func GetBaseAuthUrl() string {
 	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
 		return "https://dev-auth.hyphen.ai"

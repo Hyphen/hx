@@ -226,7 +226,7 @@ func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc c
 		return err
 	}
 
-	initapp.PrintInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
+	initapp.PrintInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID, *mc.ProjectAlternateId)
 	return nil
 }
 
