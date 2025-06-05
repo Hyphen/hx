@@ -11,6 +11,7 @@ import (
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/secret"
+	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -192,7 +193,7 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	PrintInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
+	PrintInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID, *mc.ProjectAlternateId)
 }
 
 func GetAppName(cmd *cobra.Command, args []string) (string, bool, error) {
@@ -356,13 +357,14 @@ func GenerateDefaultAppId(appName string) string {
 	return strings.ToLower(strings.ReplaceAll(appName, " ", "-"))
 }
 
-func PrintInitializationSummary(appName, appAlternateId, appID, orgID string) {
-	printer.Success("App successfully initialized")
+func PrintInitializationSummary(appName, appAlternateId, appID, orgID, projectAlternateId string) {
+	printer.Success(fmt.Sprintf("%s successfully initialized", appName))
 	printer.Print("") // Print an empty line for spacing
-	printer.PrintDetail("App Name", appName)
-	printer.PrintDetail("App AlternateId", appAlternateId)
-	printer.PrintDetail("App ID", appID)
-	printer.PrintDetail("Organization ID", orgID)
+	printer.Print(buildAppUrlLink(orgID, projectAlternateId, appAlternateId))
+}
+
+func buildAppUrlLink(organizationId, projectAlternateId, appAlternateId string) string {
+	return fmt.Sprintf("%s/%s/projects/%s/app/%s", apiconf.GetBaseAppUrl(), organizationId, projectAlternateId, appAlternateId)
 }
 
 func isValidDirectory(cmd *cobra.Command) error {
