@@ -2,6 +2,7 @@ package build
 
 import (
 	"github.com/Hyphen/cli/internal/build"
+	hyphenapp "github.com/Hyphen/cli/internal/hyphenApp"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
@@ -36,6 +37,8 @@ Use 'hyphen link --help' for more information about available flags.
 			return
 		}
 
-		printer.Info("Build uploaded successfully ID: " + build.Id)
+		url := hyphenapp.ApplicationLink(build.Organization.ID, build.Project.ID, build.App.ID)
+
+		printer.Info("Build successful: " + url)
 	},
 }
