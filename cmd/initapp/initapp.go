@@ -10,8 +10,8 @@ import (
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
+	hyphenapp "github.com/Hyphen/cli/internal/hyphenApp"
 	"github.com/Hyphen/cli/internal/secret"
-	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -360,11 +360,7 @@ func GenerateDefaultAppId(appName string) string {
 func PrintInitializationSummary(appName, appAlternateId, appID, orgID, projectAlternateId string) {
 	printer.Success(fmt.Sprintf("%s successfully initialized", appName))
 	printer.Print("") // Print an empty line for spacing
-	printer.Print(buildAppUrlLink(orgID, projectAlternateId, appAlternateId))
-}
-
-func buildAppUrlLink(organizationId, projectAlternateId, appAlternateId string) string {
-	return fmt.Sprintf("%s/%s/projects/%s/app/%s", apiconf.GetBaseAppUrl(), organizationId, projectAlternateId, appAlternateId)
+	printer.Print(hyphenapp.ApplicationLink(orgID, projectAlternateId, appAlternateId))
 }
 
 func isValidDirectory(cmd *cobra.Command) error {

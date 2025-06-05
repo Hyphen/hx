@@ -10,6 +10,7 @@ import (
 
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -189,4 +190,90 @@ func PromptForMonorepoApps(cmd *cobra.Command) ([]string, error) {
 	}
 
 	return fullPaths, nil
+}
+
+func PromptSelection(choices []Choice, prompt string) (Choice, error) {
+	mod := model{
+		choices: choices,
+		cursor:  0,
+		prompt:  prompt,
+	}
+
+	p := tea.NewProgram(mod)
+	// Run returns the model as a tea.Model.
+	m, err := p.Run()
+	if err != nil {
+		return Choice{}, fmt.Errorf("error running prompt: %w", err)
+	}
+
+	// Assert the final tea.Model to our local model and print the choice.
+	if m, ok := m.(model); ok {
+		return m.choice, nil
+	}
+
+	return Choice{}, fmt.Errorf("no choice made")
+}
+
+type Choice struct {
+	Id      string
+	Display string
+}
+
+type model struct {
+	choices []Choice
+	cursor  int
+	choice  Choice
+	prompt  string
+}
+
+func (m model) Init() tea.Cmd {
+	return nil
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q", "esc":
+			m.choice = Choice{}
+			return m, tea.Quit
+
+		case "enter":
+			// Send the choice on the channel and exit.
+			m.choice = m.choices[m.cursor]
+			return m, tea.Quit
+
+		case "down", "j":
+			m.cursor++
+			if m.cursor >= len(m.choices) {
+				m.cursor = 0
+			}
+
+		case "up", "k":
+			m.cursor--
+			if m.cursor < 0 {
+				m.cursor = len(m.choices) - 1
+			}
+		}
+	}
+
+	return m, nil
+}
+
+func (m model) View() string {
+	s := strings.Builder{}
+	s.WriteString(m.prompt)
+	s.WriteString("\n")
+
+	for i := 0; i < len(m.choices); i++ {
+		if m.cursor == i {
+			s.WriteString(" (•) ")
+		} else {
+			s.WriteString(" ( ) ")
+		}
+		s.WriteString(m.choices[i].Display)
+		s.WriteString("\n")
+	}
+
+	return s.String()
 }

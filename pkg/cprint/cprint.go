@@ -135,3 +135,9 @@ func (p *CPrinter) PrintHeader(message string) {
 func (p *CPrinter) PrintDetail(label, value string) {
 	PrintDetail(label, value)
 }
+
+func (p *CPrinter) PrintVerbose(message string) {
+	if p.verbose {
+		Print(message)
+	}
+}

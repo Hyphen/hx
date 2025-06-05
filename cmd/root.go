@@ -6,6 +6,8 @@ import (
 
 	"github.com/Hyphen/cli/cmd/app"
 	"github.com/Hyphen/cli/cmd/auth"
+	"github.com/Hyphen/cli/cmd/build"
+	"github.com/Hyphen/cli/cmd/deploy"
 	"github.com/Hyphen/cli/cmd/env"
 	"github.com/Hyphen/cli/cmd/env/pull"
 	"github.com/Hyphen/cli/cmd/env/push"
@@ -18,6 +20,7 @@ import (
 	"github.com/Hyphen/cli/cmd/update"
 	"github.com/Hyphen/cli/cmd/version"
 	"github.com/Hyphen/cli/pkg/flags"
+	"github.com/Hyphen/cli/pkg/toggle"
 	"github.com/spf13/cobra"
 )
 
@@ -67,6 +70,11 @@ func init() {
 }
 
 func Execute() {
+	canUseDeployments := toggle.GetBooleanValue("canUseDeployments", false)
+	if canUseDeployments {
+		rootCmd.AddCommand(deploy.DeployCmd)
+		rootCmd.AddCommand(build.BuildCmd)
+	}
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

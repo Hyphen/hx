@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -130,4 +131,26 @@ func EnsureGitignore(appendStr string) error {
 	}
 
 	return nil
+}
+
+func GetLastCommitHash() (string, error) {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return "", errors.New("unable to get current directory")
+	}
+
+	gitDir, found := findGitRoot(currentDir)
+
+	if !found {
+		return "", errors.New("not a git repository")
+	}
+
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = gitDir
+	output, err := cmd.Output()
+	if err != nil {
+		return "", errors.Wrap(err, "error getting last commit hash")
+	}
+
+	return strings.TrimSpace(string(output)), nil
 }

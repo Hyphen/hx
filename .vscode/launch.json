@@ -10,13 +10,15 @@
     "mode": "debug",
     "host": "127.0.0.1",
     "program": "${workspaceRoot}",
-    //"cwd": "D:\\hyphen\\scratch\\clortho\\foo2",
+    "cwd": "~/Development/Hyphen/scratch/wopr/",
     "env": {
       "HYPHEN_DEV": "true"
     },
     "args": [
-      "auth"
+      "deploy", "June 3", "--no-build" //"--verbose" //, "--no-build"
+     //"build", //"--verbose"
     ],
-    "showLog": true
+    "showLog": true,
+    "console": "integratedTerminal"
   }]
 }
