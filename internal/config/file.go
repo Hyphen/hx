@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"dario.cat/mergo"
+	"github.com/Hyphen/cli/internal/timeprovider"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/fsutil"
 )
@@ -34,6 +35,29 @@ type Config struct {
 	IsMonorepo         *bool       `json:"is_monorepo,omitempty"`
 	Project            *Project    `json:"project,omitempty"`
 	Database           interface{} `json:"database,omitempty"`
+}
+
+func IsAuthenticated() (bool, error) {
+	config, err := RestoreConfig()
+	if err != nil {
+		return false, err
+	}
+
+	return config.IsAuthenticated(), nil
+}
+
+func (c *Config) IsAuthenticated() bool {
+	if c.ExpiryTime != nil {
+		// validate it's not expired
+		timeProvider := timeprovider.DefaultTimeProvider()
+		return !timeProvider.IsExpired(*c.ExpiryTime)
+	}
+
+	if c.HyphenAPIKey != nil {
+		return true
+	}
+
+	return false
 }
 
 func (c *Config) IsMonorepoProject() bool {

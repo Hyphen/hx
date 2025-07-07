@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"dario.cat/mergo"
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/internal/vinz"
 	"github.com/Hyphen/cli/pkg/errors"
@@ -79,7 +80,18 @@ func InitializeSecret(organizationId, projectIdOrAlternateId, secretFile string)
 			return Secret{}, errors.Wrapf(err, "Error writing file: %s", secretFile)
 		}
 	} else {
-		_, err := vs.SaveKey(organizationId, projectIdOrAlternateId, vinz.Key{
+
+		// verify we are authenticated first.
+		config, err := config.RestoreConfig()
+		if err != nil {
+			return Secret{}, errors.Wrap(err, "Failed to load configuration. Please authenticate with `hx auth` and try again")
+		}
+
+		if !config.IsAuthenticated() {
+			return Secret{}, errors.New("Your authentication token has expired. Please run `hx auth` and try again")
+		}
+
+		_, err = vs.SaveKey(organizationId, projectIdOrAlternateId, vinz.Key{
 			SecretKeyId: ms.SecretKeyId,
 			SecretKey:   ms.SecretKey,
 		})

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Hyphen/cli/internal/config"
+	"github.com/Hyphen/cli/internal/timeprovider"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 )
@@ -41,16 +42,6 @@ type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-type TimeProvider interface {
-	Now() time.Time
-}
-
-type RealTimeProvider struct{}
-
-func (rtp *RealTimeProvider) Now() time.Time {
-	return time.Now()
-}
-
 type BrowserOpener func(string) error
 
 type OAuthServicer interface {
@@ -66,15 +57,15 @@ type OAuthService struct {
 	baseUrl       string
 	clientID      string
 	httpClient    HTTPClient
-	timeProvider  TimeProvider
+	timeProvider  timeprovider.TimeProvider
 	browserOpener BrowserOpener
 }
 
 func DefaultOAuthService() *OAuthService {
-	return NewOAuthService(&http.Client{}, &RealTimeProvider{}, openBrowser)
+	return NewOAuthService(&http.Client{}, timeprovider.DefaultTimeProvider(), openBrowser)
 }
 
-func NewOAuthService(httpClient HTTPClient, timeProvider TimeProvider, browserOpener BrowserOpener) *OAuthService {
+func NewOAuthService(httpClient HTTPClient, timeProvider timeprovider.TimeProvider, browserOpener BrowserOpener) *OAuthService {
 	baseUrl := apiconf.GetBaseAuthUrl()
 	clientID := apiconf.GetAuthClientID()
 
