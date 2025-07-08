@@ -79,7 +79,7 @@ func (vs *VinzService) SaveKey(organizationID, projectIdOrAlternateId string, ke
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return Key{}, errors.HandleHTTPError(resp)
 	}
 

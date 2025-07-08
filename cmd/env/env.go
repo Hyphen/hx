@@ -7,6 +7,7 @@ import (
 	"github.com/Hyphen/cli/cmd/env/push"
 	"github.com/Hyphen/cli/cmd/env/rotatekey"
 	"github.com/Hyphen/cli/cmd/env/run"
+	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
@@ -15,6 +16,9 @@ var EnvCmd = &cobra.Command{
 	Use:   "env",
 	Short: "Manage environment .env secrets",
 	Long:  `Manage environment .env secrets for different environments.`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return user.ErrorIfNotAuthenticated()
+	},
 }
 
 func init() {

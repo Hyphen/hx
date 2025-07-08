@@ -3,6 +3,7 @@ package build
 import (
 	"github.com/Hyphen/cli/internal/build"
 	hyphenapp "github.com/Hyphen/cli/internal/hyphenApp"
+	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
@@ -27,6 +28,9 @@ hyphen deploy deploy-dev
 Use 'hyphen link --help' for more information about available flags.
 `,
 	Args: cobra.RangeArgs(0, 1),
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return user.ErrorIfNotAuthenticated()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		service := build.NewService()
