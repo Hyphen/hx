@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/Hyphen/cli/internal/app"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/aquasecurity/table"
@@ -77,7 +78,7 @@ Use 'hyphen app list --help' for more information about available flags.
 	},
 }
 
-func displayTable(apps []app.App) {
+func displayTable(apps []models.App) {
 	// Define color functions
 	cyan := color.New(color.FgCyan).SprintFunc()
 	green := color.New(color.FgGreen).SprintFunc()
@@ -108,7 +109,7 @@ func displayTable(apps []app.App) {
 	t.Render()
 }
 
-func displayList(apps []app.App) {
+func displayList(apps []models.App) {
 	for _, app := range apps {
 		printer.PrintDetail("App Name", app.Name)
 		printer.PrintDetail("App AlternateId", app.AlternateId)
@@ -129,7 +130,7 @@ func newService(appService app.AppServicer) *service {
 	}
 }
 
-func (s *service) ListApps(organizationId, projectId string, limit, page int) ([]app.App, error) {
+func (s *service) ListApps(organizationId, projectId string, limit, page int) ([]models.App, error) {
 	return s.appService.GetListApps(organizationId, projectId, limit, page)
 }
 

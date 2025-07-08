@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"dario.cat/mergo"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/fsutil"
 )
@@ -19,21 +20,21 @@ var (
 )
 
 type Config struct {
-	ProjectName        *string     `json:"project_name,omitempty"`
-	ProjectId          *string     `json:"project_id,omitempty"`
-	ProjectAlternateId *string     `json:"project_alternate_id,omitempty"`
-	AppName            *string     `json:"app_name,omitempty"`
-	AppId              *string     `json:"app_id,omitempty"`
-	AppAlternateId     *string     `json:"app_alternate_id,omitempty"`
-	OrganizationId     string      `json:"organization_id,omitempty"`
-	HyphenAccessToken  *string     `json:"hyphen_access_token,omitempty"`
-	HyphenRefreshToken *string     `json:"hyphen_refresh_token,omitempty"`
-	HypenIDToken       *string     `json:"hyphen_id_token,omitempty"`
-	ExpiryTime         *int64      `json:"expiry_time,omitempty"`
-	HyphenAPIKey       *string     `json:"hyphen_api_key,omitempty"`
-	IsMonorepo         *bool       `json:"is_monorepo,omitempty"`
-	Project            *Project    `json:"project,omitempty"`
-	Database           interface{} `json:"database,omitempty"`
+	ProjectName        *string        `json:"project_name,omitempty"`
+	ProjectId          *string        `json:"project_id,omitempty"`
+	ProjectAlternateId *string        `json:"project_alternate_id,omitempty"`
+	AppName            *string        `json:"app_name,omitempty"`
+	AppId              *string        `json:"app_id,omitempty"`
+	AppAlternateId     *string        `json:"app_alternate_id,omitempty"`
+	OrganizationId     string         `json:"organization_id,omitempty"`
+	HyphenAccessToken  *string        `json:"hyphen_access_token,omitempty"`
+	HyphenRefreshToken *string        `json:"hyphen_refresh_token,omitempty"`
+	HypenIDToken       *string        `json:"hyphen_id_token,omitempty"`
+	ExpiryTime         *int64         `json:"expiry_time,omitempty"`
+	HyphenAPIKey       *string        `json:"hyphen_api_key,omitempty"`
+	IsMonorepo         *bool          `json:"is_monorepo,omitempty"`
+	Project            *ConfigProject `json:"project,omitempty"`
+	Database           interface{}    `json:"database,omitempty"`
 }
 
 func (c *Config) IsMonorepoProject() bool {
@@ -43,11 +44,11 @@ func (c *Config) IsMonorepoProject() bool {
 	return false
 }
 
-type Project struct {
+type ConfigProject struct {
 	Apps []string `json:"app"`
 }
 
-func (w *Project) AddApp(appDir string) {
+func (w *ConfigProject) AddApp(appDir string) {
 	w.Apps = append(w.Apps, appDir)
 }
 
@@ -93,7 +94,7 @@ func UpsertGlobalConfig(mc Config) error {
 	return nil
 }
 
-func UpsertLocalWorkspace(workspace Project) error {
+func UpsertLocalWorkspace(workspace ConfigProject) error {
 	localConfig, err := RestoreLocalConfig()
 	if err != nil {
 		return errors.Wrap(err, "Failed to restore local config")
@@ -115,7 +116,7 @@ func AddAppToLocalProject(appDir string) error {
 		return errors.Wrap(err, "Failed to restore local config")
 	}
 	if localConfig.Project == nil {
-		localConfig.Project = &Project{}
+		localConfig.Project = &ConfigProject{}
 	}
 	localConfig.Project.AddApp(appDir)
 	jsonData, err := json.MarshalIndent(localConfig, "", "  ")
@@ -312,7 +313,7 @@ func UpsertGlobalOrganizationID(organizationID string) error {
 	return nil
 }
 
-func UpsertProjectID(projectID string) error {
+func UpsertProject(project models.Project) error {
 	var mconfig Config
 	var hasConfig bool
 
@@ -335,11 +336,13 @@ func UpsertProjectID(projectID string) error {
 
 	if !hasConfig {
 		mc := Config{
-			ProjectId:      &projectID,
-			AppName:        nil,
-			AppId:          nil,
-			AppAlternateId: nil,
-			OrganizationId: "",
+			ProjectId:          project.ID,
+			ProjectName:        &project.Name,
+			ProjectAlternateId: &project.AlternateID,
+			AppName:            nil,
+			AppId:              nil,
+			AppAlternateId:     nil,
+			OrganizationId:     "",
 		}
 		jsonData, err := json.MarshalIndent(mc, "", "  ")
 		if err != nil {
@@ -352,7 +355,9 @@ func UpsertProjectID(projectID string) error {
 		return nil
 	}
 
-	mconfig.ProjectId = &projectID
+	mconfig.ProjectId = project.ID
+	mconfig.ProjectName = &project.Name
+	mconfig.ProjectAlternateId = &project.AlternateID
 
 	configFile := localConfigFile
 	if localConfigErr != nil {
@@ -371,7 +376,7 @@ func UpsertProjectID(projectID string) error {
 	return nil
 }
 
-func UpsertGlobalProjectID(projectID string) error {
+func UpsertGlobalProject(project models.Project) error {
 	globalDir := GetGlobalDirectory()
 	globalConfigFile := filepath.Join(globalDir, ManifestConfigFile)
 
@@ -388,8 +393,10 @@ func UpsertGlobalProjectID(projectID string) error {
 		mconfig = existingConfig
 	}
 
-	// Update or set the ProjectId
-	mconfig.ProjectId = &projectID
+	// Update or set the project fields
+	mconfig.ProjectId = project.ID
+	mconfig.ProjectName = &project.Name
+	mconfig.ProjectAlternateId = &project.AlternateID
 
 	// Ensure the global directory exists
 	if err := FS.MkdirAll(globalDir, 0755); err != nil {

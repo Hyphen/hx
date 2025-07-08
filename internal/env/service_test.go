@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/stretchr/testify/assert"
@@ -35,7 +36,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestEncryptData(t *testing.T) {
-	env := Env{Data: "KEY=VALUE"}
+	env := models.Env{Data: "KEY=VALUE"}
 	mockKey := new(secretkey.MockSecretKey)
 	mockKey.On("Encrypt", "KEY=VALUE").Return("ENCRYPTED_DATA", nil)
 
@@ -46,7 +47,7 @@ func TestEncryptData(t *testing.T) {
 }
 
 func TestDecryptData(t *testing.T) {
-	env := Env{Data: "ENCRYPTED_DATA"}
+	env := models.Env{Data: "ENCRYPTED_DATA"}
 	mockKey := new(secretkey.MockSecretKey)
 	mockKey.On("Decrypt", "ENCRYPTED_DATA").Return("KEY=VALUE", nil)
 
@@ -57,7 +58,7 @@ func TestDecryptData(t *testing.T) {
 }
 
 func TestDecryptVarsAndSaveIntoFile(t *testing.T) {
-	env := Env{Data: "ENCRYPTED_DATA"}
+	env := models.Env{Data: "ENCRYPTED_DATA"}
 	mockKey := new(secretkey.MockSecretKey)
 	mockKey.On("Decrypt", "ENCRYPTED_DATA").Return("KEY1=VALUE1\nKEY2=VALUE2", nil)
 
@@ -135,7 +136,7 @@ func TestEnvService_GetEnvironment(t *testing.T) {
 		httpClient: mockHTTPClient,
 	}
 
-	expectedEnv := Environment{ID: "123", Name: "TestEnv"}
+	expectedEnv := models.Environment{ID: "123", Name: "TestEnv"}
 	responseBody, _ := json.Marshal(expectedEnv)
 
 	mockResponse := &http.Response{
@@ -160,7 +161,7 @@ func TestEnvService_PutEnv(t *testing.T) {
 		httpClient: mockHTTPClient,
 	}
 
-	env := Env{Size: "100 bytes", CountVariables: 5}
+	env := models.Env{Size: "100 bytes", CountVariables: 5}
 
 	mockResponse := &http.Response{
 		StatusCode: http.StatusCreated,
@@ -182,7 +183,7 @@ func TestEnvService_GetEnv(t *testing.T) {
 		httpClient: mockHTTPClient,
 	}
 
-	expectedEnv := Env{Size: "100 bytes", CountVariables: 5}
+	expectedEnv := models.Env{Size: "100 bytes", CountVariables: 5}
 	responseBody, _ := json.Marshal(expectedEnv)
 
 	mockResponse := &http.Response{
@@ -207,15 +208,15 @@ func TestEnvService_ListEnvs(t *testing.T) {
 		httpClient: mockHTTPClient,
 	}
 
-	expectedEnvs := []Env{
+	expectedEnvs := []models.Env{
 		{Size: "100 bytes", CountVariables: 5},
 		{Size: "200 bytes", CountVariables: 10},
 	}
 	envsData := struct {
-		Data       []Env `json:"data"`
-		TotalCount int   `json:"totalCount"`
-		PageNum    int   `json:"pageNum"`
-		PageSize   int   `json:"pageSize"`
+		Data       []models.Env `json:"data"`
+		TotalCount int          `json:"totalCount"`
+		PageNum    int          `json:"pageNum"`
+		PageSize   int          `json:"pageSize"`
 	}{
 		Data:       expectedEnvs,
 		TotalCount: 2,
@@ -246,15 +247,15 @@ func TestEnvService_ListEnvironments(t *testing.T) {
 		httpClient: mockHTTPClient,
 	}
 
-	expectedEnvs := []Environment{
+	expectedEnvs := []models.Environment{
 		{ID: "env1", Name: "Env 1"},
 		{ID: "env2", Name: "Env 2"},
 	}
 	envsData := struct {
-		Data       []Environment `json:"data"`
-		TotalCount int           `json:"totalCount"`
-		PageNum    int           `json:"pageNum"`
-		PageSize   int           `json:"pageSize"`
+		Data       []models.Environment `json:"data"`
+		TotalCount int                  `json:"totalCount"`
+		PageNum    int                  `json:"pageNum"`
+		PageSize   int                  `json:"pageSize"`
 	}{
 		Data:       expectedEnvs,
 		TotalCount: 2,

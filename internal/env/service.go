@@ -9,19 +9,20 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/Hyphen/cli/internal/secret"
+	"github.com/Hyphen/cli/internal/models"
+	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
 )
 
 type EnvServicer interface {
-	GetEnvironment(organizationId, projectId, environment string) (Environment, bool, error)
-	PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env Env) error
-	GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId *int64, version *int) (Env, error)
-	ListEnvs(organizationId, appId string, size, page int) ([]Env, error)
-	ListEnvVersions(organizationId, appId, environmentId string, size, page int) ([]Env, error)
-	ListEnvironments(organizationId, projectId string, size, page int) ([]Environment, error)
+	GetEnvironment(organizationId, projectId, environment string) (models.Environment, bool, error)
+	PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env models.Env) error
+	GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId *int64, version *int) (models.Env, error)
+	ListEnvs(organizationId, appId string, size, page int) ([]models.Env, error)
+	ListEnvVersions(organizationId, appId, environmentId string, size, page int) ([]models.Env, error)
+	ListEnvironments(organizationId, projectId string, size, page int) ([]models.Environment, error)
 }
 
 type EnvService struct {
@@ -40,35 +41,35 @@ func NewService() *EnvService {
 	}
 }
 
-func (es *EnvService) GetEnvironment(organizationId, projectId, environmentId string) (Environment, bool, error) {
+func (es *EnvService) GetEnvironment(organizationId, projectId, environmentId string) (models.Environment, bool, error) {
 	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments/%s/", es.baseUrl, organizationId, projectId, environmentId)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return Environment{}, false, errors.Wrap(err, "Failed to create a new HTTP request")
+		return models.Environment{}, false, errors.Wrap(err, "Failed to create a new HTTP request")
 	}
 
 	resp, err := es.httpClient.Do(req)
 	if err != nil {
-		return Environment{}, false, err
+		return models.Environment{}, false, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return Environment{}, false, nil
+		return models.Environment{}, false, nil
 	} else if resp.StatusCode != http.StatusOK {
-		return Environment{}, false, errors.HandleHTTPError(resp)
+		return models.Environment{}, false, errors.HandleHTTPError(resp)
 	}
 
-	var environment Environment
+	var environment models.Environment
 	if err := json.NewDecoder(resp.Body).Decode(&environment); err != nil {
-		return Environment{}, false, errors.Wrap(err, "Failed to decode the response body")
+		return models.Environment{}, false, errors.Wrap(err, "Failed to decode the response body")
 	}
 
 	return environment, true, nil
 }
 
-func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env Env) error {
+func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env models.Env) error {
 	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseUrl, organizationId, appId)
 
 	query := url.Values{}
@@ -102,7 +103,7 @@ func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId str
 	return nil
 }
 
-func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId *int64, version *int) (Env, error) {
+func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId *int64, version *int) (models.Env, error) {
 	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseUrl, organizationId, appId)
 
 	query := url.Values{}
@@ -123,28 +124,28 @@ func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId str
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return Env{}, errors.Wrap(err, "Failed to create a new HTTP request")
+		return models.Env{}, errors.Wrap(err, "Failed to create a new HTTP request")
 	}
 
 	resp, err := es.httpClient.Do(req)
 	if err != nil {
-		return Env{}, err
+		return models.Env{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return Env{}, errors.HandleHTTPError(resp)
+		return models.Env{}, errors.HandleHTTPError(resp)
 	}
 
-	var envData Env
+	var envData models.Env
 	if err := json.NewDecoder(resp.Body).Decode(&envData); err != nil {
-		return Env{}, errors.Wrap(err, "Failed to decode the response body")
+		return models.Env{}, errors.Wrap(err, "Failed to decode the response body")
 	}
 
 	return envData, nil
 }
 
-func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]Env, error) {
+func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]models.Env, error) {
 	baseURL := fmt.Sprintf("%s/api/organizations/%s/dot-envs", es.baseUrl, organizationId)
 
 	query := url.Values{}
@@ -158,34 +159,34 @@ func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return []Env{}, errors.Wrap(err, "Failed to create a new HTTP request")
+		return []models.Env{}, errors.Wrap(err, "Failed to create a new HTTP request")
 	}
 
 	resp, err := es.httpClient.Do(req)
 	if err != nil {
-		return []Env{}, err
+		return []models.Env{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return []Env{}, errors.HandleHTTPError(resp)
+		return []models.Env{}, errors.HandleHTTPError(resp)
 	}
 
 	envsData := struct {
-		Data       []Env `json:"data"`
-		TotalCount int   `json:"totalCount"`
-		PageNum    int   `json:"pageNum"`
-		PageSize   int   `json:"pageSize"`
+		Data       []models.Env `json:"data"`
+		TotalCount int          `json:"totalCount"`
+		PageNum    int          `json:"pageNum"`
+		PageSize   int          `json:"pageSize"`
 	}{}
 
 	if err := json.NewDecoder(resp.Body).Decode(&envsData); err != nil {
-		return []Env{}, errors.Wrap(err, "Failed to decode response body")
+		return []models.Env{}, errors.Wrap(err, "Failed to decode response body")
 	}
 
 	return envsData.Data, nil
 }
 
-func (es *EnvService) ListEnvVersions(organizationId, appId, environmentId string, size, page int) ([]Env, error) {
+func (es *EnvService) ListEnvVersions(organizationId, appId, environmentId string, size, page int) ([]models.Env, error) {
 	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/versions/", es.baseUrl, organizationId, appId)
 
 	query := url.Values{}
@@ -200,28 +201,28 @@ func (es *EnvService) ListEnvVersions(organizationId, appId, environmentId strin
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return []Env{}, errors.Wrap(err, "Failed to create a new HTTP request")
+		return []models.Env{}, errors.Wrap(err, "Failed to create a new HTTP request")
 	}
 
 	resp, err := es.httpClient.Do(req)
 	if err != nil {
-		return []Env{}, err
+		return []models.Env{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return []Env{}, errors.HandleHTTPError(resp)
+		return []models.Env{}, errors.HandleHTTPError(resp)
 	}
 
 	envsData := struct {
-		Data       []Env `json:"data"`
-		TotalCount int   `json:"totalCount"`
-		PageNum    int   `json:"pageNum"`
-		PageSize   int   `json:"pageSize"`
+		Data       []models.Env `json:"data"`
+		TotalCount int          `json:"totalCount"`
+		PageNum    int          `json:"pageNum"`
+		PageSize   int          `json:"pageSize"`
 	}{}
 
 	if err := json.NewDecoder(resp.Body).Decode(&envsData); err != nil {
-		return []Env{}, errors.Wrap(err, "Failed to decode response body")
+		return []models.Env{}, errors.Wrap(err, "Failed to decode response body")
 	}
 
 	for i := range envsData.Data {
@@ -236,7 +237,7 @@ func (es *EnvService) ListEnvVersions(organizationId, appId, environmentId strin
 	return envsData.Data, nil
 }
 
-func (es *EnvService) ListEnvironments(organizationId, projectId string, size, page int) ([]Environment, error) {
+func (es *EnvService) ListEnvironments(organizationId, projectId string, size, page int) ([]models.Environment, error) {
 	baseURL := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments", es.baseUrl, organizationId, projectId)
 
 	query := url.Values{}
@@ -247,28 +248,28 @@ func (es *EnvService) ListEnvironments(organizationId, projectId string, size, p
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return []Environment{}, errors.Wrap(err, "Failed to create a new HTTP request")
+		return []models.Environment{}, errors.Wrap(err, "Failed to create a new HTTP request")
 	}
 
 	resp, err := es.httpClient.Do(req)
 	if err != nil {
-		return []Environment{}, err
+		return []models.Environment{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return []Environment{}, errors.HandleHTTPError(resp)
+		return []models.Environment{}, errors.HandleHTTPError(resp)
 	}
 
 	envsData := struct {
-		Data       []Environment `json:"data"`
-		TotalCount int           `json:"totalCount"`
-		PageNum    int           `json:"pageNum"`
-		PageSize   int           `json:"pageSize"`
+		Data       []models.Environment `json:"data"`
+		TotalCount int                  `json:"totalCount"`
+		PageNum    int                  `json:"pageNum"`
+		PageSize   int                  `json:"pageSize"`
 	}{}
 
 	if err := json.NewDecoder(resp.Body).Decode(&envsData); err != nil {
-		return []Environment{}, errors.Wrap(err, "Failed to decode response body")
+		return []models.Environment{}, errors.Wrap(err, "Failed to decode response body")
 	}
 
 	return envsData.Data, nil
@@ -288,10 +289,10 @@ func GetLocalEnvContents(envName string) (string, error) {
 	return e.Data, nil
 }
 
-func GetLocalEncryptedEnv(envName string, envCompletePath *string, s secret.Secret) (Env, error) {
+func GetLocalEncryptedEnv(envName string, envCompletePath *string, s models.Secret) (models.Env, error) {
 	envFile, err := GetFileName(envName)
 	if err != nil {
-		return Env{}, err
+		return models.Env{}, err
 	}
 	if envCompletePath != nil {
 		envFile = path.Join(*envCompletePath, envFile)
@@ -299,12 +300,12 @@ func GetLocalEncryptedEnv(envName string, envCompletePath *string, s secret.Secr
 
 	e, err := New(envFile)
 	if err != nil {
-		return Env{}, err
+		return models.Env{}, err
 	}
 
-	envEncrytedData, err := e.EncryptData(s.GetSecretKey())
+	envEncrytedData, err := e.EncryptData(secretkey.FromBase64(s.Base64SecretKey))
 	if err != nil {
-		return Env{}, err
+		return models.Env{}, err
 	}
 	e.Data = envEncrytedData
 	e.SecretKeyId = &s.SecretKeyId

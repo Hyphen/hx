@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/projects"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -63,7 +64,7 @@ func TestCreateProject(t *testing.T) {
 	}
 	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
 
-	newProject := projects.Project{
+	newProject := models.Project{
 		Name: "Project 1",
 	}
 

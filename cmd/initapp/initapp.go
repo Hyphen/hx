@@ -11,7 +11,9 @@ import (
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
 	hyphenapp "github.com/Hyphen/cli/internal/hyphenApp"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secret"
+	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -227,7 +229,7 @@ func GetAppName(cmd *cobra.Command, args []string) (string, bool, error) {
 	return dirName, true, nil
 }
 
-func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, c config.Config, s secret.Secret, orgID, appID, envID, envName string) error {
+func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, c config.Config, s models.Secret, orgID, appID, envID, envName string) error {
 	envFileName, err := env.GetFileName(envName)
 	if err != nil {
 		return err
@@ -265,7 +267,7 @@ func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, c
 		return err
 	}
 
-	newEnvDecrypted, err := envStruct.DecryptData(s.GetSecretKey())
+	newEnvDecrypted, err := envStruct.DecryptData(secretkey.FromBase64(s.Base64SecretKey))
 	if err != nil {
 		return err
 	}
@@ -381,7 +383,7 @@ func isValidDirectory(cmd *cobra.Command) error {
 	return nil
 }
 
-func HandleExistingApp(cmd *cobra.Command, appService app.AppService, orgID, appAlternateId string) (*app.App, error) {
+func HandleExistingApp(cmd *cobra.Command, appService app.AppService, orgID, appAlternateId string) (*models.App, error) {
 	response := prompt.PromptYesNo(cmd, fmt.Sprintf("An app with ID '%s' already exists. Do you want to use this existing app?", appAlternateId), true)
 	if !response.Confirmed {
 		return nil, nil

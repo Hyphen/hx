@@ -12,7 +12,9 @@ import (
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secret"
+	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -111,7 +113,7 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 	}
 }
 
-func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc config.Config, appService *app.AppService, envService *env.EnvService, monorepoSecret secret.Secret) error {
+func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc config.Config, appService *app.AppService, envService *env.EnvService, monorepoSecret models.Secret) error {
 	// Get the app name from directory and prompt for confirmation/new name
 	defaultAppName := filepath.Base(appDir)
 	response := prompt.PromptYesNo(cmd, fmt.Sprintf("Use the directory name '%s' as the app name?", defaultAppName), true)
@@ -230,7 +232,7 @@ func initializeMonorepoApp(cmd *cobra.Command, appDir string, orgID string, mc c
 	return nil
 }
 
-func CreateAndPushEmptyEnvFileMonorepo(cmd *cobra.Command, envService *env.EnvService, c config.Config, s secret.Secret, orgID, appID, envID, envName, appDir string) error {
+func CreateAndPushEmptyEnvFileMonorepo(cmd *cobra.Command, envService *env.EnvService, c config.Config, s models.Secret, orgID, appID, envID, envName, appDir string) error {
 	envFileName, err := env.GetFileName(envName)
 	if err != nil {
 		return err
@@ -274,7 +276,7 @@ func CreateAndPushEmptyEnvFileMonorepo(cmd *cobra.Command, envService *env.EnvSe
 		return err
 	}
 
-	newEnvDecrypted, err := envStruct.DecryptData(s.GetSecretKey())
+	newEnvDecrypted, err := envStruct.DecryptData(secretkey.FromBase64(s.Base64SecretKey))
 	if err != nil {
 		return err
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secret"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/internal/vinz"
@@ -195,8 +196,8 @@ func newService(envService env.EnvServicer, db database.Database, vinzService vi
 	}
 }
 
-func (s *service) getSecretKey(orgId, projectId string, secret secret.Secret) *secretkey.SecretKey {
-	return secret.GetSecretKey()
+func (s *service) getSecretKey(orgId, projectId string, secret models.Secret) *secretkey.SecretKey {
+	return secretkey.FromBase64(secret.Base64SecretKey)
 }
 
 func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
@@ -211,7 +212,7 @@ func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
 	return nil
 }
 
-func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretKey *secretkey.SecretKey, config config.Config, secret secret.Secret, force bool) error {
+func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretKey *secretkey.SecretKey, config config.Config, secret models.Secret, force bool) error {
 	envFileName, err := env.GetFileName(envName)
 	if err != nil {
 		return err
@@ -288,7 +289,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 	return nil
 }
 
-func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *secretkey.SecretKey, config config.Config, secret secret.Secret, force bool) ([]string, error) {
+func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *secretkey.SecretKey, config config.Config, secret models.Secret, force bool) ([]string, error) {
 	allEnvs, err := s.envService.ListEnvs(orgId, appId, 100, 1)
 	if err != nil {
 		return nil, err

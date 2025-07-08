@@ -6,16 +6,19 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"strings"
 
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
 )
 
 type AppServicer interface {
-	GetListApps(organizationID, projectID string, pageSize, pageNum int) ([]App, error)
-	CreateApp(organizationID, projectID, alternateID, name string) (App, error)
-	GetApp(organizationID, appID string) (App, error)
+	GetListApps(organizationID, projectID string, pageSize, pageNum int) ([]models.App, error)
+	CreateApp(organizationID, projectID, alternateID, name string) (models.App, error)
+	GetApp(organizationID, appID string) (models.App, error)
 	DeleteApp(organizationID, appID string) error
 }
 
@@ -32,7 +35,7 @@ func NewService() *AppService {
 	}
 }
 
-func (ps *AppService) GetListApps(organizationID, projectID string, pageSize, pageNum int) ([]App, error) {
+func (ps *AppService) GetListApps(organizationID, projectID string, pageSize, pageNum int) ([]models.App, error) {
 	url := fmt.Sprintf("%s/api/organizations/%s/apps/?pageNum=%d&pageSize=%d&projects=%s", ps.baseUrl, organizationID, pageNum, pageSize, projectID)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -56,10 +59,10 @@ func (ps *AppService) GetListApps(organizationID, projectID string, pageSize, pa
 	}
 
 	var response struct {
-		Total    int   `json:"total"`
-		PageNum  int   `json:"pageNum"`
-		PageSize int   `json:"pageSize"`
-		Data     []App `json:"data"`
+		Total    int          `json:"total"`
+		PageNum  int          `json:"pageNum"`
+		PageSize int          `json:"pageSize"`
+		Data     []models.App `json:"data"`
 	}
 
 	err = json.Unmarshal(body, &response)
@@ -70,7 +73,7 @@ func (ps *AppService) GetListApps(organizationID, projectID string, pageSize, pa
 	return response.Data, nil
 }
 
-func (ps *AppService) CreateApp(organizationID, projectId, alternateID, name string) (App, error) {
+func (ps *AppService) CreateApp(organizationID, projectId, alternateID, name string) (models.App, error) {
 	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/apps", ps.baseUrl, organizationID, projectId)
 
 	payload := struct {
@@ -83,65 +86,65 @@ func (ps *AppService) CreateApp(organizationID, projectId, alternateID, name str
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return App{}, errors.Wrap(err, "Failed to marshal request payload")
+		return models.App{}, errors.Wrap(err, "Failed to marshal request payload")
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
 	if err != nil {
-		return App{}, errors.Wrap(err, "Failed to create request")
+		return models.App{}, errors.Wrap(err, "Failed to create request")
 	}
 
 	resp, err := ps.httpClient.Do(req)
 	if err != nil {
-		return App{}, err
+		return models.App{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
-		return App{}, errors.HandleHTTPError(resp)
+		return models.App{}, errors.HandleHTTPError(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return App{}, errors.Wrap(err, "Failed to read response body")
+		return models.App{}, errors.Wrap(err, "Failed to read response body")
 	}
 
-	var app App
+	var app models.App
 	err = json.Unmarshal(body, &app)
 	if err != nil {
-		return App{}, errors.Wrap(err, "Failed to parse JSON response")
+		return models.App{}, errors.Wrap(err, "Failed to parse JSON response")
 	}
 
 	return app, nil
 }
 
-func (ps *AppService) GetApp(organizationID, appID string) (App, error) {
+func (ps *AppService) GetApp(organizationID, appID string) (models.App, error) {
 	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/", ps.baseUrl, organizationID, appID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return App{}, errors.Wrap(err, "Failed to create request")
+		return models.App{}, errors.Wrap(err, "Failed to create request")
 	}
 
 	resp, err := ps.httpClient.Do(req)
 	if err != nil {
-		return App{}, err
+		return models.App{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return App{}, errors.HandleHTTPError(resp)
+		return models.App{}, errors.HandleHTTPError(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return App{}, errors.Wrap(err, "Failed to read response body")
+		return models.App{}, errors.Wrap(err, "Failed to read response body")
 	}
 
-	var app App
+	var app models.App
 	err = json.Unmarshal(body, &app)
 	if err != nil {
-		return App{}, errors.Wrap(err, "Failed to parse JSON response")
+		return models.App{}, errors.Wrap(err, "Failed to parse JSON response")
 	}
 
 	return app, nil
@@ -163,6 +166,25 @@ func (ps *AppService) DeleteApp(organizationID, appID string) error {
 
 	if resp.StatusCode != http.StatusNoContent {
 		return errors.HandleHTTPError(resp)
+	}
+
+	return nil
+}
+
+func CheckAppId(appId string) error {
+	validRegex := regexp.MustCompile("^[a-z0-9-_]+$")
+	if !validRegex.MatchString(appId) {
+		suggested := strings.ToLower(appId)
+		suggested = strings.ReplaceAll(suggested, " ", "-")
+		suggested = regexp.MustCompile("[^a-z0-9-_]").ReplaceAllString(suggested, "-")
+		suggested = regexp.MustCompile("-+").ReplaceAllString(suggested, "-")
+		suggested = strings.Trim(suggested, "-")
+
+		return errors.Wrapf(
+			errors.New("invalid app ID"),
+			"You are using unpermitted characters. A valid App ID can only contain lowercase letters, numbers, hyphens, and underscores. Suggested valid ID: %s",
+			suggested,
+		)
 	}
 
 	return nil

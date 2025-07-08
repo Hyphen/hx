@@ -8,6 +8,7 @@ import (
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secret"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/internal/vinz"
@@ -182,8 +183,8 @@ func newService(envService env.EnvServicer, db database.Database, vinzService vi
 	}
 }
 
-func (s *service) putEnv(orgID, envName, appID string, e env.Env, secret secret.Secret, config config.Config, secretKeyId int64, skippedEnvs *[]string) (err error, skippable bool) {
-	secretKey := secret.GetSecretKey()
+func (s *service) putEnv(orgID, envName, appID string, e models.Env, secret models.Secret, config config.Config, secretKeyId int64, skippedEnvs *[]string) (err error, skippable bool) {
+	secretKey := secretkey.FromBase64(secret.Base64SecretKey)
 	// Check local environment
 	currentLocalEnv, exists := s.db.GetSecret(database.SecretKey{
 		ProjectId: *config.ProjectId,
@@ -226,12 +227,12 @@ func (s *service) putEnv(orgID, envName, appID string, e env.Env, secret secret.
 	return nil, false
 }
 
-func (s *service) validateLocalEnv(local *database.Secret, new *env.Env, secretKey secretkey.SecretKeyer) (err error, skippable bool) {
+func (s *service) validateLocalEnv(local *database.Secret, new *models.Env, secretKey secretkey.SecretKeyer) (err error, skippable bool) {
 	newEnvDcrypted, err := new.DecryptData(secretKey)
 	if err != nil {
 		return err, false
 	}
-	if local.Hash == env.HashData(newEnvDcrypted) {
+	if local.Hash == models.HashData(newEnvDcrypted) {
 		return nil, true
 	}
 

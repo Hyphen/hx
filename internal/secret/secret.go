@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"dario.cat/mergo"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/internal/vinz"
 	"github.com/Hyphen/cli/pkg/errors"
@@ -22,29 +23,19 @@ var (
 	ManifestSecretFile = ".hxkey"
 )
 
-type Secret struct {
-	SecretKeyId int64  `json:"secret_key_id"`
-	SecretKey   string `json:"secret_key"`
-}
-
-func NewSecret(sk *secretkey.SecretKey) Secret {
-	return Secret{
-		SecretKeyId: time.Now().Unix(),
-		SecretKey:   sk.Base64(),
+func NewSecret(sk *secretkey.SecretKey) models.Secret {
+	return models.Secret{
+		SecretKeyId:     time.Now().Unix(),
+		Base64SecretKey: sk.Base64(),
 	}
 }
 
-func (s *Secret) GetSecretKey() *secretkey.SecretKey {
-	return secretkey.FromBase64(s.SecretKey)
-}
-
-func LoadSecret(organizationId, projectIdOrAlternateId string, create bool) (Secret, error) {
+func LoadSecret(organizationId, projectIdOrAlternateId string, create bool) (models.Secret, error) {
 	secret, err := vs.GetKey(organizationId, projectIdOrAlternateId)
 	if err == nil {
-		//TODO: clean up and combine types
-		return Secret{
-			SecretKeyId: secret.SecretKeyId,
-			SecretKey:   secret.SecretKey,
+		return models.Secret{
+			SecretKeyId:     secret.SecretKeyId,
+			Base64SecretKey: secret.SecretKey,
 		}, nil
 	}
 
@@ -60,64 +51,64 @@ func LoadSecret(organizationId, projectIdOrAlternateId string, create bool) (Sec
 	return InitializeSecret(organizationId, projectIdOrAlternateId, ManifestSecretFile)
 }
 
-func InitializeSecret(organizationId, projectIdOrAlternateId, secretFile string) (Secret, error) {
+func InitializeSecret(organizationId, projectIdOrAlternateId, secretFile string) (models.Secret, error) {
 	sk, err := secretkey.New()
 	if err != nil {
-		return Secret{}, errors.Wrap(err, "Failed to create new secret key")
+		return models.Secret{}, errors.Wrap(err, "Failed to create new secret key")
 	}
 
 	ms := NewSecret(sk)
 
 	jsonData, err := json.MarshalIndent(ms, "", "  ")
 	if err != nil {
-		return Secret{}, errors.Wrap(err, "Error encoding JSON")
+		return models.Secret{}, errors.Wrap(err, "Error encoding JSON")
 	}
 
 	if flags.LocalSecret {
 		err = FS.WriteFile(secretFile, jsonData, 0644)
 		if err != nil {
-			return Secret{}, errors.Wrapf(err, "Error writing file: %s", secretFile)
+			return models.Secret{}, errors.Wrapf(err, "Error writing file: %s", secretFile)
 		}
 	} else {
 		_, err := vs.SaveKey(organizationId, projectIdOrAlternateId, vinz.Key{
 			SecretKeyId: ms.SecretKeyId,
-			SecretKey:   ms.SecretKey,
+			SecretKey:   ms.Base64SecretKey,
 		})
 		if err != nil {
-			return Secret{}, errors.Wrap(err, "Failed to save secret key")
+			return models.Secret{}, errors.Wrap(err, "Failed to save secret key")
 		}
 	}
 	return ms, nil
 }
 
-func RestoreSecretFromFile(manifestSecretFile string) (Secret, error) {
+func RestoreSecretFromFile(manifestSecretFile string) (models.Secret, error) {
 	monorepoSecret, err := RestoreSecretFromMonorepo()
 	if err == nil {
 		return monorepoSecret, nil
 	}
 
-	var secret Secret
+	var secret models.Secret
 	//var hasSecret bool
 
 	globalSecretFile := fmt.Sprintf("%s/%s", GetGlobalDirectory(), manifestSecretFile)
 
-	globalSecret, err := readAndUnmarshalConfigJSON[Secret](globalSecretFile)
+	globalSecret, err := readAndUnmarshalConfigJSON[models.Secret](globalSecretFile)
 	if err == nil {
 		secret = globalSecret
 		//hasSecret = true
 	} else if !os.IsNotExist(err) {
-		return Secret{}, err
+		return models.Secret{}, err
 	}
 
-	localSecret, localSecretErr := readAndUnmarshalConfigJSON[Secret](manifestSecretFile)
+	localSecret, localSecretErr := readAndUnmarshalConfigJSON[models.Secret](manifestSecretFile)
 	if localSecretErr == nil {
 		mergeErr := mergo.Merge(&secret, localSecret, mergo.WithOverride)
 		if mergeErr != nil {
-			return Secret{}, errors.Wrap(mergeErr, "Error merging your .hxkey secret(s)")
+			return models.Secret{}, errors.Wrap(mergeErr, "Error merging your .hxkey secret(s)")
 		}
 		//hasSecret = true
 	} else if !os.IsNotExist(localSecretErr) {
-		return Secret{}, localSecretErr
+		return models.Secret{}, localSecretErr
 	}
 
 	// if !hasSecret {
@@ -127,11 +118,11 @@ func RestoreSecretFromFile(manifestSecretFile string) (Secret, error) {
 	return secret, nil
 }
 
-func RestoreSecretFromMonorepo() (Secret, error) {
+func RestoreSecretFromMonorepo() (models.Secret, error) {
 	// Start from current directory
 	currentDir, err := os.Getwd()
 	if err != nil {
-		return Secret{}, errors.Wrap(err, "Failed to get current working directory")
+		return models.Secret{}, errors.Wrap(err, "Failed to get current working directory")
 	}
 
 	// Keep traversing up until we find a monorepo config or hit root
@@ -157,7 +148,7 @@ func RestoreSecretFromMonorepo() (Secret, error) {
 
 		// Look for .hxkey in the same directory
 		secretPath := filepath.Join(currentDir, ManifestSecretFile)
-		secret, err := readAndUnmarshalConfigJSON[Secret](secretPath)
+		secret, err := readAndUnmarshalConfigJSON[models.Secret](secretPath)
 		if err == nil {
 			return secret, nil
 		}
@@ -167,14 +158,14 @@ func RestoreSecretFromMonorepo() (Secret, error) {
 
 		// Check if we've hit the root directory
 		if parentDir == currentDir {
-			return Secret{}, errors.New("No monorepo configuration found in parent directories")
+			return models.Secret{}, errors.New("No monorepo configuration found in parent directories")
 		}
 
 		currentDir = parentDir
 	}
 }
 
-func UpsertLocalSecret(secret Secret) error {
+func UpsertLocalSecret(secret models.Secret) error {
 	localSecretFile := ManifestSecretFile
 
 	jsonData, err := json.MarshalIndent(secret, "", "  ")

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Hyphen/cli/internal/app"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
@@ -64,9 +65,11 @@ func runGet(cmd *cobra.Command, args []string) {
 	printAppDetails(retrievedApp)
 }
 
-func printAppDetails(app app.App) {
-	printer.PrintDetail("Project ID", app.Project.ID)
-	printer.PrintDetail("Project Name", app.Project.Name)
+func printAppDetails(app models.App) {
+	if app.Project != nil {
+		printer.PrintDetail("Project ID", app.Project.ID)
+		printer.PrintDetail("Project Name", app.Project.Name)
+	}
 	printer.PrintDetail("App Name", app.Name)
 	printer.PrintDetail("App AlternateId", app.AlternateId)
 	printer.PrintDetail("App ID", app.ID)

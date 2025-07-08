@@ -6,6 +6,7 @@ import (
 
 	"github.com/Hyphen/cli/internal/build"
 	Deployment "github.com/Hyphen/cli/internal/deployment"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -211,10 +212,10 @@ Use 'hyphen deploy --help' for more information about available flags.
 	},
 }
 
-func FindStepOrTaskByID(pipeline Deployment.Pipeline, id string) (interface{}, bool) {
+func FindStepOrTaskByID(pipeline models.Pipeline, id string) (interface{}, bool) {
 	// Helper function to recursively search steps
-	var searchSteps func(steps []Deployment.Step) (interface{}, bool)
-	searchSteps = func(steps []Deployment.Step) (interface{}, bool) {
+	var searchSteps func(steps []models.Step) (interface{}, bool)
+	searchSteps = func(steps []models.Step) (interface{}, bool) {
 		for _, step := range steps {
 			// Check if the current step matches the ID
 			if step.ID == id {

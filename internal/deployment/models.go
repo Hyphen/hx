@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -38,7 +39,7 @@ type RunMessageData struct {
 }
 
 type StatusModel struct {
-	Pipeline       Pipeline
+	Pipeline       models.Pipeline
 	OrganizationId string
 	DeploymentId   string
 	RunId          string
@@ -96,10 +97,10 @@ func (m StatusModel) View() string {
 	return result
 }
 
-func (m StatusModel) RenderTree(pipeLine Pipeline) string {
-	var buildTree func(steps []Step, level int) string
+func (m StatusModel) RenderTree(pipeLine models.Pipeline) string {
+	var buildTree func(steps []models.Step, level int) string
 
-	buildTree = func(steps []Step, level int) string {
+	buildTree = func(steps []models.Step, level int) string {
 		var result string
 		indent := strings.Repeat("  ", level) // Indentation based on level
 
@@ -138,8 +139,8 @@ func getMarkerBasedOnStatus(status string) string {
 
 func (m StatusModel) UpdateStatusForId(id string, status string) {
 	// Helper function to recursively search and update status
-	var updateStatus func(steps []Step) bool
-	updateStatus = func(steps []Step) bool {
+	var updateStatus func(steps []models.Step) bool
+	updateStatus = func(steps []models.Step) bool {
 		for i := range steps {
 			// Check if the current step matches the ID
 			if steps[i].ID == id {

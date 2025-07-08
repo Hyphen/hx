@@ -5,13 +5,14 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
 )
 
 type UserServicer interface {
-	GetExecutionContext() (ExecutionContext, error)
+	GetExecutionContext() (models.ExecutionContext, error)
 }
 
 type UserService struct {
@@ -27,31 +28,31 @@ func NewService() UserServicer {
 	}
 }
 
-func (us *UserService) GetExecutionContext() (ExecutionContext, error) {
+func (us *UserService) GetExecutionContext() (models.ExecutionContext, error) {
 	req, err := http.NewRequest("GET", us.baseUrl+"/api/execution-context/", nil)
 	if err != nil {
-		return ExecutionContext{}, errors.Wrap(err, "Failed to prepare the request. Please try again later.")
+		return models.ExecutionContext{}, errors.Wrap(err, "Failed to prepare the request. Please try again later.")
 	}
 
 	resp, err := us.client.Do(req)
 	if err != nil {
-		return ExecutionContext{}, err
+		return models.ExecutionContext{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return ExecutionContext{}, errors.HandleHTTPError(resp)
+		return models.ExecutionContext{}, errors.HandleHTTPError(resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return ExecutionContext{}, errors.Wrap(err, "Failed to read the server response. Please try again later.")
+		return models.ExecutionContext{}, errors.Wrap(err, "Failed to read the server response. Please try again later.")
 	}
 
-	var executionContext ExecutionContext
+	var executionContext models.ExecutionContext
 	err = json.Unmarshal(body, &executionContext)
 	if err != nil {
-		return ExecutionContext{}, errors.Wrap(err, "Failed to process the server response. Please try again later.")
+		return models.ExecutionContext{}, errors.Wrap(err, "Failed to process the server response. Please try again later.")
 	}
 
 	return executionContext, nil

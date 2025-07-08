@@ -3,6 +3,7 @@ package rotatekey
 import (
 	"github.com/Hyphen/cli/cmd/env/pull"
 	"github.com/Hyphen/cli/cmd/env/push"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secret"
 	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
@@ -75,11 +76,11 @@ func runRotateKey(cmd *cobra.Command) error {
 	return nil
 }
 
-func getNewManifestSecret() (secret.Secret, error) {
+func getNewManifestSecret() (models.Secret, error) {
 	//generate new key
 	newSecretKey, err := secretkey.New()
 	if err != nil {
-		return secret.Secret{}, err
+		return models.Secret{}, err
 	}
 
 	return secret.NewSecret(newSecretKey), nil
