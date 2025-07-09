@@ -5,7 +5,6 @@ import (
 	"github.com/Hyphen/cli/cmd/env/push"
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secret"
-	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/prompt"
@@ -78,10 +77,10 @@ func runRotateKey(cmd *cobra.Command) error {
 
 func getNewManifestSecret() (models.Secret, error) {
 	//generate new key
-	newSecretKey, err := secretkey.New()
+	newSecret, err := models.GenerateSecret()
 	if err != nil {
 		return models.Secret{}, err
 	}
 
-	return secret.NewSecret(newSecretKey), nil
+	return newSecret, nil
 }

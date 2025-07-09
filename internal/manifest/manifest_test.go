@@ -4,7 +4,6 @@ package manifest
 // 	"os"
 // 	"testing"
 
-// 	"github.com/Hyphen/cli/internal/secretkey"
 // 	"github.com/Hyphen/cli/pkg/fsutil"
 // 	"github.com/stretchr/testify/assert"
 // )

@@ -9,7 +9,6 @@ import (
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secret"
-	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/internal/vinz"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
@@ -140,10 +139,9 @@ func pullForApp(args []string, forceFlag bool) error {
 	if err != nil {
 		return err
 	}
-	secretKey := service.getSecretKey(orgId, projectId, secret)
 
 	if envName == "" { // ALL
-		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, secretKey, config, secret, forceFlag)
+		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, secret, config, forceFlag)
 		if err != nil {
 			return err
 		}
@@ -153,7 +151,7 @@ func pullForApp(args []string, forceFlag bool) error {
 		}
 		return nil
 	} else if envName == "default" {
-		if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, secretKey, config, secret, forceFlag); err != nil {
+		if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, secret, config, forceFlag); err != nil {
 			return err
 		}
 
@@ -166,7 +164,7 @@ func pullForApp(args []string, forceFlag bool) error {
 		if err != nil {
 			return err
 		}
-		if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, secretKey, config, secret, forceFlag); err != nil {
+		if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, secret, config, forceFlag); err != nil {
 			return err
 		}
 
@@ -196,10 +194,6 @@ func newService(envService env.EnvServicer, db database.Database, vinzService vi
 	}
 }
 
-func (s *service) getSecretKey(orgId, projectId string, secret models.Secret) *secretkey.SecretKey {
-	return secretkey.FromBase64(secret.Base64SecretKey)
-}
-
 func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
 	_, exist, err := s.envService.GetEnvironment(orgId, projectId, envName)
 	if !exist && err == nil {
@@ -212,7 +206,7 @@ func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
 	return nil
 }
 
-func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretKey *secretkey.SecretKey, config config.Config, secret models.Secret, force bool) error {
+func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secret models.Secret, config config.Config, force bool) error {
 	envFileName, err := env.GetFileName(envName)
 	if err != nil {
 		return err
@@ -267,7 +261,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		}
 	}
 
-	envDataDecrypted, err := e.DecryptData(secretKey)
+	envDataDecrypted, err := e.DecryptData(secret)
 	if err != nil {
 		return err
 	}
@@ -282,14 +276,14 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secretK
 		return err
 	}
 
-	if _, err = e.DecryptVarsAndSaveIntoFile(envFileName, secretKey); err != nil {
+	if _, err = e.DecryptVarsAndSaveIntoFile(envFileName, secret); err != nil {
 		return fmt.Errorf("Failed to save decrypted environment: %s, variables to file: %s", envName, envFileName)
 	}
 
 	return nil
 }
 
-func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *secretkey.SecretKey, config config.Config, secret models.Secret, force bool) ([]string, error) {
+func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secret models.Secret, config config.Config, force bool) ([]string, error) {
 	allEnvs, err := s.envService.ListEnvs(orgId, appId, 100, 1)
 	if err != nil {
 		return nil, err
@@ -300,7 +294,7 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secretkey *
 		if e.ProjectEnv != nil {
 			envName = e.ProjectEnv.AlternateID
 		}
-		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secretkey, config, secret, force); err != nil {
+		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secret, config, force); err != nil {
 			if !Silent {
 				printer.Warning(fmt.Sprintf("Failed to pull environment %s: %s", envName, err))
 			}

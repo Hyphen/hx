@@ -10,7 +10,6 @@ import (
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secret"
-	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/internal/vinz"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -184,7 +183,6 @@ func newService(envService env.EnvServicer, db database.Database, vinzService vi
 }
 
 func (s *service) putEnv(orgID, envName, appID string, e models.Env, secret models.Secret, config config.Config, secretKeyId int64, skippedEnvs *[]string) (err error, skippable bool) {
-	secretKey := secretkey.FromBase64(secret.Base64SecretKey)
 	// Check local environment
 	currentLocalEnv, exists := s.db.GetSecret(database.SecretKey{
 		ProjectId: *config.ProjectId,
@@ -192,7 +190,7 @@ func (s *service) putEnv(orgID, envName, appID string, e models.Env, secret mode
 		EnvName:   envName,
 	})
 	if exists {
-		err, skippable := s.validateLocalEnv(&currentLocalEnv, &e, secretKey)
+		err, skippable := s.validateLocalEnv(&currentLocalEnv, &e, secret)
 		if err != nil {
 			return err, false
 		}
@@ -212,7 +210,7 @@ func (s *service) putEnv(orgID, envName, appID string, e models.Env, secret mode
 	}
 
 	// Update local environment
-	newEnvDcrypted, err := e.DecryptData(secretKey)
+	newEnvDcrypted, err := e.DecryptData(secret)
 	if err != nil {
 		return err, false
 	}
@@ -227,8 +225,8 @@ func (s *service) putEnv(orgID, envName, appID string, e models.Env, secret mode
 	return nil, false
 }
 
-func (s *service) validateLocalEnv(local *database.Secret, new *models.Env, secretKey secretkey.SecretKeyer) (err error, skippable bool) {
-	newEnvDcrypted, err := new.DecryptData(secretKey)
+func (s *service) validateLocalEnv(local *database.Secret, new *models.Env, secret models.Secret) (err error, skippable bool) {
+	newEnvDcrypted, err := new.DecryptData(secret)
 	if err != nil {
 		return err, false
 	}

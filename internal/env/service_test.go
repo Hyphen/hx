@@ -2,6 +2,7 @@ package env
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/Hyphen/cli/internal/models"
-	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -35,47 +35,58 @@ func TestNew(t *testing.T) {
 	assert.Nil(t, env.Version)
 }
 
+func GetBase64Secret() string {
+	nonBase64SecretValue := "test-secret-test-secret-test-secret-test-secret-test-secret-test-secret"
+	base64SecretValue := base64.StdEncoding.EncodeToString([]byte(nonBase64SecretValue))
+	return base64SecretValue
+}
+
 func TestEncryptData(t *testing.T) {
 	env := models.Env{Data: "KEY=VALUE"}
-	mockKey := new(secretkey.MockSecretKey)
-	mockKey.On("Encrypt", "KEY=VALUE").Return("ENCRYPTED_DATA", nil)
+	secret := models.NewSecret(GetBase64Secret())
 
-	encryptedData, err := env.EncryptData(mockKey)
+	encryptedData, err := env.EncryptData(secret)
 	assert.NoError(t, err)
-	assert.Equal(t, "ENCRYPTED_DATA", encryptedData)
-	mockKey.AssertExpectations(t)
+	assert.NotEmpty(t, encryptedData)
+	assert.NotEqual(t, "KEY=VALUE", encryptedData) // Should be encrypted
 }
 
 func TestDecryptData(t *testing.T) {
-	env := models.Env{Data: "ENCRYPTED_DATA"}
-	mockKey := new(secretkey.MockSecretKey)
-	mockKey.On("Decrypt", "ENCRYPTED_DATA").Return("KEY=VALUE", nil)
+	// First encrypt some data, then decrypt it
+	secret := models.NewSecret(GetBase64Secret())
+	originalData := "KEY=VALUE"
 
-	decryptedData, err := env.DecryptData(mockKey)
+	encryptedData, err := secret.Encrypt(originalData)
 	assert.NoError(t, err)
-	assert.Equal(t, "KEY=VALUE", decryptedData)
-	mockKey.AssertExpectations(t)
+
+	env := models.Env{Data: encryptedData}
+	decryptedData, err := env.DecryptData(secret)
+	assert.NoError(t, err)
+	assert.Equal(t, originalData, decryptedData)
 }
 
 func TestDecryptVarsAndSaveIntoFile(t *testing.T) {
-	env := models.Env{Data: "ENCRYPTED_DATA"}
-	mockKey := new(secretkey.MockSecretKey)
-	mockKey.On("Decrypt", "ENCRYPTED_DATA").Return("KEY1=VALUE1\nKEY2=VALUE2", nil)
+	// Encrypt the test data first
+	secret := models.NewSecret(GetBase64Secret())
+	originalData := "KEY1=VALUE1\nKEY2=VALUE2"
+
+	encryptedData, err := secret.Encrypt(originalData)
+	assert.NoError(t, err)
+
+	env := models.Env{Data: encryptedData}
 
 	tmpfile, err := os.CreateTemp("", "test_decrypted.env")
 	assert.NoError(t, err)
 	tmpfile.Close()
 	defer os.Remove(tmpfile.Name())
 
-	fileName, err := env.DecryptVarsAndSaveIntoFile(tmpfile.Name(), mockKey)
+	fileName, err := env.DecryptVarsAndSaveIntoFile(tmpfile.Name(), secret)
 	assert.NoError(t, err)
 	assert.Equal(t, tmpfile.Name(), fileName)
 
 	content, err := os.ReadFile(tmpfile.Name())
 	assert.NoError(t, err)
-	assert.Equal(t, "KEY1=VALUE1\nKEY2=VALUE2", string(content))
-
-	mockKey.AssertExpectations(t)
+	assert.Equal(t, originalData, string(content))
 }
 
 func TestGetEnvName(t *testing.T) {

@@ -14,7 +14,6 @@ import (
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secret"
-	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -276,7 +275,7 @@ func CreateAndPushEmptyEnvFileMonorepo(cmd *cobra.Command, envService *env.EnvSe
 		return err
 	}
 
-	newEnvDecrypted, err := envStruct.DecryptData(secretkey.FromBase64(s.Base64SecretKey))
+	newEnvDecrypted, err := envStruct.DecryptData(s)
 	if err != nil {
 		return err
 	}

@@ -13,7 +13,6 @@ import (
 	hyphenapp "github.com/Hyphen/cli/internal/hyphenApp"
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secret"
-	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -267,7 +266,7 @@ func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, c
 		return err
 	}
 
-	newEnvDecrypted, err := envStruct.DecryptData(secretkey.FromBase64(s.Base64SecretKey))
+	newEnvDecrypted, err := envStruct.DecryptData(s)
 	if err != nil {
 		return err
 	}

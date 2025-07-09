@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"dario.cat/mergo"
 	"github.com/Hyphen/cli/internal/models"
-	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/internal/vinz"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -23,11 +21,8 @@ var (
 	ManifestSecretFile = ".hxkey"
 )
 
-func NewSecret(sk *secretkey.SecretKey) models.Secret {
-	return models.Secret{
-		SecretKeyId:     time.Now().Unix(),
-		Base64SecretKey: sk.Base64(),
-	}
+func NewSecret(secretBase64 string) models.Secret {
+	return models.NewSecret(secretBase64)
 }
 
 func LoadSecret(organizationId, projectIdOrAlternateId string, create bool) (models.Secret, error) {
@@ -52,12 +47,10 @@ func LoadSecret(organizationId, projectIdOrAlternateId string, create bool) (mod
 }
 
 func InitializeSecret(organizationId, projectIdOrAlternateId, secretFile string) (models.Secret, error) {
-	sk, err := secretkey.New()
+	ms, err := models.GenerateSecret()
 	if err != nil {
 		return models.Secret{}, errors.Wrap(err, "Failed to create new secret key")
 	}
-
-	ms := NewSecret(sk)
 
 	jsonData, err := json.MarshalIndent(ms, "", "  ")
 	if err != nil {
@@ -72,7 +65,7 @@ func InitializeSecret(organizationId, projectIdOrAlternateId, secretFile string)
 	} else {
 		_, err := vs.SaveKey(organizationId, projectIdOrAlternateId, vinz.Key{
 			SecretKeyId: ms.SecretKeyId,
-			SecretKey:   ms.Base64SecretKey,
+			SecretKey:   ms.Base64(),
 		})
 		if err != nil {
 			return models.Secret{}, errors.Wrap(err, "Failed to save secret key")

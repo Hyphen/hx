@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
@@ -35,30 +34,30 @@ func (e *Env) HashData() string {
 	return HashData(e.Data)
 }
 
-func (e *Env) EncryptData(key secretkey.SecretKeyer) (string, error) {
-	encryptData, err := key.Encrypt(e.Data)
+func (e *Env) EncryptData(secret Secret) (string, error) {
+	encryptData, err := secret.Encrypt(e.Data)
 	if err != nil {
 		return "", errors.Wrap(err, "Failed to encrypt environment data")
 	}
 	return encryptData, nil
 }
 
-func (e *Env) DecryptData(key secretkey.SecretKeyer) (string, error) {
-	decryptedData, err := key.Decrypt(e.Data)
+func (e *Env) DecryptData(secret Secret) (string, error) {
+	decryptedData, err := secret.Decrypt(e.Data)
 	if err != nil {
 		return "", errors.Wrap(err, "Failed to decrypt environment data")
 	}
 	return decryptedData, nil
 }
 
-func (e *Env) DecryptVarsAndSaveIntoFile(fileName string, key secretkey.SecretKeyer) (string, error) {
+func (e *Env) DecryptVarsAndSaveIntoFile(fileName string, secret Secret) (string, error) {
 	file, err := os.Create(fileName)
 	if err != nil {
 		return "", errors.Wrap(err, "Failed to create or open file for saving decrypted variables")
 	}
 	defer file.Close()
 
-	decryptedData, err := key.Decrypt(e.Data)
+	decryptedData, err := secret.Decrypt(e.Data)
 	if err != nil {
 		return "", errors.Wrap(err, "Failed to decrypt environment data")
 	}

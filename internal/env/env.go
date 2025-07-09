@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/Hyphen/cli/internal/models"
-	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
 )
@@ -50,12 +49,12 @@ func IsEnvVar(line string) bool {
 	return line != "" && !strings.HasPrefix(line, "#") && strings.Contains(line, "=")
 }
 
-func NewWithEncryptedData(fileName string, key secretkey.SecretKeyer) (models.Env, error) {
+func NewWithEncryptedData(fileName string, secret models.Secret) (models.Env, error) {
 	env, err := New(fileName)
 	if err != nil {
 		return models.Env{}, err
 	}
-	data, err := env.EncryptData(key)
+	data, err := env.EncryptData(secret)
 	env.Data = data
 	return env, nil
 }

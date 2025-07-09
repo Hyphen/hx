@@ -10,7 +10,6 @@ import (
 	"strconv"
 
 	"github.com/Hyphen/cli/internal/models"
-	"github.com/Hyphen/cli/internal/secretkey"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
@@ -303,7 +302,7 @@ func GetLocalEncryptedEnv(envName string, envCompletePath *string, s models.Secr
 		return models.Env{}, err
 	}
 
-	envEncrytedData, err := e.EncryptData(secretkey.FromBase64(s.Base64SecretKey))
+	envEncrytedData, err := e.EncryptData(s)
 	if err != nil {
 		return models.Env{}, err
 	}
