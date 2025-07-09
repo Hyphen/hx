@@ -9,7 +9,7 @@ type App struct {
 }
 
 type AppReference struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	AlternativeId string `json:"alternativeId"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	AlternateID string `json:"alternateId"`
 }

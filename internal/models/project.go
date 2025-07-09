@@ -8,7 +8,7 @@ type Project struct {
 }
 
 type ProjectReference struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	AlternativeId string `json:"alternativeId"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	AlternateID string `json:"alternateId"`
 }
