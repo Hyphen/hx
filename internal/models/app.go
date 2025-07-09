@@ -5,7 +5,7 @@ type App struct {
 	AlternateId  string                `json:"alternateId"`
 	Name         string                `json:"name"`
 	Organization OrganizationReference `json:"organization"`
-	Project      *ProjectReference     `json:"project,omitempty"`
+	Project      ProjectReference      `json:"project"`
 }
 
 type AppReference struct {

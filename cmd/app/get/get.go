@@ -66,10 +66,8 @@ func runGet(cmd *cobra.Command, args []string) {
 }
 
 func printAppDetails(app models.App) {
-	if app.Project != nil {
-		printer.PrintDetail("Project ID", app.Project.ID)
-		printer.PrintDetail("Project Name", app.Project.Name)
-	}
+	printer.PrintDetail("Project ID", app.Project.ID)
+	printer.PrintDetail("Project Name", app.Project.Name)
 	printer.PrintDetail("App Name", app.Name)
 	printer.PrintDetail("App AlternateId", app.AlternateId)
 	printer.PrintDetail("App ID", app.ID)
