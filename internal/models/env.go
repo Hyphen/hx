@@ -20,8 +20,6 @@ type Env struct {
 	Published      *time.Time                   `json:"published,omitempty"`
 }
 
-// TODO -- some of this stuff seems like it should probably just live in the env service, right? That can then hold the secret keyer?
-
 // HashData returns the SHA256 hash of the environment data.
 func HashData(data string) string {
 	hash := sha256.New()
