@@ -134,12 +134,7 @@ func (ds *DeploymentService) SearchDeployments(organizationId, nameOrId string, 
 		return nil, errors.Wrap(err, "Failed to read response body")
 	}
 
-	var response struct {
-		Total    int                 `json:"total"`
-		PageNum  int                 `json:"pageNum"`
-		PageSize int                 `json:"pageSize"`
-		Data     []models.Deployment `json:"data"`
-	}
+	var response models.PaginatedResponse[models.Deployment]
 
 	err = json.Unmarshal(body, &response)
 	if err != nil {

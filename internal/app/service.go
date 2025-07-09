@@ -58,12 +58,7 @@ func (ps *AppService) GetListApps(organizationID, projectID string, pageSize, pa
 		return nil, errors.Wrap(err, "Failed to read response body")
 	}
 
-	var response struct {
-		Total    int          `json:"total"`
-		PageNum  int          `json:"pageNum"`
-		PageSize int          `json:"pageSize"`
-		Data     []models.App `json:"data"`
-	}
+	var response models.PaginatedResponse[models.App]
 
 	err = json.Unmarshal(body, &response)
 	if err != nil {

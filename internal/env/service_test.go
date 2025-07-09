@@ -223,16 +223,11 @@ func TestEnvService_ListEnvs(t *testing.T) {
 		{Size: "100 bytes", CountVariables: 5},
 		{Size: "200 bytes", CountVariables: 10},
 	}
-	envsData := struct {
-		Data       []models.Env `json:"data"`
-		TotalCount int          `json:"totalCount"`
-		PageNum    int          `json:"pageNum"`
-		PageSize   int          `json:"pageSize"`
-	}{
-		Data:       expectedEnvs,
-		TotalCount: 2,
-		PageNum:    1,
-		PageSize:   10,
+	envsData := models.PaginatedResponse[models.Env]{
+		Data:     expectedEnvs,
+		Total:    2,
+		PageNum:  1,
+		PageSize: 10,
 	}
 	responseBody, _ := json.Marshal(envsData)
 
@@ -262,16 +257,11 @@ func TestEnvService_ListEnvironments(t *testing.T) {
 		{ID: "env1", Name: "Env 1"},
 		{ID: "env2", Name: "Env 2"},
 	}
-	envsData := struct {
-		Data       []models.Environment `json:"data"`
-		TotalCount int                  `json:"totalCount"`
-		PageNum    int                  `json:"pageNum"`
-		PageSize   int                  `json:"pageSize"`
-	}{
-		Data:       expectedEnvs,
-		TotalCount: 2,
-		PageNum:    1,
-		PageSize:   10,
+	envsData := models.PaginatedResponse[models.Environment]{
+		Data:     expectedEnvs,
+		Total:    2,
+		PageNum:  1,
+		PageSize: 10,
 	}
 	responseBody, _ := json.Marshal(envsData)
 

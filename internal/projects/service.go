@@ -64,15 +64,9 @@ func (ps *ProjectService) ListProjects() ([]models.Project, error) {
 		return []models.Project{}, errors.Wrap(err, "Failed to read response body")
 	}
 
-	type projectsListResponse struct {
-		Data       []models.Project `json:"data"`
-		TotalCount int              `json:"totalCount"`
-		PageNum    int              `json:"pageNum"`
-		PageSize   int              `json:"pageSize"`
-	}
 
 	// unmarshal the body
-	var projectsResponse projectsListResponse
+	var projectsResponse models.PaginatedResponse[models.Project]
 	err = json.Unmarshal(body, &projectsResponse)
 	if err != nil {
 		return []models.Project{}, errors.Wrap(err, "Failed to unmarshal response body")

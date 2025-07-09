@@ -15,6 +15,7 @@ import (
 	"github.com/Hyphen/cli/pkg/httputil"
 )
 
+
 type EnvServicer interface {
 	GetEnvironment(organizationId, projectId, environment string) (models.Environment, bool, error)
 	PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env models.Env) error
@@ -171,12 +172,7 @@ func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]
 		return []models.Env{}, errors.HandleHTTPError(resp)
 	}
 
-	envsData := struct {
-		Data       []models.Env `json:"data"`
-		TotalCount int          `json:"totalCount"`
-		PageNum    int          `json:"pageNum"`
-		PageSize   int          `json:"pageSize"`
-	}{}
+	var envsData models.PaginatedResponse[models.Env]
 
 	if err := json.NewDecoder(resp.Body).Decode(&envsData); err != nil {
 		return []models.Env{}, errors.Wrap(err, "Failed to decode response body")
@@ -213,12 +209,7 @@ func (es *EnvService) ListEnvVersions(organizationId, appId, environmentId strin
 		return []models.Env{}, errors.HandleHTTPError(resp)
 	}
 
-	envsData := struct {
-		Data       []models.Env `json:"data"`
-		TotalCount int          `json:"totalCount"`
-		PageNum    int          `json:"pageNum"`
-		PageSize   int          `json:"pageSize"`
-	}{}
+	var envsData models.PaginatedResponse[models.Env]
 
 	if err := json.NewDecoder(resp.Body).Decode(&envsData); err != nil {
 		return []models.Env{}, errors.Wrap(err, "Failed to decode response body")
@@ -260,12 +251,7 @@ func (es *EnvService) ListEnvironments(organizationId, projectId string, size, p
 		return []models.Environment{}, errors.HandleHTTPError(resp)
 	}
 
-	envsData := struct {
-		Data       []models.Environment `json:"data"`
-		TotalCount int                  `json:"totalCount"`
-		PageNum    int                  `json:"pageNum"`
-		PageSize   int                  `json:"pageSize"`
-	}{}
+	var envsData models.PaginatedResponse[models.Environment]
 
 	if err := json.NewDecoder(resp.Body).Decode(&envsData); err != nil {
 		return []models.Environment{}, errors.Wrap(err, "Failed to decode response body")
