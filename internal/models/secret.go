@@ -1,4 +1,4 @@
-package secretkey
+package models
 
 import (
 	"crypto/aes"
@@ -8,57 +8,33 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/Hyphen/cli/pkg/errors"
 )
 
-type SecretKey struct {
-	secretBase64 string
+type Secret struct {
+	SecretKeyId     int64  `json:"secret_key_id"`
+	Base64SecretKey string `json:"secret_key"`
 }
 
-type SecretKeyer interface {
-	Base64() string
-	HashSHA() (string, error)
-	Encrypt(message string) (string, error)
-	Decrypt(encryptedMessage string) (string, error)
+// Base64 returns the base64 encoded secret key
+func (s Secret) Base64() string {
+	return s.Base64SecretKey
 }
 
-func FromBase64(secretBase64 string) *SecretKey {
-	return &SecretKey{
-		secretBase64: secretBase64,
-	}
-}
-
-func New() (*SecretKey, error) {
-	secret := make([]byte, 256)
-	if _, err := rand.Read(secret); err != nil {
-		return nil, errors.Wrap(err, "Failed to generate secret key")
-	}
-
-	secretBase64 := base64.StdEncoding.EncodeToString(secret)
-	if len(secretBase64) > 256 {
-		secretBase64 = secretBase64[:256]
-	}
-
-	return &SecretKey{
-		secretBase64: secretBase64,
-	}, nil
-}
-
-func (s SecretKey) Base64() string {
-	return s.secretBase64
-}
-
-func (s SecretKey) HashSHA() (string, error) {
+// HashSHA returns the SHA256 hash of the secret key
+func (s Secret) HashSHA() (string, error) {
 	hasher := sha256.New()
-	if _, err := hasher.Write([]byte(s.secretBase64)); err != nil {
+	if _, err := hasher.Write([]byte(s.Base64SecretKey)); err != nil {
 		return "", errors.Wrap(err, "Failed to hash secret key")
 	}
 
 	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
 }
 
-func (s SecretKey) Encrypt(message string) (string, error) {
+// Encrypt encrypts a message using AES encryption
+func (s Secret) Encrypt(message string) (string, error) {
 	hashSHA, err := s.HashSHA()
 	if err != nil {
 		return "", err
@@ -84,7 +60,8 @@ func (s SecretKey) Encrypt(message string) (string, error) {
 	return base64.URLEncoding.EncodeToString(ciphertext), nil
 }
 
-func (s SecretKey) Decrypt(encryptedMessage string) (string, error) {
+// Decrypt decrypts an encrypted message using AES decryption
+func (s Secret) Decrypt(encryptedMessage string) (string, error) {
 	hashSHA, err := s.HashSHA()
 	if err != nil {
 		return "", err
@@ -112,4 +89,30 @@ func (s SecretKey) Decrypt(encryptedMessage string) (string, error) {
 	stream.XORKeyStream(ciphertext, ciphertext)
 
 	return string(ciphertext), nil
+}
+
+// NewSecret creates a new Secret from a base64 encoded secret key
+func NewSecret(secretBase64 string) Secret {
+	return Secret{
+		SecretKeyId:     time.Now().Unix(),
+		Base64SecretKey: secretBase64,
+	}
+}
+
+// GenerateSecret creates a new Secret with a randomly generated key
+func GenerateSecret() (Secret, error) {
+	secret := make([]byte, 256)
+	if _, err := rand.Read(secret); err != nil {
+		return Secret{}, errors.Wrap(err, "Failed to generate secret key")
+	}
+
+	secretBase64 := base64.StdEncoding.EncodeToString(secret)
+	if len(secretBase64) > 256 {
+		secretBase64 = secretBase64[:256]
+	}
+
+	return Secret{
+		SecretKeyId:     time.Now().Unix(),
+		Base64SecretKey: secretBase64,
+	}, nil
 }

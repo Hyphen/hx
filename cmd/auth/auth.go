@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/Hyphen/cli/internal/config"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/internal/user"
@@ -168,12 +169,12 @@ func login(cmd *cobra.Command) error {
 	return nil
 }
 
-func printAuthenticationSummary(user *user.ExecutionContext, organizationID string, projectID string) {
+func printAuthenticationSummary(executionContext *models.ExecutionContext, organizationID string, projectID string) {
 	if flags.VerboseFlag {
 		printer.PrintHeader("Authentication Summary")
 		printer.Success("Login successful!")
 		printer.Print("") // Add an empty line for better spacing
-		printer.PrintDetail("User", user.User.Name)
+		printer.PrintDetail("User", executionContext.User.Name)
 		printer.PrintDetail("Organization ID", organizationID)
 		printer.PrintDetail("Default Project ID", projectID)
 		printer.Print("") // Add an empty line for better spacing

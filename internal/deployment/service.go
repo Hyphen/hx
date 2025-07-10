@@ -8,14 +8,14 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/Hyphen/cli/internal/build"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
 )
 
 type IDeploymentService interface {
-	searchDeployments(organizationId, nameOrId string, pageSize, pageNum int) ([]Deployment, error)
+	searchDeployments(organizationId, nameOrId string, pageSize, pageNum int) ([]models.Deployment, error)
 }
 
 type DeploymentService struct {
@@ -24,9 +24,9 @@ type DeploymentService struct {
 }
 
 type AppSources struct {
-	AppId    string         `json:"appId"`
-	Artifact build.Artifact `json:"artifact,omitempty"`
-	BuildId  string         `json:"buildId,omitempty"`
+	AppId    string          `json:"appId"`
+	Artifact models.Artifact `json:"artifact,omitempty"`
+	BuildId  string          `json:"buildId,omitempty"`
 }
 
 func NewService() *DeploymentService {
@@ -37,7 +37,7 @@ func NewService() *DeploymentService {
 	}
 }
 
-func (ds *DeploymentService) CreateRun(organizationId, deploymentId string, appSources []AppSources) (*DeploymentRun, error) {
+func (ds *DeploymentService) CreateRun(organizationId, deploymentId string, appSources []AppSources) (*models.DeploymentRun, error) {
 	url := fmt.Sprintf("%s/api/organizations/%s/deployments/%s/runs", ds.baseUrl, organizationId, deploymentId)
 	//app_67af84d8cf5902a8f372bbcc
 	//requestBody := []byte("{\"artifacts\":[{\"appId\":\"app_67af84d8cf5902a8f372bbcc\",\"image\":\"us-docker.pkg.dev/hyphenai/public/deploy-demo\"}]}")
@@ -65,7 +65,7 @@ func (ds *DeploymentService) CreateRun(organizationId, deploymentId string, appS
 		return nil, errors.Wrap(err, "Failed to read response body")
 	}
 
-	var deploymentRun DeploymentRun
+	var deploymentRun models.DeploymentRun
 	err = json.Unmarshal(body, &deploymentRun)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to parse JSON response")
@@ -74,7 +74,7 @@ func (ds *DeploymentService) CreateRun(organizationId, deploymentId string, appS
 	return &deploymentRun, nil
 }
 
-func (ds *DeploymentService) GetDeploymentRun(organizationId, deploymentId, runId string) (*DeploymentRun, error) {
+func (ds *DeploymentService) GetDeploymentRun(organizationId, deploymentId, runId string) (*models.DeploymentRun, error) {
 	url := fmt.Sprintf("%s/api/organizations/%s/deployments/%s/runs/%s", ds.baseUrl, organizationId, deploymentId, runId)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -97,7 +97,7 @@ func (ds *DeploymentService) GetDeploymentRun(organizationId, deploymentId, runI
 		return nil, errors.Wrap(err, "Failed to read response body")
 	}
 
-	var deploymentRun DeploymentRun
+	var deploymentRun models.DeploymentRun
 	err = json.Unmarshal(body, &deploymentRun)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to parse JSON response")
@@ -106,7 +106,7 @@ func (ds *DeploymentService) GetDeploymentRun(organizationId, deploymentId, runI
 	return &deploymentRun, nil
 }
 
-func (ds *DeploymentService) SearchDeployments(organizationId, nameOrId string, pageSize, pageNum int) ([]Deployment, error) {
+func (ds *DeploymentService) SearchDeployments(organizationId, nameOrId string, pageSize, pageNum int) ([]models.Deployment, error) {
 	queryParams := url.Values{}
 	queryParams.Set("pageNum", fmt.Sprintf("%d", pageNum))
 	queryParams.Set("pageSize", fmt.Sprintf("%d", pageSize))
@@ -134,12 +134,7 @@ func (ds *DeploymentService) SearchDeployments(organizationId, nameOrId string, 
 		return nil, errors.Wrap(err, "Failed to read response body")
 	}
 
-	var response struct {
-		Total    int          `json:"total"`
-		PageNum  int          `json:"pageNum"`
-		PageSize int          `json:"pageSize"`
-		Data     []Deployment `json:"data"`
-	}
+	var response models.PaginatedResponse[models.Deployment]
 
 	err = json.Unmarshal(body, &response)
 	if err != nil {

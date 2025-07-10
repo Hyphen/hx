@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -71,7 +72,7 @@ This will create a project named "My New Project" with an alternate ID like "my-
 		}, name)
 
 		service := projects.NewService(orgId)
-		project := projects.Project{
+		project := models.Project{
 			Name:        name,
 			AlternateID: alternateId,
 		}

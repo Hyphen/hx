@@ -1,51 +1,19 @@
 package env
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/Hyphen/cli/internal/secretkey"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
 )
 
-type Env struct {
-	Size           string              `json:"size"`
-	CountVariables int                 `json:"countVariables"`
-	Data           string              `json:"data"`
-	ID             *string             `json:"id,omitempty"`
-	Version        *int                `json:"version,omitempty"`
-	ProjectEnv     *ProjectEnvironment `json:"projectEnvironment,omitempty"`
-	SecretKeyId    *int64              `json:"secretKeyId,omitempty"`
-	Published      *time.Time          `json:"published,omitempty"`
-}
-
-type ProjectEnvironment struct {
-	ID          string `json:"id"`
-	AlternateID string `json:"alternateId"`
-	Name        string `json:"name"`
-}
-
-// HashData returns the SHA256 hash of the environment data.
-func HashData(data string) string {
-	hash := sha256.New()
-	hash.Write([]byte(data))
-	hashSum := hash.Sum(nil)
-	return hex.EncodeToString(hashSum)
-}
-
-func (e *Env) HashData() string {
-	return HashData(e.Data)
-}
-
-func New(fileName string) (Env, error) {
-	var data Env
+func New(fileName string) (models.Env, error) {
+	var data models.Env
 
 	content, err := os.ReadFile(fileName)
 	if err != nil {
@@ -81,70 +49,14 @@ func IsEnvVar(line string) bool {
 	return line != "" && !strings.HasPrefix(line, "#") && strings.Contains(line, "=")
 }
 
-func NewWithEncryptedData(fileName string, key secretkey.SecretKeyer) (Env, error) {
+func NewWithEncryptedData(fileName string, secret models.Secret) (models.Env, error) {
 	env, err := New(fileName)
 	if err != nil {
-		return Env{}, err
+		return models.Env{}, err
 	}
-	data, err := env.EncryptData(key)
+	data, err := env.EncryptData(secret)
 	env.Data = data
 	return env, nil
-}
-
-func (e *Env) EncryptData(key secretkey.SecretKeyer) (string, error) {
-	encryptData, err := key.Encrypt(e.Data)
-	if err != nil {
-		return "", errors.Wrap(err, "Failed to encrypt environment data")
-	}
-	return encryptData, nil
-}
-
-func (e *Env) DecryptData(key secretkey.SecretKeyer) (string, error) {
-	decryptedData, err := key.Decrypt(e.Data)
-	if err != nil {
-		return "", errors.Wrap(err, "Failed to decrypt environment data")
-	}
-	return decryptedData, nil
-}
-
-func (e *Env) DecryptVarsAndSaveIntoFile(fileName string, key secretkey.SecretKeyer) (string, error) {
-	file, err := os.Create(fileName)
-	if err != nil {
-		return "", errors.Wrap(err, "Failed to create or open file for saving decrypted variables")
-	}
-	defer file.Close()
-
-	decryptedData, err := key.Decrypt(e.Data)
-	if err != nil {
-		return "", errors.Wrap(err, "Failed to decrypt environment data")
-	}
-
-	_, err = file.WriteString(decryptedData)
-	if err != nil {
-		return "", errors.Wrap(err, "Failed to write decrypted data to file")
-	}
-
-	return fileName, nil
-}
-
-type Environment struct {
-	ID           string       `json:"id"`
-	AlternateID  string       `json:"alternateId"`
-	Name         string       `json:"name"`
-	Color        string       `json:"color"`
-	Organization Organization `json:"organization"`
-	Project      Project      `json:"project"`
-}
-
-type Organization struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-type Project struct {
-	ID          string `json:"id"`
-	AlternateID string `json:"alternateId"`
-	Name        string `json:"name"`
 }
 
 func GetEnvName(env string) (string, error) {

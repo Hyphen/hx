@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Hyphen/cli/internal/user"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/hyphen/openfeature-provider-go/pkg/toggle"
 	"github.com/open-feature/go-sdk/openfeature"
@@ -45,7 +45,7 @@ func init() {
 	client.SetEvaluationContext(ctx)
 }
 
-func HandleAuth(ec user.ExecutionContext) {
+func HandleAuth(ec models.ExecutionContext) {
 	// TODO: handle when there is no member...
 	targetingKey := ec.Member.ID
 	if targetingKey == "" {

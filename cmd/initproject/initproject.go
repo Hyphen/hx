@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Hyphen/cli/internal/config"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/internal/secret"
 	"github.com/Hyphen/cli/pkg/cprint"
@@ -101,7 +102,7 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	newProject := projects.Project{
+	newProject := models.Project{
 		Name:        projectName,
 		AlternateID: projectAlternateId,
 		IsMonorepo:  IsMonorepo,
@@ -223,7 +224,7 @@ func isValidDirectory(cmd *cobra.Command) error {
 	return nil
 }
 
-func HandleExistingProject(cmd *cobra.Command, projectService projects.ProjectService, projectAlternateId string) (*projects.Project, error) {
+func HandleExistingProject(cmd *cobra.Command, projectService projects.ProjectService, projectAlternateId string) (*models.Project, error) {
 	response := prompt.PromptYesNo(cmd, fmt.Sprintf("A project with ID '%s' already exists. Do you want to use this existing project?", projectAlternateId), true)
 	if !response.Confirmed {
 		return nil, nil

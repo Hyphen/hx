@@ -9,7 +9,6 @@ package manifest
 // 	"dario.cat/mergo"
 // 	"github.com/Hyphen/cli/internal/config"
 // 	"github.com/Hyphen/cli/internal/key"
-// 	"github.com/Hyphen/cli/internal/secretkey"
 // 	"github.com/Hyphen/cli/pkg/errors"
 // 	"github.com/Hyphen/cli/pkg/fsutil"
 // )

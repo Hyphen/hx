@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/Hyphen/cli/internal/env"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/aquasecurity/table"
@@ -72,7 +73,7 @@ func RunListVersions(environmentId string) error {
 
 	service := env.NewService()
 
-	var envs []env.Env
+	var envs []models.Env
 	envs, err = service.ListEnvVersions(orgId, appId, environmentId, pageSize, page)
 	if err != nil {
 		return err
@@ -92,7 +93,7 @@ func RunListVersions(environmentId string) error {
 	return nil
 }
 
-func displayTable(envs []env.Env) {
+func displayTable(envs []models.Env) {
 	cyan := color.New(color.FgCyan).SprintFunc()
 	green := color.New(color.FgGreen).SprintFunc()
 	yellow := color.New(color.FgYellow).SprintFunc()
@@ -136,7 +137,7 @@ func displayTable(envs []env.Env) {
 	t.Render()
 }
 
-func displayList(envs []env.Env) {
+func displayList(envs []models.Env) {
 	for _, e := range envs {
 		id := "default"
 		if e.ProjectEnv != nil {
