@@ -15,18 +15,25 @@ import (
 )
 
 var FS fsutil.FileSystem = fsutil.NewFileSystem()
-var vs vinz.VinzServicer = vinz.NewService()
+var vs vinz.VinzServicer
 
 var (
 	ManifestSecretFile = ".hxkey"
 )
+
+func getVinzService() vinz.VinzServicer {
+	if vs == nil {
+		vs = vinz.NewService()
+	}
+	return vs
+}
 
 func NewSecret(secretBase64 string) models.Secret {
 	return models.NewSecret(secretBase64)
 }
 
 func LoadSecret(organizationId, projectIdOrAlternateId string, create bool) (models.Secret, error) {
-	secret, err := vs.GetKey(organizationId, projectIdOrAlternateId)
+	secret, err := getVinzService().GetKey(organizationId, projectIdOrAlternateId)
 	if err == nil {
 		return models.Secret{
 			SecretKeyId:     secret.SecretKeyId,
@@ -63,7 +70,7 @@ func InitializeSecret(organizationId, projectIdOrAlternateId, secretFile string)
 			return models.Secret{}, errors.Wrapf(err, "Error writing file: %s", secretFile)
 		}
 	} else {
-		_, err := vs.SaveKey(organizationId, projectIdOrAlternateId, vinz.Key{
+		_, err := getVinzService().SaveKey(organizationId, projectIdOrAlternateId, vinz.Key{
 			SecretKeyId: ms.SecretKeyId,
 			SecretKey:   ms.Base64(),
 		})
