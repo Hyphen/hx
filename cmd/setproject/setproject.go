@@ -32,8 +32,8 @@ var SetProjectCmd = &cobra.Command{
 		}
 
 		orgID := restoredConfig.OrganizationId
-		projectSerivce := projects.NewService(orgID)
-		project, err := projectSerivce.GetProject(projectID)
+		projectService := projects.NewService(orgID)
+		project, err := projectService.GetProject(projectID)
 		if err != nil {
 			return errors.Wrapf(err, "failed to get project %q. Is that a valid project ID or alternate ID?", projectID)
 		}
