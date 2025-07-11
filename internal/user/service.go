@@ -19,6 +19,18 @@ type UserService struct {
 	client  httputil.Client
 }
 
+func ErrorIfNotAuthenticated() error {
+	// Try a simple request to force tokens refresh and validate we can get a response
+	_, err := NewService().GetExecutionContext()
+	if errors.Is(err, errors.ErrUnauthorized) || errors.Is(err, errors.ErrForbidden) {
+		return errors.New("You are not authenticated. Please run `hx auth` and try again")
+	} else if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func NewService() UserServicer {
 	baseUrl := apiconf.GetBaseApixUrl()
 	return &UserService{

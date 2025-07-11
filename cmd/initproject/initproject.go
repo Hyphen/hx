@@ -9,6 +9,7 @@ import (
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/internal/secret"
+	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -48,6 +49,9 @@ Examples:
   hyphen init-project "My New Project" --id my-custom-project-id
 `,
 	Args: cobra.MaximumNArgs(1),
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return user.ErrorIfNotAuthenticated()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		RunInitProject(cmd, args)
 	},

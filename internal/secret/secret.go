@@ -79,7 +79,7 @@ func InitializeSecret(organizationId, projectIdOrAlternateId, secretFile string)
 			return Secret{}, errors.Wrapf(err, "Error writing file: %s", secretFile)
 		}
 	} else {
-		_, err := vs.SaveKey(organizationId, projectIdOrAlternateId, vinz.Key{
+		_, err = vs.SaveKey(organizationId, projectIdOrAlternateId, vinz.Key{
 			SecretKeyId: ms.SecretKeyId,
 			SecretKey:   ms.SecretKey,
 		})

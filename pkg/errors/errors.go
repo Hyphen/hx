@@ -113,7 +113,7 @@ func HandleHTTPError(resp *http.Response) *Error {
 	case http.StatusBadRequest:
 		return Wrapf(ErrBadRequest, "bad request: %s", errorMessage)
 	case http.StatusUnauthorized:
-		return Wrap(ErrUnauthorized, "unauthorized: please authenticate with `auth` and try again")
+		return Wrap(ErrUnauthorized, "unauthorized: please authenticate with `hx auth` and try again")
 	case http.StatusForbidden:
 		return Wrap(ErrForbidden, "forbidden: you don't have permission to perform this action")
 	case http.StatusNotFound:

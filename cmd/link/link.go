@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/internal/zelda"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -48,6 +49,9 @@ Examples:
 Use 'hyphen link --help' for more information about available flags.
 `,
 	Args: cobra.ExactArgs(1),
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return user.ErrorIfNotAuthenticated()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		service := newService(zelda.NewService())

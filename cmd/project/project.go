@@ -4,6 +4,7 @@ import (
 	"github.com/Hyphen/cli/cmd/project/create"
 	"github.com/Hyphen/cli/cmd/project/get"
 	"github.com/Hyphen/cli/cmd/project/list"
+	"github.com/Hyphen/cli/internal/user"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +22,9 @@ Examples:
   hyphen project get <project_id>
   hyphen project create "New Project"
 `,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return user.ErrorIfNotAuthenticated()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		// check if the subcommand is unsupported
 		// If no subcommand is provided, default to 'list' command
