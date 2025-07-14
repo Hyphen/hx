@@ -2,13 +2,14 @@ package env
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
 	"os"
 	"testing"
 
-	"github.com/Hyphen/cli/internal/secretkey"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -34,47 +35,58 @@ func TestNew(t *testing.T) {
 	assert.Nil(t, env.Version)
 }
 
-func TestEncryptData(t *testing.T) {
-	env := Env{Data: "KEY=VALUE"}
-	mockKey := new(secretkey.MockSecretKey)
-	mockKey.On("Encrypt", "KEY=VALUE").Return("ENCRYPTED_DATA", nil)
+func GetBase64Secret() string {
+	nonBase64SecretValue := "test-secret-test-secret-test-secret-test-secret-test-secret-test-secret"
+	base64SecretValue := base64.StdEncoding.EncodeToString([]byte(nonBase64SecretValue))
+	return base64SecretValue
+}
 
-	encryptedData, err := env.EncryptData(mockKey)
+func TestEncryptData(t *testing.T) {
+	env := models.Env{Data: "KEY=VALUE"}
+	secret := models.NewSecret(GetBase64Secret())
+
+	encryptedData, err := env.EncryptData(secret)
 	assert.NoError(t, err)
-	assert.Equal(t, "ENCRYPTED_DATA", encryptedData)
-	mockKey.AssertExpectations(t)
+	assert.NotEmpty(t, encryptedData)
+	assert.NotEqual(t, "KEY=VALUE", encryptedData) // Should be encrypted
 }
 
 func TestDecryptData(t *testing.T) {
-	env := Env{Data: "ENCRYPTED_DATA"}
-	mockKey := new(secretkey.MockSecretKey)
-	mockKey.On("Decrypt", "ENCRYPTED_DATA").Return("KEY=VALUE", nil)
+	// First encrypt some data, then decrypt it
+	secret := models.NewSecret(GetBase64Secret())
+	originalData := "KEY=VALUE"
 
-	decryptedData, err := env.DecryptData(mockKey)
+	encryptedData, err := secret.Encrypt(originalData)
 	assert.NoError(t, err)
-	assert.Equal(t, "KEY=VALUE", decryptedData)
-	mockKey.AssertExpectations(t)
+
+	env := models.Env{Data: encryptedData}
+	decryptedData, err := env.DecryptData(secret)
+	assert.NoError(t, err)
+	assert.Equal(t, originalData, decryptedData)
 }
 
 func TestDecryptVarsAndSaveIntoFile(t *testing.T) {
-	env := Env{Data: "ENCRYPTED_DATA"}
-	mockKey := new(secretkey.MockSecretKey)
-	mockKey.On("Decrypt", "ENCRYPTED_DATA").Return("KEY1=VALUE1\nKEY2=VALUE2", nil)
+	// Encrypt the test data first
+	secret := models.NewSecret(GetBase64Secret())
+	originalData := "KEY1=VALUE1\nKEY2=VALUE2"
+
+	encryptedData, err := secret.Encrypt(originalData)
+	assert.NoError(t, err)
+
+	env := models.Env{Data: encryptedData}
 
 	tmpfile, err := os.CreateTemp("", "test_decrypted.env")
 	assert.NoError(t, err)
 	tmpfile.Close()
 	defer os.Remove(tmpfile.Name())
 
-	fileName, err := env.DecryptVarsAndSaveIntoFile(tmpfile.Name(), mockKey)
+	fileName, err := env.DecryptVarsAndSaveIntoFile(tmpfile.Name(), secret)
 	assert.NoError(t, err)
 	assert.Equal(t, tmpfile.Name(), fileName)
 
 	content, err := os.ReadFile(tmpfile.Name())
 	assert.NoError(t, err)
-	assert.Equal(t, "KEY1=VALUE1\nKEY2=VALUE2", string(content))
-
-	mockKey.AssertExpectations(t)
+	assert.Equal(t, originalData, string(content))
 }
 
 func TestGetEnvName(t *testing.T) {
@@ -135,7 +147,7 @@ func TestEnvService_GetEnvironment(t *testing.T) {
 		httpClient: mockHTTPClient,
 	}
 
-	expectedEnv := Environment{ID: "123", Name: "TestEnv"}
+	expectedEnv := models.Environment{ID: "123", Name: "TestEnv"}
 	responseBody, _ := json.Marshal(expectedEnv)
 
 	mockResponse := &http.Response{
@@ -160,7 +172,7 @@ func TestEnvService_PutEnv(t *testing.T) {
 		httpClient: mockHTTPClient,
 	}
 
-	env := Env{Size: "100 bytes", CountVariables: 5}
+	env := models.Env{Size: "100 bytes", CountVariables: 5}
 
 	mockResponse := &http.Response{
 		StatusCode: http.StatusCreated,
@@ -182,7 +194,7 @@ func TestEnvService_GetEnv(t *testing.T) {
 		httpClient: mockHTTPClient,
 	}
 
-	expectedEnv := Env{Size: "100 bytes", CountVariables: 5}
+	expectedEnv := models.Env{Size: "100 bytes", CountVariables: 5}
 	responseBody, _ := json.Marshal(expectedEnv)
 
 	mockResponse := &http.Response{
@@ -207,20 +219,15 @@ func TestEnvService_ListEnvs(t *testing.T) {
 		httpClient: mockHTTPClient,
 	}
 
-	expectedEnvs := []Env{
+	expectedEnvs := []models.Env{
 		{Size: "100 bytes", CountVariables: 5},
 		{Size: "200 bytes", CountVariables: 10},
 	}
-	envsData := struct {
-		Data       []Env `json:"data"`
-		TotalCount int   `json:"totalCount"`
-		PageNum    int   `json:"pageNum"`
-		PageSize   int   `json:"pageSize"`
-	}{
-		Data:       expectedEnvs,
-		TotalCount: 2,
-		PageNum:    1,
-		PageSize:   10,
+	envsData := models.PaginatedResponse[models.Env]{
+		Data:     expectedEnvs,
+		Total:    2,
+		PageNum:  1,
+		PageSize: 10,
 	}
 	responseBody, _ := json.Marshal(envsData)
 
@@ -246,20 +253,15 @@ func TestEnvService_ListEnvironments(t *testing.T) {
 		httpClient: mockHTTPClient,
 	}
 
-	expectedEnvs := []Environment{
+	expectedEnvs := []models.Environment{
 		{ID: "env1", Name: "Env 1"},
 		{ID: "env2", Name: "Env 2"},
 	}
-	envsData := struct {
-		Data       []Environment `json:"data"`
-		TotalCount int           `json:"totalCount"`
-		PageNum    int           `json:"pageNum"`
-		PageSize   int           `json:"pageSize"`
-	}{
-		Data:       expectedEnvs,
-		TotalCount: 2,
-		PageNum:    1,
-		PageSize:   10,
+	envsData := models.PaginatedResponse[models.Environment]{
+		Data:     expectedEnvs,
+		Total:    2,
+		PageNum:  1,
+		PageSize: 10,
 	}
 	responseBody, _ := json.Marshal(envsData)
 

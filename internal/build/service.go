@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	common "github.com/Hyphen/cli/internal"
 	"github.com/Hyphen/cli/internal/config"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/dockerutil"
@@ -33,53 +33,7 @@ func NewService() *BuildService {
 	}
 }
 
-type ConnectionEntity struct {
-	Id   string `json:"id"`
-	Type string `json:"type"`
-	Name string `json:"name"`
-}
-
-type ConnectionOrganizationIntegration struct {
-	Id   string `json:"id"`
-	Type string `json:"type"`
-}
-
-type AzureContainerRegistryConfiguration struct {
-	RegistryId   string `json:"registryId"`
-	RegistryName string `json:"registryName"`
-	TenantId     string `json:"tenantId"`
-	Secrets      struct {
-		Auth struct {
-			Server            string `json:"server"`
-			Username          string `json:"username"`
-			EncryptedPassword string `json:"encryptedPassword"`
-		} `json:"auth"`
-	} `json:"secrets"`
-}
-
-type ContainerRegistry struct {
-	Id   string `json:"id"`
-	Name string `json:"name"`
-	Url  string `json:"url"`
-	Auth struct {
-		Server   string `json:"server"`
-		Username string `json:"username"`
-		Password string `json:"password"`
-	} `json:"auth"`
-}
-
-type Connection[T AzureContainerRegistryConfiguration] struct {
-	Id                      string                            `json:"id"`
-	Type                    string                            `json:"type"`
-	Entity                  ConnectionEntity                  `json:"entity"`
-	OrganizationIntegration ConnectionOrganizationIntegration `json:"organizationIntegration"`
-	Config                  T                                 `json:"config"`
-	Status                  string                            `json:"status"`
-	Organization            common.OrganizationReference      `json:"organization"`
-	Project                 common.ProjectReference           `json:"project"`
-}
-
-func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commitSha, dockerUri string, ports []int) (*Build, error) {
+func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commitSha, dockerUri string, ports []int) (*models.Build, error) {
 
 	///api/organizations/{organizationId}/apps/{appId}/builds/
 	queryParams := url.Values{}
@@ -88,10 +42,10 @@ func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commit
 	}
 	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/builds?%s", bs.baseUrl, organizationId, appId, queryParams.Encode())
 
-	build := NewBuild{
+	build := models.NewBuild{
 		Tags:      []string{},
 		CommitSha: commitSha,
-		Artifact: Artifact{
+		Artifact: models.Artifact{
 			Type:  "Docker",
 			Ports: ports,
 			Image: struct {
@@ -127,7 +81,7 @@ func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commit
 		return nil, errors.Wrap(err, "Failed to read response body")
 	}
 
-	var NewBuild Build
+	var NewBuild models.Build
 	err = json.Unmarshal(body, &NewBuild)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to parse JSON response")
@@ -135,7 +89,7 @@ func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commit
 	return &NewBuild, nil
 }
 
-func (bs *BuildService) FindRegistryConnection(organizationId, projectId string) (*ContainerRegistry, error) {
+func (bs *BuildService) FindRegistryConnection(organizationId, projectId string) (*models.ContainerRegistry, error) {
 	///api/organizations/{organizationId}/deployments/containerRegistries
 	queryParams := url.Values{}
 	queryParams.Add("projectId", projectId)
@@ -162,7 +116,7 @@ func (bs *BuildService) FindRegistryConnection(organizationId, projectId string)
 		return nil, errors.Wrap(err, "Failed to read response body")
 	}
 
-	var response []ContainerRegistry
+	var response []models.ContainerRegistry
 	err = json.Unmarshal(body, &response)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to parse JSON response")
@@ -178,7 +132,7 @@ func (bs *BuildService) FindRegistryConnection(organizationId, projectId string)
 
 }
 
-func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string, verbose bool) (*Build, error) {
+func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string, verbose bool) (*models.Build, error) {
 	// TODO: this probably shouldn't error if there is no hxkey
 	// file it just means they aren't using env or are using the new
 	// cert store service.

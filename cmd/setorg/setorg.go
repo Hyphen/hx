@@ -49,9 +49,9 @@ var SetOrgCmd = &cobra.Command{
 		}
 
 		if globalFlag {
-			err = config.UpsertGlobalProjectID(*defaultProject.ID)
+			err = config.UpsertGlobalProject(defaultProject)
 		} else {
-			err = config.UpsertProjectID(*defaultProject.ID)
+			err = config.UpsertProject(defaultProject)
 		}
 		if err != nil {
 			return fmt.Errorf("failed to update project ID: %w", err)

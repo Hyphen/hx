@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/stretchr/testify/assert"
@@ -24,11 +25,11 @@ func TestUserService_GetExecutionContext(t *testing.T) {
 		{
 			name: "Successful request",
 			setupMocks: func(mhc *httputil.MockHTTPClient) {
-				executionContext := ExecutionContext{
-					Member: Member{
+				executionContext := models.ExecutionContext{
+					Member: models.Member{
 						ID: "test_member_id",
 					},
-					User: User{
+					User: models.User{
 						ID: "test_user_id",
 					},
 				}

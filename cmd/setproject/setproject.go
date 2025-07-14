@@ -4,8 +4,10 @@ import (
 	"fmt"
 
 	"github.com/Hyphen/cli/internal/config"
+	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
@@ -28,10 +30,22 @@ var SetProjectCmd = &cobra.Command{
 		projectID := args[0]
 		var err error
 
+		restoredConfig, err := config.RestoreConfig()
+		if err != nil {
+			return errors.Wrapf(err, "failed to restore config")
+		}
+
+		orgID := restoredConfig.OrganizationId
+		projectService := projects.NewService(orgID)
+		project, err := projectService.GetProject(projectID)
+		if err != nil {
+			return errors.Wrapf(err, "failed to get project %q. Is that a valid project ID or alternate ID?", projectID)
+		}
+
 		if globalFlag {
-			err = config.UpsertGlobalProjectID(projectID)
+			err = config.UpsertGlobalProject(project)
 		} else {
-			err = config.UpsertProjectID(projectID)
+			err = config.UpsertProject(project)
 		}
 
 		if err != nil {
