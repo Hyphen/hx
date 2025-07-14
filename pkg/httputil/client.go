@@ -40,7 +40,7 @@ func (hc *HyphenClient) Do(req *http.Request) (*http.Response, error) {
 	} else {
 		token, err := hc.oauthService.GetValidToken()
 		if err != nil {
-			return nil, errors.Wrap(err, "Failed to authenticate. Please authenticate with `auth` and try again.")
+			return nil, errors.Wrap(err, "Failed to authenticate. Please authenticate with `hx auth` and try again.")
 		}
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -73,7 +73,7 @@ func (hc *HyphenClient) GetWebsocketConnection(websocketUrl string) (*websocket.
 	} else {
 		token, err := hc.oauthService.GetValidToken()
 		if err != nil {
-			return nil, errors.Wrap(err, "Failed to authenticate. Please authenticate with `auth` and try again.")
+			return nil, errors.Wrap(err, "Failed to authenticate. Please authenticate with `hx auth` and try again.")
 		}
 		headers.Set("Authorization", "Bearer "+token)
 	}

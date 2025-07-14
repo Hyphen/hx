@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/Hyphen/cli/cmd/initapp"
+	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
@@ -42,6 +43,9 @@ Examples:
   hyphen init "My New App" --id my-custom-app-id
 `,
 	Args: cobra.MaximumNArgs(1),
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return user.ErrorIfNotAuthenticated()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		if isMonorepo {
 			runInitMonorepo(cmd, args)

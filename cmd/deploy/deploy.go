@@ -7,6 +7,7 @@ import (
 	"github.com/Hyphen/cli/internal/build"
 	Deployment "github.com/Hyphen/cli/internal/deployment"
 	"github.com/Hyphen/cli/internal/models"
+	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -36,6 +37,9 @@ hyphen deploy deploy-dev
 Use 'hyphen deploy --help' for more information about available flags.
 `,
 	Args: cobra.RangeArgs(0, 1),
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return user.ErrorIfNotAuthenticated()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {

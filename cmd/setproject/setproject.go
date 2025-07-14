@@ -5,6 +5,7 @@ import (
 
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/projects"
+	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -21,6 +22,9 @@ var SetProjectCmd = &cobra.Command{
 	Short: "Set the project ID",
 	Long:  `Set the project ID for the Hyphen CLI to use.`,
 	Args:  cobra.ExactArgs(1),
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return user.ErrorIfNotAuthenticated()
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		projectID := args[0]

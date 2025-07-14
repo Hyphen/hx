@@ -13,6 +13,7 @@ import (
 	hyphenapp "github.com/Hyphen/cli/internal/hyphenApp"
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secret"
+	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -52,9 +53,11 @@ Examples:
   hyphen init "My New App" --id my-custom-app-id
 `,
 	Args: cobra.MaximumNArgs(1),
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return user.ErrorIfNotAuthenticated()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		RunInitApp(cmd, args)
-
 	},
 }
 

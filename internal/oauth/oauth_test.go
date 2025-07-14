@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Hyphen/cli/internal/timeprovider"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -37,13 +38,13 @@ func TestDefaultOAuthService(t *testing.T) {
 	service := DefaultOAuthService()
 	assert.NotNil(t, service)
 	assert.IsType(t, &http.Client{}, service.httpClient)
-	assert.IsType(t, &RealTimeProvider{}, service.timeProvider)
+	assert.IsType(t, &timeprovider.RealTimeProvider{}, service.timeProvider)
 	assert.NotNil(t, service.browserOpener)
 }
 
 func TestNewOAuthService(t *testing.T) {
 	httpClient := &MockHTTPClient{}
-	timeProvider := &MockTimeProvider{}
+	timeProvider := timeprovider.NewMockTimeProvider()
 	browserOpener := func(url string) error { return nil }
 	service := NewOAuthService(httpClient, timeProvider, browserOpener)
 	assert.NotNil(t, service)
@@ -63,7 +64,7 @@ func TestGeneratePKCE(t *testing.T) {
 
 func TestExchangeCodeForToken(t *testing.T) {
 	mockClient := new(MockHTTPClient)
-	mockTime := new(MockTimeProvider)
+	mockTime := timeprovider.NewMockTimeProvider()
 	service := NewOAuthService(mockClient, mockTime, func(url string) error { return nil })
 
 	mockResp := &http.Response{
@@ -92,7 +93,7 @@ func TestExchangeCodeForToken(t *testing.T) {
 }
 
 func TestIsTokenExpired(t *testing.T) {
-	mockTime := new(MockTimeProvider)
+	mockTime := timeprovider.NewMockTimeProvider()
 	service := NewOAuthService(&http.Client{}, mockTime, func(url string) error { return nil })
 
 	mockTime.On("Now").Return(time.Unix(1000000000, 0))
@@ -105,7 +106,7 @@ func TestIsTokenExpired(t *testing.T) {
 
 func TestRefreshToken(t *testing.T) {
 	mockClient := new(MockHTTPClient)
-	mockTime := new(MockTimeProvider)
+	mockTime := timeprovider.NewMockTimeProvider()
 	service := NewOAuthService(mockClient, mockTime, func(url string) error { return nil })
 
 	mockResp := &http.Response{
@@ -135,7 +136,7 @@ func TestRefreshToken(t *testing.T) {
 
 func TestStartOAuthServer(t *testing.T) {
 	mockClient := new(MockHTTPClient)
-	mockTime := new(MockTimeProvider)
+	mockTime := timeprovider.NewMockTimeProvider()
 
 	// Create a channel to signal when the browser opener has been called
 	browserOpenerCalled := make(chan bool, 1)
@@ -233,7 +234,7 @@ func TestGeneratePKCE_Error(t *testing.T) {
 
 func TestExchangeCodeForToken_Error(t *testing.T) {
 	mockClient := new(MockHTTPClient)
-	mockTime := new(MockTimeProvider)
+	mockTime := timeprovider.NewMockTimeProvider()
 	service := NewOAuthService(mockClient, mockTime, func(url string) error { return nil })
 
 	mockResp := &http.Response{
@@ -251,7 +252,7 @@ func TestExchangeCodeForToken_Error(t *testing.T) {
 
 func TestRefreshToken_Error(t *testing.T) {
 	mockClient := new(MockHTTPClient)
-	mockTime := new(MockTimeProvider)
+	mockTime := timeprovider.NewMockTimeProvider()
 	service := NewOAuthService(mockClient, mockTime, func(url string) error { return nil })
 
 	mockResp := &http.Response{
