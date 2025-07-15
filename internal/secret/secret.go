@@ -28,6 +28,46 @@ func getVinzService() vinz.VinzServicer {
 	return vs
 }
 
+type SecretLocation int
+
+const (
+	SecretLocationVinz SecretLocation = iota
+	SecretLocationLocal
+	SecretLocationNone
+)
+
+func DetectSecretLocation(organizationId, projectIdOrAlternateId string) SecretLocation {
+	// First check if secret exists in Vinz (but only if not forced to use local)
+	if !flags.LocalSecret {
+		_, err := getVinzService().GetKey(organizationId, projectIdOrAlternateId)
+		if err == nil {
+			return SecretLocationVinz
+		}
+	}
+
+	// Then check if secret exists locally (including monorepo)
+	if _, err := RestoreSecretFromFile(ManifestSecretFile); err == nil {
+		return SecretLocationLocal
+	}
+
+	return SecretLocationNone
+}
+
+func GetSecretLocationDescription(organizationId, projectIdOrAlternateId string) (string, error) {
+	location := DetectSecretLocation(organizationId, projectIdOrAlternateId)
+
+	switch location {
+	case SecretLocationVinz:
+		return "remotely", nil
+	case SecretLocationLocal:
+		return "locally", nil
+	case SecretLocationNone:
+		return "new location (will be created)", nil
+	default:
+		return "unknown location", nil
+	}
+}
+
 func NewSecret(secretBase64 string) models.Secret {
 	return models.NewSecret(secretBase64)
 }
@@ -176,6 +216,52 @@ func UpsertLocalSecret(secret models.Secret) error {
 	err = FS.WriteFile(localSecretFile, jsonData, 0644)
 	if err != nil {
 		return errors.Wrapf(err, "Error writing file: %s", localSecretFile)
+	}
+
+	return nil
+}
+
+func RotateSecret() error {
+	organizationId, err := flags.GetOrganizationID()
+	if err != nil {
+		return errors.Wrap(err, "Failed to get organization ID")
+	}
+
+	projectId, err := flags.GetProjectID()
+	if err != nil {
+		return errors.Wrap(err, "Failed to get project ID")
+	}
+
+	// Detect where the secret is currently stored
+	location := DetectSecretLocation(organizationId, projectId)
+
+	newSecret, err := models.GenerateSecret()
+	if err != nil {
+		return errors.Wrap(err, "Failed to generate new secret key")
+	}
+
+	switch location {
+	case SecretLocationVinz:
+		// Secret is stored in Vinz, rotate it there
+		_, err = getVinzService().SaveKey(organizationId, projectId, vinz.Key{
+			SecretKeyId: newSecret.SecretKeyId,
+			SecretKey:   newSecret.Base64(),
+		})
+		if err != nil {
+			return errors.Wrap(err, "Failed to save new key to Vinz")
+		}
+	case SecretLocationLocal:
+		// Secret is stored locally, rotate it there
+		err = UpsertLocalSecret(newSecret)
+		if err != nil {
+			return errors.Wrap(err, "Failed to save new secret locally")
+		}
+	case SecretLocationNone:
+		// No existing secret found, initialize new one based on configuration
+		_, err := InitializeSecret(organizationId, projectId, ManifestSecretFile)
+		if err != nil {
+			return errors.Wrap(err, "Failed to initialize new secret")
+		}
 	}
 
 	return nil

@@ -1,11 +1,13 @@
 package rotatekey
 
 import (
+	"fmt"
+
 	"github.com/Hyphen/cli/cmd/env/pull"
 	"github.com/Hyphen/cli/cmd/env/push"
-	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secret"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
@@ -34,13 +36,30 @@ func init() {
 }
 
 func runRotateKey(cmd *cobra.Command) error {
+	// Get organization and project info for detection
+	organizationId, err := flags.GetOrganizationID()
+	if err != nil {
+		return errors.Wrap(err, "Failed to get organization ID")
+	}
+
+	projectId, err := flags.GetProjectID()
+	if err != nil {
+		return errors.Wrap(err, "Failed to get project ID")
+	}
+
+	// Get the exact location description
+	locationDesc, err := secret.GetSecretLocationDescription(organizationId, projectId)
+	if err != nil {
+		locationDesc = "unknown location"
+	}
+
 	// Display warning and prompt for confirmation
 	printer.Warning("You are about to rotate the encryption key. This action is irreversible and will affect all environments.")
 	printer.Info("Make sure you have a backup of your current configuration before proceeding.")
 	printer.Info("This action will:")
 	printer.Info("  1. Generate a new encryption key")
 	printer.Info("  2. Re-encrypt all environment variables with the new key")
-	printer.Info("  3. Update the local configuration with the new key")
+	printer.Info(fmt.Sprintf("  3. Update the secret key stored %s", locationDesc))
 	printer.Info("\nAre you absolutely sure you want to proceed?")
 
 	response := prompt.PromptYesNo(cmd, "Rotate encryption key?", false)
@@ -58,29 +77,18 @@ func runRotateKey(cmd *cobra.Command) error {
 		return err
 	}
 
-	newManifestSecret, err := getNewManifestSecret()
+	err = secret.RotateSecret()
 	if err != nil {
 		return err
 	}
-
-	secret.UpsertLocalSecret(newManifestSecret)
 
 	push.Silent = true
 	push.RunPush([]string{})
 
 	printer.Success("Key rotation completed successfully.")
-	printer.Info("New encryption key has been generated and all environments have been updated.")
+	printer.Info(fmt.Sprintf("New encryption key has been generated and stored %s", locationDesc))
+	printer.Info("All environments have been updated with the new key.")
 	printer.Info("Please ensure all team members pull the latest changes.")
 
 	return nil
-}
-
-func getNewManifestSecret() (models.Secret, error) {
-	//generate new key
-	newSecret, err := models.GenerateSecret()
-	if err != nil {
-		return models.Secret{}, err
-	}
-
-	return newSecret, nil
 }
