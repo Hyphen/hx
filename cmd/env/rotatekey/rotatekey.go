@@ -47,10 +47,19 @@ func runRotateKey(cmd *cobra.Command) error {
 		return errors.Wrap(err, "Failed to get project ID")
 	}
 
-	// Get the exact location description
-	locationDesc, err := secret.GetSecretLocationDescription(organizationId, projectId)
+	// Get the current location
+	_, location, err := secret.LoadSecret(organizationId, projectId)
 	if err != nil {
-		locationDesc = "unknown location"
+		return errors.Wrap(err, "unable to load secret for rotation")
+	}
+
+	if location == secret.SecretLocationNone {
+		return fmt.Errorf("there is currently no secret to rotate for this application")
+	}
+
+	locationDesc := "remotely"
+	if location == secret.SecretLocationLocal {
+		locationDesc = "locally"
 	}
 
 	// Display warning and prompt for confirmation

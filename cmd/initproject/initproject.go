@@ -145,7 +145,7 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 		printer.Error(cmd, err)
 		os.Exit(1)
 	}
-	_, err = secret.LoadSecret(orgID, *createdProject.ID, true)
+	_, _, err = secret.LoadOrInitializeSecret(orgID, *createdProject.ID)
 	if err != nil {
 		printer.Error(cmd, err)
 		os.Exit(1)

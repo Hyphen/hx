@@ -52,7 +52,7 @@ func RunPush(args []string) error {
 	if err != nil {
 		return err
 	}
-	secret, err := secret.LoadSecret(config.OrganizationId, *config.ProjectId, true)
+	secret, _, err := secret.LoadSecret(config.OrganizationId, *config.ProjectId)
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func pushForMember(args []string, secretKeyId int64) error {
 	if err != nil {
 		return err
 	}
-	secret, err := secret.LoadSecret(config.OrganizationId, *config.ProjectId, true)
+	secret, _, err := secret.LoadSecret(config.OrganizationId, *config.ProjectId)
 	if err != nil {
 		return err
 	}
