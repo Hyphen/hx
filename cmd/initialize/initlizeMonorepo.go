@@ -49,7 +49,7 @@ func runInitMonorepo(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	s, err := secret.LoadSecret(c.OrganizationId, *c.ProjectId, true)
+	s, _, err := secret.LoadOrInitializeSecret(c.OrganizationId, *c.ProjectId)
 	if err != nil {
 		printer.Error(cmd, err)
 		return

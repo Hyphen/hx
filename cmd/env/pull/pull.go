@@ -135,7 +135,7 @@ func pullForApp(args []string, forceFlag bool) error {
 		envName = args[0]
 	}
 
-	secret, err := secret.LoadSecret(*&config.OrganizationId, *config.ProjectId, true)
+	secret, _, err := secret.LoadSecret(config.OrganizationId, *config.ProjectId)
 	if err != nil {
 		return err
 	}

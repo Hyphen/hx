@@ -158,7 +158,7 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	ms, err := secret.LoadSecret(mcl.OrganizationId, *mcl.ProjectId, false)
+	ms, _, err := secret.LoadOrInitializeSecret(mcl.OrganizationId, *mcl.ProjectId)
 	if err != nil {
 		printer.Error(cmd, err)
 		return

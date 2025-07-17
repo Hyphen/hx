@@ -15,7 +15,6 @@ import (
 	"github.com/Hyphen/cli/pkg/httputil"
 )
 
-
 type EnvServicer interface {
 	GetEnvironment(organizationId, projectId, environment string) (models.Environment, bool, error)
 	PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env models.Env) error
@@ -293,7 +292,7 @@ func GetLocalEncryptedEnv(envName string, envCompletePath *string, s models.Secr
 		return models.Env{}, err
 	}
 	e.Data = envEncrytedData
-	e.SecretKeyId = &s.SecretKeyId
+	e.SecretKeyID = &s.SecretKeyId
 
 	return e, nil
 }
