@@ -86,13 +86,13 @@ func runRotateKey(cmd *cobra.Command) error {
 		return err
 	}
 
-	err = secret.RotateSecret()
+	newSecret, err := secret.RotateSecret()
 	if err != nil {
 		return err
 	}
 
 	push.Silent = true
-	push.RunPush([]string{})
+	push.RunPushUsingSecret([]string{}, newSecret, cmd)
 
 	printer.Success("Key rotation completed successfully.")
 	printer.Info(fmt.Sprintf("New encryption key has been generated and stored %s", locationDesc))

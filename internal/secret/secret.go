@@ -9,6 +9,7 @@ import (
 	"dario.cat/mergo"
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/vinz"
+	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/fsutil"
@@ -51,6 +52,11 @@ func LoadOrInitializeSecret(organizationId, projectIdOrAlternateId string) (mode
 
 		secret, err = InitializeSecret(organizationId, projectIdOrAlternateId, initToLocation, ManifestSecretFile)
 		return secret, initToLocation, err
+	}
+
+	if flags.LocalSecret && location == SecretLocationVinz {
+		// warn
+		cprint.Warning("This project already has remotely configured secrets. Ignoring --localSecret flag.")
 	}
 
 	return secret, location, err
@@ -210,20 +216,20 @@ func UpsertLocalSecret(secret models.Secret) error {
 	return nil
 }
 
-func RotateSecret() error {
+func RotateSecret() (models.Secret, error) {
+	newSecret, err := models.GenerateSecret()
+	if err != nil {
+		return newSecret, errors.Wrap(err, "Failed to generate new secret key")
+	}
+
 	organizationId, err := flags.GetOrganizationID()
 	if err != nil {
-		return errors.Wrap(err, "Failed to get organization ID")
+		return newSecret, errors.Wrap(err, "Failed to get organization ID")
 	}
 
 	projectId, err := flags.GetProjectID()
 	if err != nil {
-		return errors.Wrap(err, "Failed to get project ID")
-	}
-
-	newSecret, err := models.GenerateSecret()
-	if err != nil {
-		return errors.Wrap(err, "Failed to generate new secret key")
+		return newSecret, errors.Wrap(err, "Failed to get project ID")
 	}
 
 	// If there's a secret in Vinz, we're using vinz for this project. Do not use local secret.
@@ -235,19 +241,19 @@ func RotateSecret() error {
 			SecretKey:   newSecret.Base64(),
 		})
 		if err != nil {
-			return errors.Wrap(err, "Failed to save new key to Vinz")
+			return newSecret, errors.Wrap(err, "Failed to save new key to Vinz")
 		}
 
-		return nil
+		return newSecret, nil
 	}
 
 	// rotate locally
 	err = UpsertLocalSecret(newSecret)
 	if err != nil {
-		return errors.Wrap(err, "Failed to save new secret locally")
+		return newSecret, errors.Wrap(err, "Failed to save new secret locally")
 	}
 
-	return nil
+	return newSecret, nil
 }
 
 func readAndUnmarshalConfigJSON[T any](filename string) (T, error) {

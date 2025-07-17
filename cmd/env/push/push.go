@@ -12,6 +12,7 @@ import (
 	"github.com/Hyphen/cli/internal/secret"
 	"github.com/Hyphen/cli/internal/vinz"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
@@ -41,18 +42,27 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
-		if err := RunPush(args); err != nil {
+		if err := RunPush(args, cmd); err != nil {
 			printer.Error(cmd, err)
 		}
 	},
 }
 
-func RunPush(args []string) error {
+func RunPush(args []string, cmd *cobra.Command) error {
 	config, err := config.RestoreConfig()
 	if err != nil {
 		return err
 	}
 	secret, _, err := secret.LoadSecret(config.OrganizationId, *config.ProjectId)
+	if err != nil {
+		return err
+	}
+
+	return RunPushUsingSecret(args, secret, cmd)
+}
+
+func RunPushUsingSecret(args []string, secret models.Secret, cmd *cobra.Command) error {
+	config, err := config.RestoreConfig()
 	if err != nil {
 		return err
 	}
@@ -79,7 +89,7 @@ func RunPush(args []string) error {
 			}
 
 			// Run push for this member
-			err = pushForMember(args, secret.SecretKeyId)
+			err = pushForMember(args, secret, cmd)
 			if err != nil {
 				printer.Warning(fmt.Sprintf("Failed to push for member %s: %s", memberDir, err))
 			}
@@ -95,16 +105,12 @@ func RunPush(args []string) error {
 	}
 
 	// If not a monorepo, proceed with regular push
-	return pushForMember(args, secret.SecretKeyId)
+	return pushForMember(args, secret, cmd)
 }
 
 // pushForMember contains the original push logic
-func pushForMember(args []string, secretKeyId int64) error {
+func pushForMember(args []string, secret models.Secret, cmd *cobra.Command) error {
 	config, err := config.RestoreConfig()
-	if err != nil {
-		return err
-	}
-	secret, _, err := secret.LoadSecret(config.OrganizationId, *config.ProjectId)
 	if err != nil {
 		return err
 	}
@@ -150,12 +156,12 @@ func pushForMember(args []string, secretKeyId int64) error {
 	for _, envName := range envsToPush {
 		e, err := env.GetLocalEncryptedEnv(envName, nil, secret)
 		if err != nil {
-			printer.Error(nil, err)
+			printer.Error(cmd, err)
 			continue
 		}
-		err, skippable := service.putEnv(orgId, envName, appId, e, secret, config, secretKeyId, &skippedEnvs)
+		err, skippable := service.putEnv(orgId, envName, appId, e, secret, config, &skippedEnvs)
 		if err != nil {
-			printer.Error(nil, err)
+			printer.Error(cmd, err)
 			continue
 		} else if !skippable {
 			envsPushed = append(envsPushed, envName)
@@ -182,19 +188,33 @@ func newService(envService env.EnvServicer, db database.Database, vinzService vi
 	}
 }
 
-func (s *service) putEnv(orgID, envName, appID string, e models.Env, secret models.Secret, config config.Config, secretKeyId int64, skippedEnvs *[]string) (err error, skippable bool) {
+func (s *service) putEnv(orgID, envName, appID string, e models.Env, currentSecret models.Secret, config config.Config, skippedEnvs *[]string) (err error, skippable bool) {
 	// Check local environment
 	currentLocalEnv, exists := s.db.GetSecret(database.SecretKey{
 		ProjectId: *config.ProjectId,
 		AppId:     *config.AppId,
 		EnvName:   envName,
 	})
+
+	var replacingSecretKeyID int64 = 0
 	if exists {
-		err, skippable := s.validateLocalEnv(&currentLocalEnv, &e, secret)
+		err, skippable := s.validateLocalEnv(&currentLocalEnv, &e, currentSecret)
 		if err != nil {
 			return err, false
 		}
-		if skippable && secret.SecretKeyId == secretKeyId {
+
+		// get the latest secret key id for this env, if it exists
+		latestEnv, err := s.envService.GetEnvironmentEnv(orgID, appID, envName, nil, nil)
+		if err != nil {
+			// if this is not found, we'll use a nil secretKeyId - first push
+			if !errors.Is(err, errors.ErrNotFound) {
+				return err, false
+			}
+		} else {
+			replacingSecretKeyID = *latestEnv.SecretKeyID
+		}
+
+		if skippable && currentSecret.SecretKeyId == replacingSecretKeyID {
 			*skippedEnvs = append(*skippedEnvs, envName)
 			return nil, true
 		}
@@ -205,12 +225,12 @@ func (s *service) putEnv(orgID, envName, appID string, e models.Env, secret mode
 	e.Version = &newVersion
 
 	// Update cloud environment
-	if err := s.envService.PutEnvironmentEnv(orgID, appID, envName, secretKeyId, e); err != nil {
+	if err := s.envService.PutEnvironmentEnv(orgID, appID, envName, replacingSecretKeyID, e); err != nil {
 		return fmt.Errorf("failed to update cloud %s environment: %w", envName, err), false
 	}
 
 	// Update local environment
-	newEnvDcrypted, err := e.DecryptData(secret)
+	newEnvDcrypted, err := e.DecryptData(currentSecret)
 	if err != nil {
 		return err, false
 	}
