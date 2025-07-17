@@ -222,20 +222,15 @@ func RotateSecret() error {
 		return errors.Wrap(err, "Failed to get project ID")
 	}
 
-	// Detect where the secret is currently stored
-	_, location, err := LoadSecret(organizationId, projectId)
-	if err != nil {
-		return errors.Wrap(err, "Failed to load existing secret")
-	}
-
 	newSecret, err := models.GenerateSecret()
 	if err != nil {
 		return errors.Wrap(err, "Failed to generate new secret key")
 	}
 
-	switch location {
-	case SecretLocationVinz:
-		// Secret is stored in Vinz, rotate it there
+	// If there's a secret in Vinz, we're using vinz for this project. Do not use local secret.
+	_, err = getVinzService().GetKey(organizationId, projectId)
+	if err == nil {
+		// rotate in vinz
 		_, err = getVinzService().SaveKey(organizationId, projectId, vinz.Key{
 			SecretKeyId: newSecret.SecretKeyId,
 			SecretKey:   newSecret.Base64(),
@@ -243,14 +238,14 @@ func RotateSecret() error {
 		if err != nil {
 			return errors.Wrap(err, "Failed to save new key to Vinz")
 		}
-	case SecretLocationLocal:
-		// Secret is stored locally, rotate it there
-		err = UpsertLocalSecret(newSecret)
-		if err != nil {
-			return errors.Wrap(err, "Failed to save new secret locally")
-		}
-	case SecretLocationNone:
-		return fmt.Errorf("could not find an existing secret to rotate")
+
+		return nil
+	}
+
+	// rotate locally
+	err = UpsertLocalSecret(newSecret)
+	if err != nil {
+		return errors.Wrap(err, "Failed to save new secret locally")
 	}
 
 	return nil
