@@ -33,6 +33,7 @@ var RotateCmd = &cobra.Command{
 
 func init() {
 	RotateCmd.Flags().BoolVar(&forceFlag, "force", false, "Force overwrite of locally modified environment files")
+	RotateCmd.Flags().BoolVarP(&flags.LocalSecret, "localSecret", "l", false, "Use local secret key file instead of Hyphen's secure key store")
 }
 
 func runRotateKey(cmd *cobra.Command) error {
