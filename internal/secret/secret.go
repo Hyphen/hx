@@ -57,15 +57,7 @@ func LoadOrInitializeSecret(organizationId, projectIdOrAlternateId string) (mode
 }
 
 func LoadSecret(organizationId, projectIdOrAlternateId string) (models.Secret, SecretLocation, error) {
-	// Try loading from manifest file first
-	if _, err := os.Stat(ManifestSecretFile); err == nil {
-		secret, err := restoreSecretFromFile(ManifestSecretFile)
-		if err == nil {
-			return secret, SecretLocationLocal, nil
-		}
-	}
-
-	// Fallback to looking remotely.
+	// Always default to looking in Vinz first, unless there is a LocalSecret flag.
 	if !flags.LocalSecret {
 		secret, err := getVinzService().GetKey(organizationId, projectIdOrAlternateId)
 		if err == nil {
@@ -73,6 +65,13 @@ func LoadSecret(organizationId, projectIdOrAlternateId string) (models.Secret, S
 				SecretKeyId:     secret.SecretKeyId,
 				Base64SecretKey: secret.SecretKey,
 			}, SecretLocationVinz, nil
+		}
+	}
+
+	if _, err := os.Stat(ManifestSecretFile); err == nil {
+		secret, err := restoreSecretFromFile(ManifestSecretFile)
+		if err == nil {
+			return secret, SecretLocationLocal, nil
 		}
 	}
 
