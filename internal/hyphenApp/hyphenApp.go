@@ -18,6 +18,10 @@ func ApplicationLink(organizationId, projectAlternateId, appAlternateId string) 
 	return fmt.Sprintf("%s/%s/projects/%s/app/%s", apiconf.GetBaseAppUrl(), organizationId, projectAlternateId, appAlternateId)
 }
 
+func ApplicationBuildLink(organizationId, projectAlternateId, appAlternateId, buildId string) string {
+	return fmt.Sprintf("%s/%s/projects/%s/app/%s/builds#%s", apiconf.GetBaseAppUrl(), organizationId, projectAlternateId, appAlternateId, buildId)
+}
+
 func DeploymentLink(organizationId, deploymentId string) string {
 	return fmt.Sprintf("%s/%s/deploy/%s", apiconf.GetBaseAppUrl(), organizationId, deploymentId)
 }

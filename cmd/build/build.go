@@ -17,15 +17,15 @@ var BuildCmd = &cobra.Command{
 	Use:   "build ",
 	Short: "Run a build and post it to hyphen",
 	Long: `
-The deploy command runs a deployment for a given deployment name.
+The build command runs a build and uploads it to hyphen without deploying.
 
 Usage:
-	hyphen deploy <deployment> [flags]
+	hyphen build [flags]
 
 Examples:
-hyphen deploy deploy-dev
+hyphen build
 
-Use 'hyphen link --help' for more information about available flags.
+Use 'hyphen build --help' for more information about available flags.
 `,
 	Args: cobra.RangeArgs(0, 1),
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -41,7 +41,7 @@ Use 'hyphen link --help' for more information about available flags.
 			return
 		}
 
-		url := hyphenapp.ApplicationLink(build.Organization.ID, build.Project.ID, build.App.ID)
+		url := hyphenapp.ApplicationBuildLink(build.Organization.ID, build.Project.ID, build.App.ID, build.Id)
 
 		printer.Info("Build successful: " + url)
 	},
