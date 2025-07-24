@@ -15,7 +15,6 @@ import (
 	"github.com/Hyphen/cli/pkg/httputil"
 )
 
-
 type EnvServicer interface {
 	GetEnvironment(organizationId, projectId, environment string) (models.Environment, bool, error)
 	PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env models.Env) error
@@ -26,23 +25,24 @@ type EnvServicer interface {
 }
 
 type EnvService struct {
-	baseUrl    string
-	httpClient httputil.Client
+	baseApixUrl    string
+	baseHorizonUrl string
+	httpClient     httputil.Client
 }
 
 var _ EnvServicer = (*EnvService)(nil)
 
 func NewService() *EnvService {
-	baseUrl := apiconf.GetBaseApixUrl()
 
 	return &EnvService{
-		baseUrl:    baseUrl,
-		httpClient: httputil.NewHyphenHTTPClient(),
+		baseApixUrl:    apiconf.GetBaseApixUrl(),
+		baseHorizonUrl: apiconf.GetBaseHorizonUrl(),
+		httpClient:     httputil.NewHyphenHTTPClient(),
 	}
 }
 
 func (es *EnvService) GetEnvironment(organizationId, projectId, environmentId string) (models.Environment, bool, error) {
-	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments/%s/", es.baseUrl, organizationId, projectId, environmentId)
+	url := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments/%s/", es.baseHorizonUrl, organizationId, projectId, environmentId)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -70,7 +70,7 @@ func (es *EnvService) GetEnvironment(organizationId, projectId, environmentId st
 }
 
 func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env models.Env) error {
-	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseUrl, organizationId, appId)
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseApixUrl, organizationId, appId)
 
 	query := url.Values{}
 	query.Set("secretKeyId", strconv.FormatInt(secretKeyId, 10))
@@ -104,7 +104,7 @@ func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId str
 }
 
 func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId *int64, version *int) (models.Env, error) {
-	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseUrl, organizationId, appId)
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/", es.baseHorizonUrl, organizationId, appId)
 
 	query := url.Values{}
 
@@ -146,7 +146,7 @@ func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId str
 }
 
 func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]models.Env, error) {
-	baseURL := fmt.Sprintf("%s/api/organizations/%s/dot-envs", es.baseUrl, organizationId)
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/dot-envs", es.baseApixUrl, organizationId)
 
 	query := url.Values{}
 	query.Set("pageSize", strconv.Itoa(size))
@@ -182,7 +182,7 @@ func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]
 }
 
 func (es *EnvService) ListEnvVersions(organizationId, appId, environmentId string, size, page int) ([]models.Env, error) {
-	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/versions/", es.baseUrl, organizationId, appId)
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dot-env/versions/", es.baseHorizonUrl, organizationId, appId)
 
 	query := url.Values{}
 	query.Set("pageSize", strconv.Itoa(size))
@@ -228,7 +228,7 @@ func (es *EnvService) ListEnvVersions(organizationId, appId, environmentId strin
 }
 
 func (es *EnvService) ListEnvironments(organizationId, projectId string, size, page int) ([]models.Environment, error) {
-	baseURL := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments", es.baseUrl, organizationId, projectId)
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments", es.baseHorizonUrl, organizationId, projectId)
 
 	query := url.Values{}
 	query.Set("pageSize", strconv.Itoa(size))
