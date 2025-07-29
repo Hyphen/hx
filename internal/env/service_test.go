@@ -143,8 +143,8 @@ func TestGetFileName(t *testing.T) {
 func TestEnvService_GetEnvironment(t *testing.T) {
 	mockHTTPClient := new(httputil.MockHTTPClient)
 	service := &EnvService{
-		baseUrl:    "https://api.example.com",
-		httpClient: mockHTTPClient,
+		baseApixUrl: "https://api.example.com",
+		httpClient:  mockHTTPClient,
 	}
 
 	expectedEnv := models.Environment{ID: "123", Name: "TestEnv"}
@@ -168,8 +168,8 @@ func TestEnvService_GetEnvironment(t *testing.T) {
 func TestEnvService_PutEnv(t *testing.T) {
 	mockHTTPClient := new(httputil.MockHTTPClient)
 	service := &EnvService{
-		baseUrl:    "https://api.example.com",
-		httpClient: mockHTTPClient,
+		baseApixUrl: "https://api.example.com",
+		httpClient:  mockHTTPClient,
 	}
 
 	env := models.Env{Size: "100 bytes", CountVariables: 5}
@@ -190,8 +190,8 @@ func TestEnvService_PutEnv(t *testing.T) {
 func TestEnvService_GetEnv(t *testing.T) {
 	mockHTTPClient := new(httputil.MockHTTPClient)
 	service := &EnvService{
-		baseUrl:    "https://api.example.com",
-		httpClient: mockHTTPClient,
+		baseApixUrl: "https://api.example.com",
+		httpClient:  mockHTTPClient,
 	}
 
 	expectedEnv := models.Env{Size: "100 bytes", CountVariables: 5}
@@ -215,8 +215,8 @@ func TestEnvService_GetEnv(t *testing.T) {
 func TestEnvService_ListEnvs(t *testing.T) {
 	mockHTTPClient := new(httputil.MockHTTPClient)
 	service := &EnvService{
-		baseUrl:    "https://api.example.com",
-		httpClient: mockHTTPClient,
+		baseApixUrl: "https://api.example.com",
+		httpClient:  mockHTTPClient,
 	}
 
 	expectedEnvs := []models.Env{
@@ -249,8 +249,8 @@ func TestEnvService_ListEnvs(t *testing.T) {
 func TestEnvService_ListEnvironments(t *testing.T) {
 	mockHTTPClient := new(httputil.MockHTTPClient)
 	service := &EnvService{
-		baseUrl:    "https://api.example.com",
-		httpClient: mockHTTPClient,
+		baseApixUrl: "https://api.example.com",
+		httpClient:  mockHTTPClient,
 	}
 
 	expectedEnvs := []models.Environment{

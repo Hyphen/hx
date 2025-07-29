@@ -17,6 +17,16 @@ func GetBaseApixUrl() string {
 	return "https://api.hyphen.ai"
 }
 
+func GetBaseHorizonUrl() string {
+	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
+		return "https://dev-horizon.hyphen.ai"
+	}
+	if strings.ToLower(os.Getenv("HYPHEN_Local")) == "true" {
+		return "http://localhost:3333"
+	}
+	return "https://toggle.hyphen.cloud"
+}
+
 func GetBaseWebsocketUrl() string {
 	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
 		return "wss://dev-api.hyphen.ai"
