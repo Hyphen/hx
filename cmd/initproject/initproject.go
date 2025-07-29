@@ -61,6 +61,7 @@ Examples:
 func init() {
 	InitProjectCmd.Flags().StringVarP(&projectIDFlag, "id", "i", "", "Project ID (optional)")
 	InitProjectCmd.Flags().BoolVarP(&IsMonorepo, "monorepo", "m", false, "Initialize a monorepo project")
+	InitProjectCmd.Flags().BoolVarP(&flags.LocalSecret, "localSecret", "l", false, "Use local secret key file instead of Hyphen's secure key store")
 }
 
 func RunInitProject(cmd *cobra.Command, args []string) {
@@ -145,7 +146,7 @@ func RunInitProject(cmd *cobra.Command, args []string) {
 		printer.Error(cmd, err)
 		os.Exit(1)
 	}
-	_, err = secret.LoadSecret(orgID, *createdProject.ID, true)
+	_, _, err = secret.LoadOrInitializeSecret(orgID, *createdProject.ID)
 	if err != nil {
 		printer.Error(cmd, err)
 		os.Exit(1)

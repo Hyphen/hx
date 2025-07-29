@@ -9,6 +9,7 @@ import (
 	"dario.cat/mergo"
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/vinz"
+	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/fsutil"
@@ -28,32 +29,62 @@ func getVinzService() vinz.VinzServicer {
 	return vs
 }
 
+type SecretLocation int
+
+const (
+	SecretLocationVinz SecretLocation = iota
+	SecretLocationLocal
+	SecretLocationNone
+)
+
 func NewSecret(secretBase64 string) models.Secret {
 	return models.NewSecret(secretBase64)
 }
 
-func LoadSecret(organizationId, projectIdOrAlternateId string, create bool) (models.Secret, error) {
-	secret, err := getVinzService().GetKey(organizationId, projectIdOrAlternateId)
-	if err == nil {
-		return models.Secret{
-			SecretKeyId:     secret.SecretKeyId,
-			Base64SecretKey: secret.SecretKey,
-		}, nil
+func LoadOrInitializeSecret(organizationId, projectIdOrAlternateId string) (models.Secret, SecretLocation, error) {
+	// First, attempt to load the secret
+	secret, location, err := LoadSecret(organizationId, projectIdOrAlternateId)
+	if location == SecretLocationNone {
+		initToLocation := SecretLocationVinz
+		if flags.LocalSecret {
+			initToLocation = SecretLocationLocal
+		}
+
+		secret, err = InitializeSecret(organizationId, projectIdOrAlternateId, initToLocation, ManifestSecretFile)
+		return secret, initToLocation, err
 	}
 
-	// Try loading from manifest file first
-	if _, err := os.Stat(ManifestSecretFile); err == nil {
-		secret, err := RestoreSecretFromFile(ManifestSecretFile)
+	if flags.LocalSecret && location == SecretLocationVinz {
+		// warn
+		cprint.Warning("This project already has remotely configured secrets. Ignoring --localSecret flag.")
+	}
+
+	return secret, location, err
+}
+
+func LoadSecret(organizationId, projectIdOrAlternateId string) (models.Secret, SecretLocation, error) {
+	// Always default to looking in Vinz first, unless there is a LocalSecret flag.
+	if !flags.LocalSecret {
+		secret, err := getVinzService().GetKey(organizationId, projectIdOrAlternateId)
 		if err == nil {
-			return secret, nil
+			return models.Secret{
+				SecretKeyId:     secret.SecretKeyId,
+				Base64SecretKey: secret.SecretKey,
+			}, SecretLocationVinz, nil
 		}
 	}
 
-	// Finally, try initializing new secret
-	return InitializeSecret(organizationId, projectIdOrAlternateId, ManifestSecretFile)
+	if _, err := os.Stat(ManifestSecretFile); err == nil {
+		secret, err := restoreSecretFromFile(ManifestSecretFile)
+		if err == nil {
+			return secret, SecretLocationLocal, nil
+		}
+	}
+
+	return models.Secret{}, SecretLocationNone, nil
 }
 
-func InitializeSecret(organizationId, projectIdOrAlternateId, secretFile string) (models.Secret, error) {
+func InitializeSecret(organizationId, projectIdOrAlternateId string, secretLocation SecretLocation, secretFile string) (models.Secret, error) {
 	ms, err := models.GenerateSecret()
 	if err != nil {
 		return models.Secret{}, errors.Wrap(err, "Failed to create new secret key")
@@ -64,12 +95,13 @@ func InitializeSecret(organizationId, projectIdOrAlternateId, secretFile string)
 		return models.Secret{}, errors.Wrap(err, "Error encoding JSON")
 	}
 
-	if flags.LocalSecret {
+	switch secretLocation {
+	case SecretLocationLocal:
 		err = FS.WriteFile(secretFile, jsonData, 0644)
 		if err != nil {
 			return models.Secret{}, errors.Wrapf(err, "Error writing file: %s", secretFile)
 		}
-	} else {
+	case SecretLocationVinz:
 		_, err := getVinzService().SaveKey(organizationId, projectIdOrAlternateId, vinz.Key{
 			SecretKeyId: ms.SecretKeyId,
 			SecretKey:   ms.Base64(),
@@ -77,11 +109,14 @@ func InitializeSecret(organizationId, projectIdOrAlternateId, secretFile string)
 		if err != nil {
 			return models.Secret{}, errors.Wrap(err, "Failed to save secret key")
 		}
+	default:
+		return ms, fmt.Errorf("specified secret location must be local or vinz")
 	}
+
 	return ms, nil
 }
 
-func RestoreSecretFromFile(manifestSecretFile string) (models.Secret, error) {
+func restoreSecretFromFile(manifestSecretFile string) (models.Secret, error) {
 	monorepoSecret, err := RestoreSecretFromMonorepo()
 	if err == nil {
 		return monorepoSecret, nil
@@ -179,6 +214,46 @@ func UpsertLocalSecret(secret models.Secret) error {
 	}
 
 	return nil
+}
+
+func RotateSecret() (models.Secret, error) {
+	newSecret, err := models.GenerateSecret()
+	if err != nil {
+		return newSecret, errors.Wrap(err, "Failed to generate new secret key")
+	}
+
+	organizationId, err := flags.GetOrganizationID()
+	if err != nil {
+		return newSecret, errors.Wrap(err, "Failed to get organization ID")
+	}
+
+	projectId, err := flags.GetProjectID()
+	if err != nil {
+		return newSecret, errors.Wrap(err, "Failed to get project ID")
+	}
+
+	// If there's a secret in Vinz, we're using vinz for this project. Do not use local secret.
+	_, err = getVinzService().GetKey(organizationId, projectId)
+	if err == nil {
+		// rotate in vinz
+		_, err = getVinzService().SaveKey(organizationId, projectId, vinz.Key{
+			SecretKeyId: newSecret.SecretKeyId,
+			SecretKey:   newSecret.Base64(),
+		})
+		if err != nil {
+			return newSecret, errors.Wrap(err, "Failed to save new key to Vinz")
+		}
+
+		return newSecret, nil
+	}
+
+	// rotate locally
+	err = UpsertLocalSecret(newSecret)
+	if err != nil {
+		return newSecret, errors.Wrap(err, "Failed to save new secret locally")
+	}
+
+	return newSecret, nil
 }
 
 func readAndUnmarshalConfigJSON[T any](filename string) (T, error) {

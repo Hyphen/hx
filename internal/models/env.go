@@ -16,7 +16,7 @@ type Env struct {
 	ID             *string                      `json:"id,omitempty"`
 	Version        *int                         `json:"version,omitempty"`
 	ProjectEnv     *ProjectEnvironmentReference `json:"projectEnvironment,omitempty"`
-	SecretKeyId    *int64                       `json:"secretKeyId,omitempty"`
+	SecretKeyID    *int64                       `json:"secretKeyId,omitempty"`
 	Published      *time.Time                   `json:"published,omitempty"`
 }
 
