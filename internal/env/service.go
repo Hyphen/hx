@@ -146,7 +146,7 @@ func (es *EnvService) GetEnvironmentEnv(organizationId, appId, environmentId str
 }
 
 func (es *EnvService) ListEnvs(organizationId, appId string, size, page int) ([]models.Env, error) {
-	baseURL := fmt.Sprintf("%s/api/organizations/%s/dot-envs", es.baseApixUrl, organizationId)
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/dot-envs", es.baseHorizonUrl, organizationId)
 
 	query := url.Values{}
 	query.Set("pageSize", strconv.Itoa(size))

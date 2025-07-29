@@ -16,7 +16,7 @@
     },
     "args": [
       //"deploy", "June 3", "--no-build" //"--verbose" //, "--no-build"
-     "env", "list-versions", "development"
+     "env", "pull", "--force"
     ],
     "showLog": true,
     "console": "integratedTerminal"
