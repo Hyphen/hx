@@ -72,10 +72,10 @@ func GetGlobalDirectory() string {
 func UpsertGlobalConfig(mc Config) error {
 	globDir := GetGlobalDirectory()
 
-	mc.IsMonorepo = nil //this should always be nil in the global config
-	mc.Project = nil    //this should always be nil in the global config
+	mc.IsMonorepo = nil // this should always be nil in the global config
+	mc.Project = nil    // this should always be nil in the global config
 
-	if err := FS.MkdirAll(globDir, 0755); err != nil {
+	if err := FS.MkdirAll(globDir, 0o755); err != nil {
 		return errors.Wrap(err, "Failed to create global directory")
 	}
 
@@ -87,7 +87,7 @@ func UpsertGlobalConfig(mc Config) error {
 	}
 
 	// WriteFile will create the file if it doesn't exist, or overwrite it if it does
-	if err := FS.WriteFile(globManifestFilePath, jsonData, 0644); err != nil {
+	if err := FS.WriteFile(globManifestFilePath, jsonData, 0o644); err != nil {
 		return errors.Wrap(err, "Failed to save manifest")
 	}
 
@@ -104,7 +104,7 @@ func UpsertLocalWorkspace(workspace ConfigProject) error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal manifest to JSON")
 	}
-	if err := FS.WriteFile(ManifestConfigFile, jsonData, 0644); err != nil {
+	if err := FS.WriteFile(ManifestConfigFile, jsonData, 0o644); err != nil {
 		return errors.Wrap(err, "Failed to save manifest")
 	}
 	return nil
@@ -123,7 +123,7 @@ func AddAppToLocalProject(appDir string) error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal manifest to JSON")
 	}
-	if err := FS.WriteFile(ManifestConfigFile, jsonData, 0644); err != nil {
+	if err := FS.WriteFile(ManifestConfigFile, jsonData, 0o644); err != nil {
 		return errors.Wrap(err, "Failed to save manifest")
 	}
 	return nil
@@ -134,7 +134,7 @@ func InitializeConfig(mc Config, configFile string) error {
 	if err != nil {
 		return errors.Wrap(err, "Error encoding JSON")
 	}
-	err = FS.WriteFile(configFile, jsonData, 0644)
+	err = FS.WriteFile(configFile, jsonData, 0o644)
 	if err != nil {
 		return errors.Wrapf(err, "Error writing file: %s", configFile)
 	}
@@ -145,7 +145,7 @@ func RestoreConfigFromFile(manifestConfigFile string) (Config, error) {
 	var mconfig Config
 	var hasConfig bool
 
-	globalConfigFile := fmt.Sprintf("%s/%s", GetGlobalDirectory(), manifestConfigFile)
+	globalConfigFile := filepath.Join(GetGlobalDirectory(), manifestConfigFile)
 
 	globalConfig, err := readAndUnmarshalConfigJSON[Config](globalConfigFile)
 	if err == nil {
@@ -247,7 +247,7 @@ func UpsertOrganizationID(organizationID string) error {
 		if err != nil {
 			return errors.Wrap(err, "Error encoding JSON")
 		}
-		err = FS.WriteFile(globalConfigFile, jsonData, 0644)
+		err = FS.WriteFile(globalConfigFile, jsonData, 0o644)
 		if err != nil {
 			return errors.Wrapf(err, "Error writing file: %s", ManifestConfigFile)
 		}
@@ -265,7 +265,7 @@ func UpsertOrganizationID(organizationID string) error {
 	if err != nil {
 		return errors.Wrapf(err, "Error encoding JSON for file: %s", configFile)
 	}
-	err = FS.WriteFile(configFile, jsonData, 0644)
+	err = FS.WriteFile(configFile, jsonData, 0o644)
 	if err != nil {
 		return errors.Wrapf(err, "Error writing file: %s", configFile)
 	}
@@ -294,7 +294,7 @@ func UpsertGlobalOrganizationID(organizationID string) error {
 	mconfig.OrganizationId = organizationID
 
 	// Ensure the global directory exists
-	if err := FS.MkdirAll(globalDir, 0755); err != nil {
+	if err := FS.MkdirAll(globalDir, 0o755); err != nil {
 		return errors.Wrap(err, "Failed to create global directory")
 	}
 
@@ -305,7 +305,7 @@ func UpsertGlobalOrganizationID(organizationID string) error {
 	}
 
 	// Write the updated config to the global file
-	err = FS.WriteFile(globalConfigFile, jsonData, 0644)
+	err = FS.WriteFile(globalConfigFile, jsonData, 0o644)
 	if err != nil {
 		return errors.Wrapf(err, "Error writing file: %s", globalConfigFile)
 	}
@@ -348,7 +348,7 @@ func UpsertProject(project models.Project) error {
 		if err != nil {
 			return errors.Wrap(err, "Error encoding JSON")
 		}
-		err = FS.WriteFile(globalConfigFile, jsonData, 0644)
+		err = FS.WriteFile(globalConfigFile, jsonData, 0o644)
 		if err != nil {
 			return errors.Wrapf(err, "Error writing file: %s", ManifestConfigFile)
 		}
@@ -368,7 +368,7 @@ func UpsertProject(project models.Project) error {
 	if err != nil {
 		return errors.Wrapf(err, "Error encoding JSON for file: %s", configFile)
 	}
-	err = FS.WriteFile(configFile, jsonData, 0644)
+	err = FS.WriteFile(configFile, jsonData, 0o644)
 	if err != nil {
 		return errors.Wrapf(err, "Error writing file: %s", configFile)
 	}
@@ -399,7 +399,7 @@ func UpsertGlobalProject(project models.Project) error {
 	mconfig.ProjectAlternateId = &project.AlternateID
 
 	// Ensure the global directory exists
-	if err := FS.MkdirAll(globalDir, 0755); err != nil {
+	if err := FS.MkdirAll(globalDir, 0o755); err != nil {
 		return errors.Wrap(err, "Failed to create global directory")
 	}
 
@@ -410,7 +410,7 @@ func UpsertGlobalProject(project models.Project) error {
 	}
 
 	// Write the updated config to the global file
-	err = FS.WriteFile(globalConfigFile, jsonData, 0644)
+	err = FS.WriteFile(globalConfigFile, jsonData, 0o644)
 	if err != nil {
 		return errors.Wrapf(err, "Error writing file: %s", globalConfigFile)
 	}
