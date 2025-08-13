@@ -2,9 +2,12 @@ package user
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"time"
 
+	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
@@ -21,15 +24,18 @@ type UserService struct {
 }
 
 func ErrorIfNotAuthenticated() error {
-	// Try a simple request to force tokens refresh and validate we can get a response
-	_, err := NewService().GetExecutionContext()
-	if errors.Is(err, errors.ErrUnauthorized) || errors.Is(err, errors.ErrForbidden) {
-		return errors.New("You are not authenticated. Please run `hx auth` and try again")
-	} else if err != nil {
+	mc, err := config.RestoreConfig()
+	if err != nil {
 		return err
 	}
 
-	return nil
+	if mc.HyphenAccessToken != nil {
+		if mc.ExpiryTime != nil && *mc.ExpiryTime > time.Now().Unix() {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("You are not authenticated. Please run `hx auth` and try again")
 }
 
 func NewService() UserServicer {
