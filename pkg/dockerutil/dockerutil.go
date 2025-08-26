@@ -110,21 +110,31 @@ func Build(dockerFilePath, name, tag string, verbose bool) (string, string, erro
 }
 
 func Push(nameTag, registryUrl string) (string, error) {
+	var finalImageTag string
+
+	if strings.Contains(registryUrl, ".dkr.ecr.") {
+		// AWS: change : to - and use : as separator
+		finalImageTag = registryUrl + ":" + strings.ReplaceAll(nameTag, ":", "-")
+	} else {
+		// GCP/Azure: current behavior
+		finalImageTag = registryUrl + "/" + nameTag
+	}
+
 	// tag the image with the registry URL
-	cmdTag := exec.Command("docker", "tag", nameTag, registryUrl+"/"+nameTag)
+	cmdTag := exec.Command("docker", "tag", nameTag, finalImageTag)
 
 	_, err := cmdTag.CombinedOutput()
 	if err != nil {
 		return "", err
 	}
 
-	cmd := exec.Command("docker", "push", registryUrl+"/"+nameTag)
+	cmd := exec.Command("docker", "push", finalImageTag)
 
 	_, err = cmd.CombinedOutput()
 	if err != nil {
 		return "", err
 	}
-	return string(registryUrl + "/" + nameTag), nil
+	return finalImageTag, nil
 }
 
 func Inspect(nameTag string) (DockerInspectResult, error) {
