@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Hyphen/cli/cmd/agent"
 	"github.com/Hyphen/cli/cmd/app"
 	"github.com/Hyphen/cli/cmd/auth"
 	"github.com/Hyphen/cli/cmd/build"
@@ -70,6 +71,10 @@ func init() {
 }
 
 func Execute() {
+	canUseAgent := toggle.GetBooleanValue("canUseAgent", false)
+	if canUseAgent {
+		rootCmd.AddCommand(agent.AgentCmd)
+	}
 	canUseDeployments := toggle.GetBooleanValue("canUseDeployments", false)
 	if canUseDeployments {
 		rootCmd.AddCommand(deploy.DeployCmd)
