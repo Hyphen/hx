@@ -71,13 +71,13 @@ jobs:
           tar czf "../hyphen-${VERSION}-darwin-arm64.tar.gz" "hyphen-${VERSION}-macos-arm"
           cd ..
 
-          # Windows x86_64
-          cd "hyphen-${VERSION}-windows"
-          zip "../hyphen-${VERSION}-windows-x86_64.zip" "hyphen-${VERSION}-windows.exe"
-          cd ..
+          # # Windows x86_64
+          # cd "hyphen-${VERSION}-windows"
+          # zip "../hyphen-${VERSION}-windows-x86_64.zip" "hyphen-${VERSION}-windows.exe"
+          # cd ..
 
           # List created archives
-          ls -lh *.tar.gz *.zip
+          ls -lh *.tar.gz
 
       - name: Attach artifacts to release
         env:
@@ -89,8 +89,8 @@ jobs:
             "hyphen-${VERSION}-linux-x86_64.tar.gz" \
             "hyphen-${VERSION}-darwin-x86_64.tar.gz" \
             "hyphen-${VERSION}-darwin-arm64.tar.gz" \
-            "hyphen-${VERSION}-windows-x86_64.zip" \
             --repo ${{ github.repository }}
+            # "hyphen-${VERSION}-windows-x86_64.zip" \
 
   # upload:
   #   needs: [extract-version, build]

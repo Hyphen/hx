@@ -27,10 +27,10 @@ jobs:
             goos: darwin
             goarch: arm64
             arch: macos-arm
-          - os: windows-latest
-            goos: windows
-            goarch: amd64
-            arch: windows
+          # - os: windows-latest
+          #   goos: windows
+          #   goarch: amd64
+          #   arch: windows
 
     steps:
       - name: Set up Go
