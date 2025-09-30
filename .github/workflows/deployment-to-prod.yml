@@ -52,7 +52,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
 
-      - name: Package artifacts for mise/ubi
+      - name: Package artifacts
         run: |
           VERSION="${{ needs.extract-version.outputs.version }}"
 
