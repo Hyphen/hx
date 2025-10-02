@@ -112,8 +112,8 @@ func Build(dockerFilePath, name, tag string, verbose bool) (string, string, erro
 func Push(nameTag, registryUrl string) (string, error) {
 	var finalImageTag string
 
-	if strings.Contains(registryUrl, ".dkr.ecr.") {
-		// AWS: change : to - and use : as separator
+	if strings.Contains(registryUrl, ".dkr.ecr.") || strings.Contains(registryUrl, "index.docker.io") {
+		// AWS/Docker Hub: change : to - and use : as separator
 		finalImageTag = registryUrl + ":" + strings.ReplaceAll(nameTag, ":", "-")
 	} else {
 		// GCP/Azure: current behavior
