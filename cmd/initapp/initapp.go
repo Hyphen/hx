@@ -36,6 +36,7 @@ This command will:
 - Generate a local configuration file
 - Set up environment files for each project environment
 - Update .gitignore to exclude sensitive files
+- Create hyphen-entrypoint.sh (intended for Dockerfile usage)
 
 If no app name is provided, it will prompt to use the current directory name.
 
@@ -44,7 +45,7 @@ The command will guide you through:
 - Generating or providing an app ID
 - Creating necessary local files
 
-After initialization, you'll receive a summary of the new application, including its name, 
+After initialization, you'll receive a summary of the new application, including its name,
 ID, and associated organization.
 
 Examples:
@@ -197,6 +198,11 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	err = CreateEntrypoint(cmd)
+	if err != nil {
+		return
+	}
+
 	PrintInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID, *mc.ProjectAlternateId)
 }
 
@@ -282,6 +288,92 @@ func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, c
 
 	if err := db.UpsertSecret(secretKey, newEnvDecrypted, version); err != nil {
 		return fmt.Errorf("failed to save local environment: %w", err)
+	}
+
+	return nil
+}
+
+func CreateEntrypoint(cmd *cobra.Command) error {
+	file, err := os.OpenFile("hyphen-entrypoint.sh", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+	if err != nil {
+		printer.Error(cmd, fmt.Errorf("error creating hyphen-entrypoint.sh: %w", err))
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(`#!/bin/sh
+
+if ! command -v "wget" >/dev/null; then
+    echo "Missing command 'wget'. Please install wget into the Docker container." 1>&2
+    exit 1
+fi
+
+if ! command -v "sed" >/dev/null; then
+    echo "Missing command 'sed'. Please install sed into the Docker container." 1>&2
+    exit 1
+fi
+
+if [ $# -eq 0 ]; then
+    echo "Missing execution command line. Did you forget a CMD in your Dockerfile?" 1>&2
+    exit 1
+fi
+
+if [ -z "${HYPHEN_API_KEY}" ]; then
+    echo "Missing environment variable: HYPHEN_API_KEY" 1>&2
+    exit 1
+fi
+
+if [ -z "${HYPHEN_APP_ENVIRONMENT}" ]; then
+    echo "Missing environment variable: HYPHEN_APP_ENVIRONMENT" 1>&2
+    exit 1
+fi
+
+if ! [ -f ".hyphen/hx" ]; then
+    echo ">>> Determining Hyphen CLI latest version..."
+
+    wget -q -O /tmp/hyphen-cli-version "https://api.hyphen.ai/api/downloads/hyphen-cli/versions?latest=true"
+    if [ $? -ne 0 ]; then
+        exit 1
+    fi
+
+    version=$(sed -n 's/.*"version":"\([^"]*\).*/\1/p' /tmp/hyphen-cli-version)
+    if [ -z "${version}" ]; then
+        exit 1
+    fi
+
+    echo ">>> Downloading Hyphen CLI version $version..."
+
+    mkdir -p .hyphen
+
+    wget -q -O ./.hyphen/hx "https://api.hyphen.ai/api/downloads/hyphen-cli/${version}?os=linux"
+    if [ $? -ne 0 ]; then
+        exit 1
+    fi
+
+    chmod +x ".hyphen/hx"
+fi
+
+echo ">>> Logging into Hyphen..."
+
+./.hyphen/hx auth --use-api-key
+if [ $? -ne 0 ]; then
+    exit 1
+fi
+
+echo ">>> Pulling environment variables..."
+
+./.hyphen/hx pull "${HYPHEN_APP_ENVIRONMENT}" --force --yes
+if [ $? -ne 0 ]; then
+    exit 1
+fi
+
+echo ">>> Running..."
+
+./.hyphen/hx env run "${HYPHEN_APP_ENVIRONMENT}" --yes -- $@
+`)
+	if err != nil {
+		printer.Error(cmd, fmt.Errorf("error writing to hyphen-entrypoint.sh: %w", err))
+		return err
 	}
 
 	return nil
