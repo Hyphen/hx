@@ -8,7 +8,6 @@ import (
 
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/run"
-	runp "github.com/Hyphen/cli/internal/run"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -47,18 +46,18 @@ var DockerCmd = &cobra.Command{
 			return
 		}
 
-		service := runp.NewService()
+		service := run.NewService()
 
 		targetBranch := "main"
 		targetBranch, _ = gitutil.GetCurrentBranch()
-		run, err := service.CreateDockerFileRun(orgId, *config.AppId, targetBranch)
+		hyphenRun, err := service.CreateDockerFileRun(orgId, *config.AppId, targetBranch)
 		if err != nil {
 			printer.Error(cmd, err)
 			return
 		}
 
-		modelThing := DockerModelThingy{
-			Run: run,
+		modelThing := GenerateDockerRunModel{
+			Run: hyphenRun,
 		}
 
 		statusDisplay := tea.NewProgram(modelThing)
@@ -106,14 +105,14 @@ var DockerCmd = &cobra.Command{
 					continue
 				}
 
-				if data.RunId != run.ID {
+				if data.RunId != hyphenRun.ID {
 					continue
 				}
 
 				statusDisplay.Send(data)
 
 				if data.Action == "update" && data.Run.Status == "succeeded" {
-					var codeChanges runp.CodeChangeRunData
+					var codeChanges run.CodeChangeRunData
 					err := json.Unmarshal(data.Run.Data, &codeChanges)
 					if err != nil {
 						printer.Error(cmd, fmt.Errorf("error unmarshaling to CodeChangeRunData: %w", err))
@@ -154,12 +153,10 @@ func applyDiffs(diffs []run.DiffResult) {
 
 		// This is a create or modify
 		var contents []byte
-		for i, chunk := range diff.Chunks {
-			fmt.Printf("Chunk %d - Type: '%s', Content length: %d\n", i, chunk.Type, len(chunk.Content))
+		for _, chunk := range diff.Chunks {
 			// TODO: handle deletes to files
 			if chunk.Type != "delete" {
 				contents = append(contents, []byte(chunk.Content)...)
-				fmt.Printf("Added chunk %d to contents, total length now: %d\n", i, len(contents))
 			}
 		}
 		fullPath := filepath.Join(currentDir, diff.To)
@@ -167,8 +164,6 @@ func applyDiffs(diffs []run.DiffResult) {
 		err := fs.WriteFile(fullPath, contents, 0o644)
 		if err != nil {
 			fmt.Printf("Error writing file %s: %v\n", fullPath, err)
-		} else {
-			fmt.Printf("Successfully wrote %d bytes to %s\n", len(contents), fullPath)
 		}
 	}
 

@@ -21,7 +21,7 @@ type RunData struct {
 	Run    run.Run `json:"run"`
 }
 
-type DockerModelThingy struct {
+type GenerateDockerRunModel struct {
 	RunID string
 	Run   *run.Run
 }
@@ -30,12 +30,12 @@ var (
 	spinIcon = spinner.New()
 )
 
-func (m DockerModelThingy) Init() tea.Cmd {
+func (m GenerateDockerRunModel) Init() tea.Cmd {
 	spinIcon.Spinner = spinner.Line
 	return spinIcon.Tick
 }
 
-func (m DockerModelThingy) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m GenerateDockerRunModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -52,10 +52,9 @@ func (m DockerModelThingy) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m DockerModelThingy) View() string {
+func (m GenerateDockerRunModel) View() string {
 	result := "-------------------------------------------------\n"
 	result += "Generating Dockerfile (this may take a few seconds)\n"
-	result += string(m.Run.ID) + "\n"
 	result += getMarkerBasedOnStatus(m.Run.Status) + "\n"
 	result += "-------------------------------------------------\n"
 	return result
@@ -68,7 +67,7 @@ func getMarkerBasedOnStatus(status run.RunStatus) string {
 	case run.RunStatusQueued:
 		return "⏳ Queued..."
 	case run.RunStatusRunning:
-		return fmt.Sprintf("%s Running...", spinIcon.View())
+		return fmt.Sprintf("%s Generating...", spinIcon.View())
 	case run.RunStatusSucceeded:
 		return "✅ Succeeded!"
 	case run.RunStatusFailed:
