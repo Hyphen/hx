@@ -11,6 +11,7 @@ type FileSystem interface {
 	Create(name string) (*os.File, error)
 	Stat(name string) (os.FileInfo, error)
 	MkdirAll(path string, perm os.FileMode) error
+	Remove(path string) error
 }
 
 // RealFileSystem implements FileSystem using actual OS calls
@@ -34,6 +35,10 @@ func (rfs *RealFileSystem) Stat(name string) (os.FileInfo, error) {
 
 func (rfs *RealFileSystem) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
+}
+
+func (rfs *RealFileSystem) Remove(path string) error {
+	return os.Remove(path)
 }
 
 // NewFileSystem returns a new instance of RealFileSystem

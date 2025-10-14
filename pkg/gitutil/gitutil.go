@@ -154,3 +154,21 @@ func GetLastCommitHash() (string, error) {
 
 	return strings.TrimSpace(string(output)), nil
 }
+
+func GetCurrentBranch() (string, error) {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return "", errors.New("unable to get current directory")
+	}
+	gitDir, found := findGitRoot(currentDir)
+	if !found {
+		return "", errors.New("not a git repository")
+	}
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Dir = gitDir
+	output, err := cmd.Output()
+	if err != nil {
+		return "", errors.Wrap(err, "error getting current branch")
+	}
+	return strings.TrimSpace(string(output)), nil
+}

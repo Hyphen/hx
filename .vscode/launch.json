@@ -10,13 +10,15 @@
     "mode": "debug",
     "host": "127.0.0.1",
     "program": "${workspaceRoot}",
-    "cwd": "D:\\hyphen\\scratch\\mirror\\myApp",
+    "cwd": "D:\\hyphen-tilde\\location",
     "env": {
-      "HYPHEN_DEV": "true"
+      //"HYPHEN_DEV": "true",
+      "HYPHEN_Local": "true"
     },
     "args": [
-      //"deploy", "June 3", "--no-build" //"--verbose" //, "--no-build"
-     "env", "pull", "--force"
+     //"deploy", "June 3", "--no-build" //"--verbose" //, "--no-build"
+     //"env", "pull", "--force"
+     "code", "docker"
     ],
     "showLog": true,
     "console": "integratedTerminal"
