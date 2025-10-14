@@ -31,7 +31,7 @@ The authentication process supports two methods:
 - API Key Login: If you prefer or are required to use an API key, you can authenticate by providing the key either via an environment variable, an inline flag, or interactively via a prompt.
 
 Examples:
-	hyhen auth
+	hyphen auth
 	hyphen auth --use-api-key # This will read check for HYPHEN_API_KEY in the environment and prompt if not found
 	hyphen auth --set-api-key YOURKEY1234
 	`,

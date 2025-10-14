@@ -1,6 +1,7 @@
 package initapp
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,6 +26,9 @@ import (
 var appIDFlag string
 var printer *cprint.CPrinter
 
+//go:embed hyphen-entrypoint.sh
+var hyphenEntrypoint string
+
 var InitCmd = &cobra.Command{
 	Use:   "init-app <app name>",
 	Short: "Initialize a new Hyphen application in the current directory",
@@ -36,6 +40,7 @@ This command will:
 - Generate a local configuration file
 - Set up environment files for each project environment
 - Update .gitignore to exclude sensitive files
+- Create hyphen-entrypoint.sh (intended for Dockerfile usage)
 
 If no app name is provided, it will prompt to use the current directory name.
 
@@ -44,7 +49,7 @@ The command will guide you through:
 - Generating or providing an app ID
 - Creating necessary local files
 
-After initialization, you'll receive a summary of the new application, including its name, 
+After initialization, you'll receive a summary of the new application, including its name,
 ID, and associated organization.
 
 Examples:
@@ -197,6 +202,11 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	err = CreateEntrypoint(cmd)
+	if err != nil {
+		return
+	}
+
 	PrintInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID, *mc.ProjectAlternateId)
 }
 
@@ -282,6 +292,23 @@ func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, c
 
 	if err := db.UpsertSecret(secretKey, newEnvDecrypted, version); err != nil {
 		return fmt.Errorf("failed to save local environment: %w", err)
+	}
+
+	return nil
+}
+
+func CreateEntrypoint(cmd *cobra.Command) error {
+	file, err := os.OpenFile("hyphen-entrypoint.sh", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+	if err != nil {
+		printer.Error(cmd, fmt.Errorf("error creating hyphen-entrypoint.sh: %w", err))
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(hyphenEntrypoint)
+	if err != nil {
+		printer.Error(cmd, fmt.Errorf("error writing to hyphen-entrypoint.sh: %w", err))
+		return err
 	}
 
 	return nil

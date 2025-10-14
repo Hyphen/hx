@@ -29,6 +29,10 @@ func ErrorIfNotAuthenticated() error {
 		return err
 	}
 
+	if mc.HyphenAPIKey != nil {
+		return nil
+	}
+
 	if mc.HyphenAccessToken != nil {
 		if mc.ExpiryTime != nil && *mc.ExpiryTime > time.Now().Unix() {
 			return nil
