@@ -54,7 +54,6 @@ func (m GenerateDockerRunModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m GenerateDockerRunModel) View() string {
 	result := "-------------------------------------------------\n"
-	result += "Generating Dockerfile (this may take a few seconds)\n"
 	result += getMarkerBasedOnStatus(m.Run.Status) + "\n"
 	result += "-------------------------------------------------\n"
 	return result
@@ -63,17 +62,17 @@ func (m GenerateDockerRunModel) View() string {
 func getMarkerBasedOnStatus(status run.RunStatus) string {
 	switch status {
 	case run.RunStatusPending:
-		return "⏳ Pending..."
+		fallthrough
 	case run.RunStatusQueued:
-		return "⏳ Queued..."
+		fallthrough
 	case run.RunStatusRunning:
-		return fmt.Sprintf("%s Generating...", spinIcon.View())
+		return fmt.Sprintf("%s Generating Dockerfile (this may take a few seconds)...", spinIcon.View())
 	case run.RunStatusSucceeded:
-		return "✅ Succeeded!"
+		return "✅ Dockerfile generated! You may choose to check it in if you like."
 	case run.RunStatusFailed:
-		return "❌ Failed!"
+		return "❌ Dockerfile generation failed!"
 	case run.RunStatusCanceled:
-		return "🚫 Canceled"
+		return "🚫 Dockerfile generation was canceled."
 	default:
 		return "❓ Unknown status"
 	}

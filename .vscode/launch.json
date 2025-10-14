@@ -18,7 +18,7 @@
     "args": [
      //"deploy", "June 3", "--no-build" //"--verbose" //, "--no-build"
      //"env", "pull", "--force"
-     "agent", "docker"
+     "code", "docker"
     ],
     "showLog": true,
     "console": "integratedTerminal"

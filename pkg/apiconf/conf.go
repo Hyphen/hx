@@ -9,7 +9,7 @@ import (
 
 func GetBaseApixUrl() string {
 	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
-		return "http://localhost:4000" // TODO: put back
+		return "https://dev-api.hyphen.ai"
 	}
 	if strings.ToLower(os.Getenv("HYPHEN_Local")) == "true" {
 		return "http://localhost:4000"
@@ -29,7 +29,7 @@ func GetBaseHorizonUrl() string {
 
 func GetBaseWebsocketUrl() string {
 	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
-		return "ws://localhost:4000" // TODO: put back
+		return "wss://dev-api.hyphen.ai"
 	}
 	if strings.ToLower(os.Getenv("HYPHEN_Local")) == "true" {
 		return "ws://localhost:4000"
