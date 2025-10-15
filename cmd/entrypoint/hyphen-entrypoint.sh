@@ -64,6 +64,11 @@ echo "}"                                                     >> ~/.hx
 
 echo ">>> Pulling environment variables..."
 
+./.hyphen/hx pull default --force --yes
+if [ $? -ne 0 ]; then
+    exit 1
+fi
+
 ./.hyphen/hx pull "${HYPHEN_APP_ENVIRONMENT}" --force --yes
 if [ $? -ne 0 ]; then
     exit 1
