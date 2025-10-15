@@ -1,12 +1,12 @@
 package initapp
 
 import (
-	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/Hyphen/cli/cmd/entrypoint"
 	"github.com/Hyphen/cli/internal/app"
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/database"
@@ -25,9 +25,6 @@ import (
 
 var appIDFlag string
 var printer *cprint.CPrinter
-
-//go:embed hyphen-entrypoint.sh
-var hyphenEntrypoint string
 
 var InitCmd = &cobra.Command{
 	Use:   "init-app <app name>",
@@ -202,7 +199,7 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	err = CreateEntrypoint(cmd)
+	err = entrypoint.CreateEntrypoint(true)
 	if err != nil {
 		return
 	}
@@ -292,23 +289,6 @@ func CreateAndPushEmptyEnvFile(cmd *cobra.Command, envService *env.EnvService, c
 
 	if err := db.UpsertSecret(secretKey, newEnvDecrypted, version); err != nil {
 		return fmt.Errorf("failed to save local environment: %w", err)
-	}
-
-	return nil
-}
-
-func CreateEntrypoint(cmd *cobra.Command) error {
-	file, err := os.OpenFile("hyphen-entrypoint.sh", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
-	if err != nil {
-		printer.Error(cmd, fmt.Errorf("error creating hyphen-entrypoint.sh: %w", err))
-		return err
-	}
-	defer file.Close()
-
-	_, err = file.WriteString(hyphenEntrypoint)
-	if err != nil {
-		printer.Error(cmd, fmt.Errorf("error writing to hyphen-entrypoint.sh: %w", err))
-		return err
 	}
 
 	return nil
