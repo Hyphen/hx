@@ -2,13 +2,16 @@ package gitutil
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/Hyphen/cli/internal/run"
 	"github.com/Hyphen/cli/pkg/errors"
+	"github.com/Hyphen/cli/pkg/fsutil"
 )
 
 const gitDirPath = ".git"
@@ -171,4 +174,110 @@ func GetCurrentBranch() (string, error) {
 		return "", errors.Wrap(err, "error getting current branch")
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+func CheckForChangesNotOnRemote() (bool, error) {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return false, errors.New("unable to get current directory")
+	}
+
+	gitDir, found := findGitRoot(currentDir)
+	if !found {
+		return false, nil // Not a git repository, no changes to check
+	}
+
+	// First, fetch latest remote references
+	fetchCmd := exec.Command("git", "fetch")
+	fetchCmd.Dir = gitDir
+	if err := fetchCmd.Run(); err != nil {
+		// If fetch fails, we can still check local state
+		// This might happen if there's no remote configured
+	}
+
+	// Check for uncommitted changes (staged and unstaged)
+	statusCmd := exec.Command("git", "status", "--porcelain")
+	statusCmd.Dir = gitDir
+	statusOutput, err := statusCmd.Output()
+	if err != nil {
+		return false, errors.Wrap(err, "error checking git status")
+	}
+
+	// If there are uncommitted changes, return true
+	if len(strings.TrimSpace(string(statusOutput))) > 0 {
+		return true, nil
+	}
+
+	currentBranch, err := GetCurrentBranch()
+	if err != nil {
+		return false, err
+	}
+
+	// Check for commits not pushed to remote
+	// Try the current branch first, then fall back to main/master
+	remoteBranches := []string{
+		fmt.Sprintf("origin/%s", currentBranch),
+		"origin/main",
+		"origin/master",
+	}
+
+	var logOutput []byte
+	var logErr error
+
+	for _, remoteBranch := range remoteBranches {
+		logCmd := exec.Command("git", "log", "--oneline", fmt.Sprintf("%s..HEAD", remoteBranch))
+		logCmd.Dir = gitDir
+		logOutput, logErr = logCmd.Output()
+
+		// If command succeeds, we found a valid remote branch
+		if logErr == nil {
+			break
+		}
+	}
+
+	// If all remote branch checks failed, assume no remote exists
+	if logErr != nil {
+		return false, nil
+	}
+
+	// If there are commits not on remote, return true
+	return len(strings.TrimSpace(string(logOutput))) > 0, nil
+}
+
+func ApplyDiffs(diffs []run.DiffResult) {
+	fs := fsutil.NewFileSystem()
+	// Get the current working directory
+	currentDir, err := os.Getwd()
+	if err != nil {
+		fmt.Printf("Error getting current directory: %v\n", err)
+		return
+	}
+
+	// iterate over diffs
+	for _, diff := range diffs {
+		// This is a delete
+		if diff.To == "" {
+			fullPath := filepath.Join(currentDir, diff.From)
+			err := fs.Remove(fullPath)
+			if err != nil {
+				fmt.Printf("Error removing file %s: %v\n", fullPath, err)
+			}
+			continue
+		}
+
+		// This is a create or modify
+		var contents []byte
+		for _, chunk := range diff.Chunks {
+			// TODO: handle deletes to files
+			if chunk.Type != "delete" {
+				contents = append(contents, []byte(chunk.Content)...)
+			}
+		}
+		fullPath := filepath.Join(currentDir, diff.To)
+
+		err := fs.WriteFile(fullPath, contents, 0o644)
+		if err != nil {
+			fmt.Printf("Error writing file %s: %v\n", fullPath, err)
+		}
+	}
 }

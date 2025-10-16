@@ -12,13 +12,14 @@
     "program": "${workspaceRoot}",
     "cwd": "D:\\hyphen-tilde\\location",
     "env": {
-      //"HYPHEN_DEV": "true",
-      "HYPHEN_Local": "true"
+      "HYPHEN_DEV": "true",
+      //"HYPHEN_Local": "true"
     },
     "args": [
-     //"deploy", "June 3", "--no-build" //"--verbose" //, "--no-build"
+     "deploy", "Location-Staging", //"--no-build" //"--verbose" //, "--no-build"
      //"env", "pull", "--force"
-     "code", "docker"
+     //"code", "docker"
+     //"build"
     ],
     "showLog": true,
     "console": "integratedTerminal"

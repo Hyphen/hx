@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Hyphen/cli/internal/code"
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/apiconf"
@@ -133,9 +134,6 @@ func (bs *BuildService) FindRegistryConnection(organizationId, projectId string)
 }
 
 func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string, verbose bool) (*models.Build, error) {
-	// TODO: this probably shouldn't error if there is no hxkey
-	// file it just means they aren't using env or are using the new
-	// cert store service.
 	// grab the manifest to get app details
 	config, err := config.RestoreConfig()
 	if err != nil {
@@ -157,11 +155,14 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string,
 	printer.PrintVerbose("Looking for Docker File")
 	dockerfilePath, err := dockerutil.FindDockerFile()
 	if err != nil || dockerfilePath == "" {
-		return nil, fmt.Errorf("no docker file found. Dynamic builds are not supported yet")
+		coder := code.NewService()
+		err = coder.GenerateDocker(printer, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate docker file: %w", err)
+		}
+		dockerfilePath, _ = dockerutil.FindDockerFile()
 	}
 	printer.PrintVerbose(fmt.Sprintf("found docker file at %s", dockerfilePath))
-
-	// TODO: pull this from a deployment?
 
 	containerRegistry, err := bs.FindRegistryConnection(config.OrganizationId, *config.ProjectId)
 	if err != nil {
