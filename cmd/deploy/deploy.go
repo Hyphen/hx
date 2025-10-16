@@ -96,18 +96,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 			}
 		}
 
-		appSources := []Deployment.AppSources{
-			// {
-			// 	AppId: "app_67af84d8cf5902a8f372bbcc",
-			// 	Artifact: Deployment.Artifact{
-			// 		Type: "Docker",
-			// 		Image: Deployment.Image{
-			// 			//URI: "us-docker.pkg.dev/hyphenai/public/deploy-demo",
-			// 			URI: "deploydevelopmentregistry.azurecr.io/wopr:0f3f7c3",
-			// 		},
-			// 	},
-			// },
-		}
+		appSources := []Deployment.AppSources{}
 
 		if noBuild {
 			// check for build ID
