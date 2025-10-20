@@ -22,6 +22,57 @@ jobs:
       version: ${{ needs.extract-version.outputs.version }}
     secrets: inherit
 
+  attach-to-release:
+    needs: [extract-version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Package artifacts
+        run: |
+          VERSION="${{ needs.extract-version.outputs.version }}"
+
+          # Linux x86_64
+          cd "hyphen-${VERSION}-linux"
+          tar czf "../hyphen-${VERSION}-linux-x86_64.tar.gz" "hyphen-${VERSION}-linux"
+          cd ..
+
+          # macOS x86_64
+          cd "hyphen-${VERSION}-macos"
+          tar czf "../hyphen-${VERSION}-darwin-x86_64.tar.gz" "hyphen-${VERSION}-macos"
+          cd ..
+
+          # macOS ARM64
+          cd "hyphen-${VERSION}-macos-arm"
+          tar czf "../hyphen-${VERSION}-darwin-arm64.tar.gz" "hyphen-${VERSION}-macos-arm"
+          cd ..
+
+          # Windows x86_64
+          cd "hyphen-${VERSION}-windows"
+          zip "../hyphen-${VERSION}-windows-x86_64.zip" "hyphen-${VERSION}-windows.exe"
+          cd ..
+
+          # List created archives
+          ls -lh *.tar.gz *.zip
+
+      - name: Attach artifacts to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ needs.extract-version.outputs.version }}"
+          gh release upload ${{ github.ref_name }} \
+            "hyphen-${VERSION}-linux-x86_64.tar.gz" \
+            "hyphen-${VERSION}-darwin-x86_64.tar.gz" \
+            "hyphen-${VERSION}-darwin-arm64.tar.gz" \
+            "hyphen-${VERSION}-windows-x86_64.zip" \
+            --repo ${{ github.repository }}
+
   upload:
     needs: [extract-version, build]
     uses: ./.github/workflows/upload-package-to-r2.yml
