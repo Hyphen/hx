@@ -29,21 +29,23 @@ if [ $# -eq 0 ]; then
 fi
 
 if ! [ -f ".hyphen/hx" ]; then
+    mkdir -p .hyphen
+
     echo ">>> Determining Hyphen CLI latest version..."
 
-    wget -q -O /tmp/hyphen-cli-version "https://api.hyphen.ai/api/downloads/hyphen-cli/versions?latest=true"
+    wget -q -O .hyphen/hyphen-cli-version "https://api.hyphen.ai/api/downloads/hyphen-cli/versions?latest=true"
     if [ $? -ne 0 ]; then
         exit 1
     fi
 
-    version=$(sed -n 's/.*"version":"\([^"]*\).*/\1/p' /tmp/hyphen-cli-version)
+    version=$(sed -n 's/.*"version":"\([^"]*\).*/\1/p' .hyphen/hyphen-cli-version)
     if [ -z "${version}" ]; then
         exit 1
     fi
 
-    echo ">>> Downloading Hyphen CLI version $version..."
+    rm .hyphen/hyphen-cli-version
 
-    mkdir -p .hyphen
+    echo ">>> Downloading Hyphen CLI version $version..."
 
     wget -q -O ./.hyphen/hx "https://api.hyphen.ai/api/downloads/hyphen-cli/${version}?os=linux"
     if [ $? -ne 0 ]; then
