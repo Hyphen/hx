@@ -92,6 +92,15 @@ func (m *StatusModel) View() string {
 	result := "-------------------------------------------------\n"
 	result += m.AppUrl + "\n"
 	result += "-------------------------------------------------\n"
+
+	// Show loading message if pipeline has no steps yet
+	if len(m.Pipeline.Steps) == 0 {
+		const amber = "\033[33m"
+		const reset = "\033[0m"
+		result += amber + spinIcon.View() + reset + " Loading deployment status...\n"
+		return result
+	}
+
 	result += m.RenderTree(m.Pipeline)
 	return result
 }

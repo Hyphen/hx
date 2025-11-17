@@ -129,7 +129,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 			OrganizationId: orgId,
 			DeploymentId:   selectedDeployment.ID,
 			RunId:          run.ID,
-			Pipeline:       run.Pipeline,
+			Pipeline:       models.DeploymentPipeline{}, // Start with empty pipeline to show loading message
 			Service:        *service,
 			AppUrl:         fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID),
 		}
@@ -141,14 +141,18 @@ Use 'hyphen deploy --help' for more information about available flags.
 			const pollInterval = 500 * time.Millisecond
 			const maxPollDuration = 30 * time.Minute
 
-			// Send initial pipeline data immediately to show visualization right away
-			statusDisplay.Send(Deployment.RunMessageData{
-				Type:     "run",
-				Status:   run.Status,
-				RunId:    run.ID,
-				Id:       run.ID,
-				Pipeline: &run.Pipeline,
-			})
+			// Fetch and send initial pipeline data immediately
+			// Do this in the goroutine to avoid blocking the TUI from rendering
+			initialRun, err := service.GetDeploymentRun(orgId, selectedDeployment.ID, run.ID)
+			if err == nil {
+				statusDisplay.Send(Deployment.RunMessageData{
+					Type:     "run",
+					Status:   initialRun.Status,
+					RunId:    initialRun.ID,
+					Id:       initialRun.ID,
+					Pipeline: &initialRun.Pipeline,
+				})
+			}
 
 			startTime := time.Now()
 
