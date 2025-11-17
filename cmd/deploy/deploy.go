@@ -1,8 +1,8 @@
 package deploy
 
 import (
-	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/Hyphen/cli/internal/build"
 	Deployment "github.com/Hyphen/cli/internal/deployment"
@@ -11,7 +11,6 @@ import (
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
-	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/Hyphen/cli/pkg/prompt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -126,7 +125,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 			return
 		}
 
-		statusModel := Deployment.StatusModel{
+		statusModel := &Deployment.StatusModel{
 			OrganizationId: orgId,
 			DeploymentId:   selectedDeployment.ID,
 			RunId:          run.ID,
@@ -134,73 +133,77 @@ Use 'hyphen deploy --help' for more information about available flags.
 			Service:        *service,
 			AppUrl:         fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID),
 		}
-		statusDisplay := tea.NewProgram(statusModel)
+		statusDisplay := tea.NewProgram(statusModel, tea.WithAltScreen())
+
+		finalStatus := make(chan string, 1)
 
 		go func() {
-			client := httputil.NewHyphenHTTPClient()
-			url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
-			conn, err := client.GetWebsocketConnection(url)
-			if err != nil {
-				printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
-				return
-			}
-			defer conn.Close()
-			conn.WriteJSON(
-				map[string]interface{}{
-					"eventStreamTopic": "deploymentRun",
-					"organizationId":   orgId,
-				},
-			)
-		messageListener:
+			const pollInterval = 500 * time.Millisecond
+			const maxPollDuration = 30 * time.Minute
+
+			// Send initial pipeline data immediately to show visualization right away
+			statusDisplay.Send(Deployment.RunMessageData{
+				Type:     "run",
+				Status:   run.Status,
+				RunId:    run.ID,
+				Id:       run.ID,
+				Pipeline: &run.Pipeline,
+			})
+
+			startTime := time.Now()
+
+			ticker := time.NewTicker(pollInterval)
+			defer ticker.Stop()
+
 			for {
-				_, message, err := conn.ReadMessage()
-				if err != nil {
-					printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
-					break
-				}
-
-				var wsMessage Deployment.WebSocketMessage
-				err = json.Unmarshal(message, &wsMessage)
-				if err != nil {
-					continue
-				}
-
-				var typeCheck map[string]interface{}
-				err = json.Unmarshal(wsMessage.Data, &typeCheck)
-				if err != nil {
-					printer.Error(cmd, fmt.Errorf("error unmarshalling Data for type check: %w", err))
-					continue
-				}
-
-				if _, ok := typeCheck["level"]; ok {
-					var data Deployment.LogMessageData
-					err = json.Unmarshal(wsMessage.Data, &data)
-					if err != nil {
-						continue
-					}
-
-					// TODO: this should go in a second pane or something
-					// timestamp := time.UnixMilli(data.Timestamp)
-					// formattedTime := timestamp.Format("15:04:05")
-					// log := fmt.Sprintf("[%s] %s: %s", formattedTime, data.Level, data.Message)
-					// printer.PrintVerbose(log)
-				} else if _, ok := typeCheck["type"]; ok {
-					var data Deployment.RunMessageData
-					err = json.Unmarshal(wsMessage.Data, &data)
-					if err != nil {
-						continue
-					}
-
-					statusDisplay.Send(data)
-
-					if data.Type == "run" && (data.Status == "succeeded" || data.Status == "failed" || data.Status == "canceled") {
+				select {
+				case <-ticker.C:
+					if time.Since(startTime) > maxPollDuration {
+						finalStatus <- "timeout"
 						statusDisplay.Quit()
-						break messageListener
+						return
+					}
+
+					deploymentRun, err := service.GetDeploymentRun(orgId, selectedDeployment.ID, run.ID)
+					if err != nil {
+						continue
+					}
+
+					// Send the updated pipeline in the message to avoid blocking the Update method
+					statusDisplay.Send(Deployment.RunMessageData{
+						Type:     "run",
+						Status:   deploymentRun.Status,
+						RunId:    deploymentRun.ID,
+						Id:       deploymentRun.ID,
+						Pipeline: &deploymentRun.Pipeline,
+					})
+
+					if deploymentRun.Status == "succeeded" || deploymentRun.Status == "failed" || deploymentRun.Status == "canceled" {
+						finalStatus <- deploymentRun.Status
+						statusDisplay.Quit()
+						return
 					}
 				}
 			}
 		}()
-		statusDisplay.Run()
+
+		if _, err := statusDisplay.Run(); err != nil {
+			printer.Error(cmd, err)
+			return
+		}
+
+		// Show final status after TUI exits
+		status := <-finalStatus
+		switch status {
+		case "succeeded":
+			printer.GreenPrint(fmt.Sprintf("✓ Deployment succeeded: %s", statusModel.AppUrl))
+		case "failed":
+			printer.Error(cmd, fmt.Errorf("✗ Deployment failed: %s", statusModel.AppUrl))
+		case "canceled":
+			printer.YellowPrint(fmt.Sprintf("✗ Deployment canceled: %s", statusModel.AppUrl))
+		case "timeout":
+			printer.Error(cmd, fmt.Errorf("✗ Deployment timed out after 30 minutes"))
+		}
 
 	},
 }

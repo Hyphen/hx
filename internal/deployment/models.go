@@ -2,7 +2,6 @@ package deployment
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/Hyphen/cli/internal/models"
@@ -32,10 +31,11 @@ type LogMessageData struct {
 
 // Define the second data type (new structure)
 type RunMessageData struct {
-	Type   string `json:"type"`
-	RunId  string `json:"RunId"`
-	Id     string `json:"id"`
-	Status string `json:"status"`
+	Type     string                    `json:"type"`
+	RunId    string                    `json:"RunId"`
+	Id       string                    `json:"id"`
+	Status   string                    `json:"status"`
+	Pipeline *models.DeploymentPipeline `json:"pipeline,omitempty"`
 }
 
 type StatusModel struct {
@@ -51,12 +51,14 @@ var (
 	spinIcon = spinner.New()
 )
 
-func (m StatusModel) Init() tea.Cmd {
+func (m *StatusModel) Init() tea.Cmd {
 	spinIcon.Spinner = spinner.Line
 	return spinIcon.Tick
 }
 
-func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var spinCmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -64,32 +66,29 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	case spinner.TickMsg:
-		var cmd tea.Cmd
-		spinIcon, cmd = spinIcon.Update(msg)
-		return m, cmd
+		spinIcon, spinCmd = spinIcon.Update(msg)
+		return m, spinCmd
 	case RunMessageData:
 		switch msg.Type {
 		case "run":
-			if msg.Status == "pending" {
-				// Update the top-level run variable
-				run, _ := m.Service.GetDeploymentRun(m.OrganizationId, m.DeploymentId, msg.RunId)
-				m.Pipeline = run.Pipeline
+			if msg.Pipeline != nil {
+				// Update the pipeline with the data sent in the message
+				m.Pipeline = *msg.Pipeline
 			}
-			// if msg.Status == "succeeded" || msg.Status == "failed" || msg.Status == "canceled" {
-			// 	return m, tea.Quit
-			// }
 			m.UpdateStatusForId(msg.Id, msg.Status)
 		case "step":
 			m.UpdateStatusForId(msg.Id, msg.Status)
 		case "task":
 			m.UpdateStatusForId(msg.Id, msg.Status)
 		}
+		// Always keep the spinner ticking
+		return m, spinIcon.Tick
 	}
 
-	return m, nil
+	return m, spinIcon.Tick
 }
 
-func (m StatusModel) View() string {
+func (m *StatusModel) View() string {
 	result := "-------------------------------------------------\n"
 	result += m.AppUrl + "\n"
 	result += "-------------------------------------------------\n"
@@ -97,7 +96,7 @@ func (m StatusModel) View() string {
 	return result
 }
 
-func (m StatusModel) RenderTree(pipeLine models.DeploymentPipeline) string {
+func (m *StatusModel) RenderTree(pipeLine models.DeploymentPipeline) string {
 	var buildTree func(steps []models.DeploymentStep, level int) string
 
 	buildTree = func(steps []models.DeploymentStep, level int) string {
@@ -125,19 +124,28 @@ func (m StatusModel) RenderTree(pipeLine models.DeploymentPipeline) string {
 }
 
 func getMarkerBasedOnStatus(status string) string {
+	const (
+		green = "\033[32m"
+		red   = "\033[31m"
+		amber = "\033[33m"
+		reset = "\033[0m"
+	)
+
 	switch status {
-	case "Success":
-		return "[✓]"
-	case "Error":
-		return "[✗]"
-	case "Running":
-		return fmt.Sprintf("[%s]", spinIcon.View())
+	case "succeeded", "Success", "Succeeded":
+		return "[" + green + "✓" + reset + "]"
+	case "failed", "Error", "canceled", "Failed", "Canceled":
+		return "[" + red + "✗" + reset + "]"
+	case "running", "Running":
+		return "[" + amber + spinIcon.View() + reset + "]"
+	case "pending", "queued", "Pending", "Queued":
+		return "[ ]"
 	default:
-		return "[ ]" // Default marker for unknown status
+		return "[ ]" // Default to empty checkbox for unknown statuses
 	}
 }
 
-func (m StatusModel) UpdateStatusForId(id string, status string) {
+func (m *StatusModel) UpdateStatusForId(id string, status string) {
 	// Helper function to recursively search and update status
 	var updateStatus func(steps []models.DeploymentStep) bool
 	updateStatus = func(steps []models.DeploymentStep) bool {

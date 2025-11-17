@@ -3,14 +3,13 @@ package code
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/run"
-	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/gitutil"
-	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/Hyphen/cli/pkg/prompt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -65,67 +64,60 @@ func (cs *CodeService) GenerateDocker(printer *cprint.CPrinter, cmd *cobra.Comma
 	statusDisplay := tea.NewProgram(modelThing)
 
 	go func() {
-		client := httputil.NewHyphenHTTPClient()
-		url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
-		conn, err := client.GetWebsocketConnection(url)
-		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
-			return
-		}
-		defer conn.Close()
-		conn.WriteJSON(
-			map[string]interface{}{
-				"eventStreamTopic": "run",
-				"organizationId":   orgId,
-			},
-		)
-	messageListener:
+		const pollInterval = 500 * time.Millisecond
+		const maxPollDuration = 30 * time.Minute
+
+		printer.PrintVerbose("Monitoring code generation status via polling")
+		startTime := time.Now()
+
+		ticker := time.NewTicker(pollInterval)
+		defer ticker.Stop()
+
 		for {
-			_, message, err := conn.ReadMessage()
-			if err != nil {
-				printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
-				break
-			}
-
-			var wsMessage WebSocketMessage
-			err = json.Unmarshal(message, &wsMessage)
-			if err != nil {
-				continue
-			}
-
-			var typeCheck map[string]interface{}
-			err = json.Unmarshal(wsMessage.Data, &typeCheck)
-			if err != nil {
-				printer.Error(cmd, fmt.Errorf("error unmarshalling Data for type check: %w", err))
-				continue
-			}
-
-			var data RunData
-
-			err = json.Unmarshal(wsMessage.Data, &data)
-			if err != nil {
-				continue
-			}
-
-			if data.RunId != hyphenRun.ID {
-				continue
-			}
-
-			statusDisplay.Send(data)
-
-			if data.Action == "update" && data.Run.Status == "succeeded" {
-				var codeChanges run.CodeChangeRunData
-				err := json.Unmarshal(data.Run.Data, &codeChanges)
-				if err != nil {
-					printer.Error(cmd, fmt.Errorf("error unmarshaling to CodeChangeRunData: %w", err))
-					break messageListener
+			select {
+			case <-ticker.C:
+				if time.Since(startTime) > maxPollDuration {
+					printer.Error(cmd, fmt.Errorf("code generation polling timeout after %v", maxPollDuration))
+					statusDisplay.Send(tea.KeyMsg{Type: tea.KeyEsc})
+					return
 				}
 
-				gitutil.ApplyDiffs(codeChanges.Changes)
-				statusDisplay.Send(tea.KeyMsg{Type: tea.KeyEsc})
-				break messageListener
-			}
+				currentRun, err := service.GetRun(orgId, *config.AppId, hyphenRun.ID)
+				if err != nil {
+					printer.PrintVerbose(fmt.Sprintf("Error polling run status: %v", err))
+					continue
+				}
 
+				printer.PrintVerbose(fmt.Sprintf("Run status: %s", currentRun.Status))
+
+				// Send status update to display
+				statusDisplay.Send(RunData{
+					Action: "update",
+					RunId:  currentRun.ID,
+					Run:    *currentRun,
+				})
+
+				if currentRun.Status == "succeeded" {
+					var codeChanges run.CodeChangeRunData
+					err := json.Unmarshal(currentRun.Data, &codeChanges)
+					if err != nil {
+						printer.Error(cmd, fmt.Errorf("error unmarshaling to CodeChangeRunData: %w", err))
+						statusDisplay.Send(tea.KeyMsg{Type: tea.KeyEsc})
+						return
+					}
+
+					printer.PrintVerbose("Code generation completed successfully, applying diffs")
+					gitutil.ApplyDiffs(codeChanges.Changes)
+					statusDisplay.Send(tea.KeyMsg{Type: tea.KeyEsc})
+					return
+				}
+
+				if currentRun.Status == "failed" || currentRun.Status == "canceled" {
+					printer.Error(cmd, fmt.Errorf("code generation %s", currentRun.Status))
+					statusDisplay.Send(tea.KeyMsg{Type: tea.KeyEsc})
+					return
+				}
+			}
 		}
 	}()
 	statusDisplay.Run()

@@ -32,6 +32,38 @@ func (rs *RunService) CreateRun() {
 
 }
 
+func (rs *RunService) GetRun(organizationID, appID, runID string) (*Run, error) {
+	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/runs/%s", rs.baseUrl, organizationID, appID, runID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := rs.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, errors.HandleHTTPError(resp)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to read response body")
+	}
+
+	var run Run
+	err = json.Unmarshal(body, &run)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to parse JSON response")
+	}
+
+	return &run, nil
+}
+
 func (rs *RunService) CreateDockerFileRun(organizationID, appID, targetBranch string) (*Run, error) {
 	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/runs", rs.baseUrl, organizationID, appID)
 
