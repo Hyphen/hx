@@ -123,7 +123,7 @@ func HandleHTTPError(resp *http.Response) *Error {
 	case http.StatusTooManyRequests:
 		return Wrap(ErrTooManyRequests, "rate limit exceeded: please try again later")
 	case http.StatusInternalServerError:
-		return Wrap(ErrInternalServerError, "internal server error: please try again later")
+		return Wrapf(ErrInternalServerError, "internal server error: %s", errorMessage)
 	default:
 		return Wrapf(ErrUnexpected, "unexpected error (status code %d): %s", resp.StatusCode, errorMessage)
 	}

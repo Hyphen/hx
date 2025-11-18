@@ -203,21 +203,27 @@ func (s *service) putEnv(orgID, envName, appID string, e models.Env, currentSecr
 			return err, false
 		}
 
-		// get the latest secret key id for this env, if it exists
-		latestEnv, err := s.envService.GetEnvironmentEnv(orgID, appID, envName, nil, nil)
-		if err != nil {
-			// if this is not found, we'll use a nil secretKeyId - first push
-			if !errors.Is(err, errors.ErrNotFound) {
-				return err, false
-			}
-		} else {
-			replacingSecretKeyID = *latestEnv.SecretKeyID
-		}
-
 		if skippable && currentSecret.SecretKeyId == replacingSecretKeyID {
 			*skippedEnvs = append(*skippedEnvs, envName)
 			return nil, true
 		}
+	}
+
+	// Get the latest secret key id for this env, if it exists in the cloud
+	printer.PrintVerbose(fmt.Sprintf("Attempting to get env for: %s", envName))
+	latestEnv, err := s.envService.GetEnvironmentEnv(orgID, appID, envName, nil, nil)
+	if err != nil {
+		// If not found in cloud (404) or internal server error (500 from missing store),
+		// use the project's secret key id for first push
+		if !errors.Is(err, errors.ErrNotFound) && !errors.Is(err, errors.ErrInternalServerError) {
+			printer.PrintVerbose(fmt.Sprintf("GetEnvironmentEnv failed for %s: %v", envName, err))
+			return err, false
+		}
+		printer.PrintVerbose(fmt.Sprintf("Env %s not found in cloud, using project secretKeyId: %d", envName, currentSecret.SecretKeyId))
+		replacingSecretKeyID = currentSecret.SecretKeyId
+	} else {
+		printer.PrintVerbose(fmt.Sprintf("Found existing env %s with secretKeyId: %d", envName, *latestEnv.SecretKeyID))
+		replacingSecretKeyID = *latestEnv.SecretKeyID
 	}
 
 	// try pushing version+1
@@ -225,6 +231,7 @@ func (s *service) putEnv(orgID, envName, appID string, e models.Env, currentSecr
 	e.Version = &newVersion
 
 	// Update cloud environment
+	printer.PrintVerbose(fmt.Sprintf("Pushing env %s with secretKeyId: %d", envName, replacingSecretKeyID))
 	if err := s.envService.PutEnvironmentEnv(orgID, appID, envName, replacingSecretKeyID, e); err != nil {
 		return fmt.Errorf("failed to update cloud %s environment: %w", envName, err), false
 	}
