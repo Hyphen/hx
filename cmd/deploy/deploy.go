@@ -18,6 +18,7 @@ import (
 
 var (
 	noBuild bool
+	ci      bool
 	printer *cprint.CPrinter
 )
 
@@ -125,13 +126,57 @@ Use 'hyphen deploy --help' for more information about available flags.
 			return
 		}
 
+		appUrl := fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID)
+
+		if ci {
+			// CI mode: simple polling without TUI
+			const pollInterval = 2 * time.Second
+			const maxPollDuration = 30 * time.Minute
+
+			printer.Print(fmt.Sprintf("Polling deployment status (CI mode): %s", appUrl))
+
+			startTime := time.Now()
+			ticker := time.NewTicker(pollInterval)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					if time.Since(startTime) > maxPollDuration {
+						printer.Error(cmd, fmt.Errorf("✗ Deployment timed out after 30 minutes"))
+						return
+					}
+
+					deploymentRun, err := service.GetDeploymentRun(orgId, selectedDeployment.ID, run.ID)
+					if err != nil {
+						printer.Print(fmt.Sprintf("Polling... (status check failed: %v)", err))
+						continue
+					}
+
+					printer.Print(fmt.Sprintf("Status: %s", deploymentRun.Status))
+
+					if deploymentRun.Status == "succeeded" {
+						printer.GreenPrint(fmt.Sprintf("✓ Deployment succeeded: %s", appUrl))
+						return
+					} else if deploymentRun.Status == "failed" {
+						printer.Error(cmd, fmt.Errorf("✗ Deployment failed: %s", appUrl))
+						return
+					} else if deploymentRun.Status == "canceled" {
+						printer.YellowPrint(fmt.Sprintf("✗ Deployment canceled: %s", appUrl))
+						return
+					}
+				}
+			}
+		}
+
+		// Interactive mode: use TUI
 		statusModel := &Deployment.StatusModel{
 			OrganizationId: orgId,
 			DeploymentId:   selectedDeployment.ID,
 			RunId:          run.ID,
 			Pipeline:       models.DeploymentPipeline{}, // Start with empty pipeline to show loading message
 			Service:        *service,
-			AppUrl:         fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID),
+			AppUrl:         appUrl,
 		}
 		statusDisplay := tea.NewProgram(statusModel, tea.WithAltScreen())
 
@@ -200,11 +245,11 @@ Use 'hyphen deploy --help' for more information about available flags.
 		status := <-finalStatus
 		switch status {
 		case "succeeded":
-			printer.GreenPrint(fmt.Sprintf("✓ Deployment succeeded: %s", statusModel.AppUrl))
+			printer.GreenPrint(fmt.Sprintf("✓ Deployment succeeded: %s", appUrl))
 		case "failed":
-			printer.Error(cmd, fmt.Errorf("✗ Deployment failed: %s", statusModel.AppUrl))
+			printer.Error(cmd, fmt.Errorf("✗ Deployment failed: %s", appUrl))
 		case "canceled":
-			printer.YellowPrint(fmt.Sprintf("✗ Deployment canceled: %s", statusModel.AppUrl))
+			printer.YellowPrint(fmt.Sprintf("✗ Deployment canceled: %s", appUrl))
 		case "timeout":
 			printer.Error(cmd, fmt.Errorf("✗ Deployment timed out after 30 minutes"))
 		}
@@ -243,4 +288,5 @@ func FindStepOrTaskByID(pipeline models.DeploymentPipeline, id string) (interfac
 
 func init() {
 	DeployCmd.Flags().BoolVar(&noBuild, "no-build", false, "Skip the build step")
+	DeployCmd.Flags().BoolVar(&ci, "ci", false, "CI mode: disable TUI and use simple polling")
 }
