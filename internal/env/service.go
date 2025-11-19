@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -95,11 +96,21 @@ func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId str
 
 	resp, err := es.httpClient.Do(req)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "DEBUG: HTTP request failed: %v\n", err)
 		return err
 	}
 	defer resp.Body.Close()
 
+	fmt.Fprintf(os.Stderr, "DEBUG: Response status code: %d\n", resp.StatusCode)
 	if resp.StatusCode != http.StatusCreated {
+		// Read body for debugging before HandleHTTPError consumes it
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		fmt.Fprintf(os.Stderr, "DEBUG: Expected 201 Created, got %d\n", resp.StatusCode)
+		fmt.Fprintf(os.Stderr, "DEBUG: Response body: %s\n", string(bodyBytes))
+
+		// Recreate the body so HandleHTTPError can read it
+		resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 		return errors.HandleHTTPError(resp)
 	}
 
