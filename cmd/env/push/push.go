@@ -219,6 +219,7 @@ func (s *service) putEnv(orgID, envName, appID string, e models.Env, currentSecr
 	// Get the latest secret key id for this env, if it exists in the cloud
 	printer.PrintVerbose(fmt.Sprintf("Attempting to get env for: %s", envName))
 	latestEnv, err := s.envService.GetEnvironmentEnv(orgID, appID, envName, nil, nil)
+	var cloudVersion int
 	if err != nil {
 		// If not found in cloud (404) or internal server error (500 from missing store),
 		// use the project's secret key id for first push
@@ -228,13 +229,20 @@ func (s *service) putEnv(orgID, envName, appID string, e models.Env, currentSecr
 		}
 		printer.PrintVerbose(fmt.Sprintf("Env %s not found in cloud, using project secretKeyId: %d", envName, currentSecret.SecretKeyId))
 		replacingSecretKeyID = currentSecret.SecretKeyId
+		cloudVersion = 0
 	} else {
-		printer.PrintVerbose(fmt.Sprintf("Found existing env %s with secretKeyId: %d", envName, *latestEnv.SecretKeyID))
+		printer.PrintVerbose(fmt.Sprintf("Found existing env %s with secretKeyId: %d, version: %d", envName, *latestEnv.SecretKeyID, *latestEnv.Version))
 		replacingSecretKeyID = *latestEnv.SecretKeyID
+		cloudVersion = *latestEnv.Version
 	}
 
-	// try pushing version+1
-	newVersion := currentLocalEnv.Version + 1
+	// Use the greater of cloud version or local version, then add 1
+	baseVersion := cloudVersion
+	if currentLocalEnv.Version > baseVersion {
+		baseVersion = currentLocalEnv.Version
+	}
+	newVersion := baseVersion + 1
+	printer.PrintVerbose(fmt.Sprintf("Using version %d (cloud: %d, local: %d)", newVersion, cloudVersion, currentLocalEnv.Version))
 	e.Version = &newVersion
 
 	// Update cloud environment
