@@ -49,10 +49,17 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 }
 
 func RunPush(args []string, cmd *cobra.Command) error {
+	// Debug logging
+	fmt.Fprintf(os.Stderr, "DEBUG: HYPHEN_DEV=%s\n", os.Getenv("HYPHEN_DEV"))
+
 	config, err := config.RestoreConfig()
 	if err != nil {
 		return err
 	}
+
+	fmt.Fprintf(os.Stderr, "DEBUG: Config restored - OrgID=%s, ProjectID=%v, AppID=%v\n",
+		config.OrganizationId, config.ProjectId, config.AppId)
+
 	secret, _, err := secret.LoadSecret(config.OrganizationId, *config.ProjectId)
 	if err != nil {
 		return err

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strconv"
 
@@ -79,6 +80,8 @@ func (es *EnvService) PutEnvironmentEnv(organizationId, appId, environmentId str
 	}
 
 	url := fmt.Sprintf("%s?%s", baseURL, query.Encode())
+	fmt.Fprintf(os.Stderr, "DEBUG: PutEnvironmentEnv URL: %s\n", url)
+	fmt.Fprintf(os.Stderr, "DEBUG: Base Apix URL: %s\n", es.baseApixUrl)
 
 	envJSON, err := json.Marshal(env)
 	if err != nil {
