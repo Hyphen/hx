@@ -40,11 +40,12 @@ Examples:
 After pushing, all environment variables will be securely stored in Hyphen and available for use across your project.
 `,
 	Args: cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		if err := RunPush(args, cmd); err != nil {
-			printer.Error(cmd, err)
+			return err
 		}
+		return nil
 	},
 }
 

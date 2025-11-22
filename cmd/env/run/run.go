@@ -31,7 +31,7 @@ Examples:
   hyphen env run staging -- node server.js
   hyphen env run -- go run main.go (uses default environment)
 `,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 
 		var envName string
@@ -49,26 +49,23 @@ Examples:
 		}
 
 		if len(childCommand) == 0 {
-			printer.Error(cmd, errors.New("No command specified"))
-			return
+			return errors.New("No command specified")
 		}
 
 		config, err := config.RestoreConfig()
 		if err != nil {
-			printer.Error(cmd, errors.Wrap(err, "Failed to restore manifest"))
-			return
+			return errors.Wrap(err, "Failed to restore manifest")
 		}
 
 		mergedEnvVars, err := loadAndMergeEnvFiles(envName, config)
 		if err != nil {
-			printer.Error(cmd, err)
-			return
+			return err
 		}
 
 		if err := runCommandWithEnv(childCommand, mergedEnvVars); err != nil {
-			printer.Error(cmd, errors.Wrap(err, "Command execution failed"))
-			return
+			return errors.Wrap(err, "Command execution failed")
 		}
+		return nil
 	},
 }
 

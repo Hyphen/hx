@@ -35,12 +35,12 @@ Examples:
 	hyphen auth --use-api-key # This will read check for HYPHEN_API_KEY in the environment and prompt if not found
 	hyphen auth --set-api-key YOURKEY1234
 	`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		if err := login(cmd); err != nil {
-			printer.Error(cmd, err)
-			return
+			return err
 		}
+		return nil
 	},
 }
 

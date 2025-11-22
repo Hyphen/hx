@@ -40,11 +40,10 @@ Use 'hyphen deploy --help' for more information about available flags.
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return user.ErrorIfNotAuthenticated()
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
-			printer.Error(cmd, err)
-			return
+			return err
 		}
 
 		deploymentName := ""
@@ -61,8 +60,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 		deployments, err := service.SearchDeployments(orgId, deploymentName, 50, 1)
 
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to list apps: %w", err))
-			return
+			return fmt.Errorf("failed to list apps: %w", err)
 		}
 
 		selectedDeployment := deployments[0]
@@ -79,13 +77,12 @@ Use 'hyphen deploy --help' for more information about available flags.
 			choice, err := prompt.PromptSelection(choices, "Select a deployment to run:")
 
 			if err != nil {
-				printer.Error(cmd, err)
-				return
+				return err
 			}
 
 			if choice.Id == "" {
 				printer.YellowPrint(("no choice made, canceling deploy"))
-				return
+				return nil
 			}
 
 			for _, deployment := range deployments {
@@ -108,8 +105,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 			service := build.NewService()
 			result, err := service.RunBuild(printer, firstApp.DeploymentSettings.ProjectEnvironment.ID, flags.VerboseFlag)
 			if err != nil {
-				printer.Error(cmd, err)
-				return
+				return err
 			}
 			appSources = append(appSources, Deployment.AppSources{
 				AppId:    result.App.ID,
@@ -122,8 +118,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 
 		run, err := service.CreateRun(orgId, selectedDeployment.ID, appSources)
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to create run: %w", err))
-			return
+			return fmt.Errorf("failed to create run: %w", err)
 		}
 
 		statusModel := Deployment.StatusModel{
@@ -202,6 +197,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 		}()
 		statusDisplay.Run()
 
+		return nil
 	},
 }
 

@@ -31,11 +31,12 @@ This command will place a copy of the current hyphen-entrypoint.sh file into the
 current folder.
 `,
 	Args: cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		if err := CreateEntrypoint(forceFlag); err != nil {
-			printer.Error(cmd, err)
+			return err
 		}
+		return nil
 	},
 }
 

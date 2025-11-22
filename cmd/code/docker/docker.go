@@ -14,12 +14,12 @@ var DockerCmd = &cobra.Command{
 	Use:   "docker",
 	Short: "Generate a Dockerfile for the given application",
 	Long:  `Generate a Dockerfile for the given application.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		coder := code.NewService()
 		err := coder.GenerateDocker(printer, cmd)
 		if err != nil {
-			printer.Error(cmd, err)
-			return
+			return err
 		}
+		return nil
 	},
 }

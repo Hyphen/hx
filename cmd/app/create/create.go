@@ -41,48 +41,48 @@ After creation, you'll receive a summary of the new application, including its n
 ID, and associated organization.
 `,
 	Args: cobra.ExactArgs(1),
-	Run:  runCreate,
+	RunE: runCreate,
 }
 
 func init() {
 	CreateCmd.Flags().StringVarP(&appIDFlag, "id", "i", "", "App ID (optional)")
 }
 
-func runCreate(cmd *cobra.Command, args []string) {
+func runCreate(cmd *cobra.Command, args []string) error {
 	printer = cprint.NewCPrinter(flags.VerboseFlag)
 	appService := app.NewService()
 	orgID, err := flags.GetOrganizationID()
 	if err != nil {
-		printer.Error(cmd, err)
-		return
+		return err
 	}
 	projID, err := flags.GetProjectID()
 	if err != nil {
-		printer.Error(cmd, err)
-		return
+		return err
 	}
 
 	appName := args[0]
 	if appName == "" {
-		printer.Error(cmd, fmt.Errorf("app name is required"))
-		return
+		return fmt.Errorf("app name is required")
 	}
 
-	appAlternateId := getAppID(cmd, appName)
-	if appAlternateId == "" {
-		return
+	appAlternateId, err := getAppID(cmd, appName)
+	if err != nil {
+		return err
+	}
+	if appAlternateId == "" { /* this will be empty when the user passes --no and is prompted for the app ID */
+		return nil
 	}
 
 	newApp, err := appService.CreateApp(orgID, projID, appAlternateId, appName)
 	if err != nil {
-		printer.Error(cmd, err)
-		return
+		return err
 	}
 
 	printCreationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID)
+	return nil
 }
 
-func getAppID(cmd *cobra.Command, appName string) string {
+func getAppID(cmd *cobra.Command, appName string) (string, error) {
 	defaultAppAlternateId := generateDefaultAppId(appName)
 	appAlternateId := appIDFlag
 	if appAlternateId == "" {
@@ -96,7 +96,7 @@ func getAppID(cmd *cobra.Command, appName string) string {
 
 		if response.IsFlag && !response.Confirmed {
 			printer.Info("Operation cancelled due to --no flag.")
-			return ""
+			return "", nil
 		}
 
 		if !response.Confirmed {
@@ -105,20 +105,19 @@ func getAppID(cmd *cobra.Command, appName string) string {
 				var err error
 				customID, err = prompt.PromptString(cmd, "Enter a custom app ID:")
 				if err != nil {
-					printer.Error(cmd, err)
-					return ""
+					return "", err
 				}
 
 				err = app.CheckAppId(customID)
 				if err == nil {
-					return customID
+					return customID, nil
 				}
 				printer.Warning("Invalid app ID. Please try again.")
 			}
 		}
 		appAlternateId = suggestedID
 	}
-	return appAlternateId
+	return appAlternateId, nil
 }
 
 func generateDefaultAppId(appName string) string {

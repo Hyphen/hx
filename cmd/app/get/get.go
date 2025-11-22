@@ -37,32 +37,30 @@ Example:
 After execution, you'll see a summary of the application's details.
 `,
 	Args: cobra.ExactArgs(1),
-	Run:  runGet,
+	RunE: runGet,
 }
 
-func runGet(cmd *cobra.Command, args []string) {
+func runGet(cmd *cobra.Command, args []string) error {
 	printer = cprint.NewCPrinter(flags.VerboseFlag)
 
 	appService := app.NewService()
 	orgID, err := flags.GetOrganizationID()
 	if err != nil {
-		printer.Error(cmd, err)
-		return
+		return err
 	}
 
 	appIdentifier := args[0]
 	if appIdentifier == "" {
-		printer.Error(cmd, fmt.Errorf("app name or id is required"))
-		return
+		return fmt.Errorf("app name or id is required")
 	}
 
 	retrievedApp, err := appService.GetApp(orgID, appIdentifier)
 	if err != nil {
-		printer.Error(cmd, err)
-		return
+		return err
 	}
 
 	printAppDetails(retrievedApp)
+	return nil
 }
 
 func printAppDetails(app models.App) {
