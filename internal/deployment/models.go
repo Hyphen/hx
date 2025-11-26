@@ -131,7 +131,7 @@ func (m StatusModel) View() string {
 	result += m.RenderTree(m.Pipeline)
 
 	if m.Error != nil {
-		result += fmt.Sprintf("❗error: %v\n", m.Error)
+		result += fmt.Sprintf("\n❗error: %v\n", m.Error)
 	}
 
 	return result
