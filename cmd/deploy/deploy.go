@@ -3,6 +3,7 @@ package deploy
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/Hyphen/cli/internal/build"
 	Deployment "github.com/Hyphen/cli/internal/deployment"
@@ -15,6 +16,7 @@ import (
 	"github.com/Hyphen/cli/pkg/prompt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -126,83 +128,160 @@ Use 'hyphen deploy --help' for more information about available flags.
 			return
 		}
 
-		statusModel := Deployment.StatusModel{
-			OrganizationId: orgId,
-			DeploymentId:   selectedDeployment.ID,
-			RunId:          run.ID,
-			Pipeline:       run.Pipeline,
-			Service:        *service,
-			AppUrl:         fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID),
+		appUrl := fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID)
+
+		if shouldUseTUI() {
+			runWithTUI(cmd, orgId, selectedDeployment.ID, run, appUrl, service)
+		} else {
+			runWithoutTUI(cmd, orgId, appUrl)
 		}
-		statusDisplay := tea.NewProgram(statusModel)
-
-		go func() {
-			client := httputil.NewHyphenHTTPClient()
-			url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
-			conn, err := client.GetWebsocketConnection(url)
-			if err != nil {
-				printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
-				return
-			}
-			defer conn.Close()
-			conn.WriteJSON(
-				map[string]interface{}{
-					"eventStreamTopic": "deploymentRun",
-					"organizationId":   orgId,
-				},
-			)
-		messageListener:
-			for {
-				_, message, err := conn.ReadMessage()
-				if err != nil {
-					printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
-					break
-				}
-
-				var wsMessage Deployment.WebSocketMessage
-				err = json.Unmarshal(message, &wsMessage)
-				if err != nil {
-					continue
-				}
-
-				var typeCheck map[string]interface{}
-				err = json.Unmarshal(wsMessage.Data, &typeCheck)
-				if err != nil {
-					printer.Error(cmd, fmt.Errorf("error unmarshalling Data for type check: %w", err))
-					continue
-				}
-
-				if _, ok := typeCheck["level"]; ok {
-					var data Deployment.LogMessageData
-					err = json.Unmarshal(wsMessage.Data, &data)
-					if err != nil {
-						continue
-					}
-
-					// TODO: this should go in a second pane or something
-					// timestamp := time.UnixMilli(data.Timestamp)
-					// formattedTime := timestamp.Format("15:04:05")
-					// log := fmt.Sprintf("[%s] %s: %s", formattedTime, data.Level, data.Message)
-					// printer.PrintVerbose(log)
-				} else if _, ok := typeCheck["type"]; ok {
-					var data Deployment.RunMessageData
-					err = json.Unmarshal(wsMessage.Data, &data)
-					if err != nil {
-						continue
-					}
-
-					statusDisplay.Send(data)
-
-					if data.Type == "run" && (data.Status == "succeeded" || data.Status == "failed" || data.Status == "canceled") {
-						statusDisplay.Quit()
-						break messageListener
-					}
-				}
-			}
-		}()
-		statusDisplay.Run()
-
 	},
+}
+
+func shouldUseTUI() bool {
+	return term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+func runWithTUI(cmd *cobra.Command, orgId, deploymentId string, run *models.DeploymentRun, appUrl string, service *Deployment.DeploymentService) {
+	statusModel := Deployment.StatusModel{
+		OrganizationId: orgId,
+		DeploymentId:   deploymentId,
+		RunId:          run.ID,
+		Pipeline:       run.Pipeline,
+		Service:        *service,
+		AppUrl:         appUrl,
+	}
+	statusDisplay := tea.NewProgram(statusModel)
+
+	go func() {
+		client := httputil.NewHyphenHTTPClient()
+		url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
+		conn, err := client.GetWebsocketConnection(url)
+		if err != nil {
+			printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
+			return
+		}
+		defer conn.Close()
+		conn.WriteJSON(
+			map[string]interface{}{
+				"eventStreamTopic": "deploymentRun",
+				"organizationId":   orgId,
+			},
+		)
+	messageListener:
+		for {
+			_, message, err := conn.ReadMessage()
+			if err != nil {
+				printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
+				break
+			}
+
+			var wsMessage Deployment.WebSocketMessage
+			err = json.Unmarshal(message, &wsMessage)
+			if err != nil {
+				continue
+			}
+
+			var typeCheck map[string]interface{}
+			err = json.Unmarshal(wsMessage.Data, &typeCheck)
+			if err != nil {
+				printer.Error(cmd, fmt.Errorf("error unmarshalling Data for type check: %w", err))
+				continue
+			}
+
+			if _, ok := typeCheck["level"]; ok {
+				var data Deployment.LogMessageData
+				err = json.Unmarshal(wsMessage.Data, &data)
+				if err != nil {
+					continue
+				}
+			} else if _, ok := typeCheck["type"]; ok {
+				var data Deployment.RunMessageData
+				err = json.Unmarshal(wsMessage.Data, &data)
+				if err != nil {
+					continue
+				}
+
+				statusDisplay.Send(data)
+
+				if data.Type == "run" && (data.Status == "succeeded" || data.Status == "failed" || data.Status == "canceled") {
+					statusDisplay.Quit()
+					break messageListener
+				}
+			}
+		}
+	}()
+	statusDisplay.Run()
+}
+
+func runWithoutTUI(cmd *cobra.Command, orgId string, appUrl string) {
+	printer.Print(fmt.Sprintf("Deployment URL: %s", appUrl))
+	printer.Print("Monitoring deployment progress...")
+
+	client := httputil.NewHyphenHTTPClient()
+	url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
+
+	conn, err := client.GetWebsocketConnection(url)
+	if err != nil {
+		printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
+		return
+	}
+	defer conn.Close()
+
+	conn.WriteJSON(
+		map[string]any{
+			"eventStreamTopic": "deploymentRun",
+			"organizationId":   orgId,
+		},
+	)
+
+	for {
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
+			return
+		}
+
+		var wsMessage Deployment.WebSocketMessage
+		err = json.Unmarshal(message, &wsMessage)
+		if err != nil {
+			continue
+		}
+
+		var typeCheck map[string]interface{}
+		err = json.Unmarshal(wsMessage.Data, &typeCheck)
+		if err != nil {
+			continue
+		}
+
+		if _, ok := typeCheck["type"]; ok {
+			var data Deployment.RunMessageData
+			err = json.Unmarshal(wsMessage.Data, &data)
+			if err != nil {
+				continue
+			}
+
+			// Print status updates
+			switch data.Type {
+			case "step", "task":
+				printer.Print(fmt.Sprintf("  %s: %s", data.Type, data.Status))
+			case "run":
+				printer.Print(fmt.Sprintf("Deployment: %s", data.Status))
+
+				switch data.Status {
+				case "succeeded":
+					printer.Success("Deployment completed successfully")
+					return
+				case "failed":
+					printer.Error(cmd, fmt.Errorf("deployment failed"))
+					return
+				case "canceled":
+					printer.Warning("Deployment was canceled")
+					return
+				}
+			}
+		}
+	}
 }
 
 func FindStepOrTaskByID(pipeline models.DeploymentPipeline, id string) (interface{}, bool) {
