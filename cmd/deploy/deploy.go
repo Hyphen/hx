@@ -134,7 +134,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 		if shouldUseTUI() {
 			runWithTUI(cmd, orgId, selectedDeployment.ID, run, appUrl, service)
 		} else {
-			runWithoutTUI(cmd, orgId, appUrl)
+			runWithoutTUI(cmd, orgId, selectedDeployment.ID, run.ID, appUrl, service)
 		}
 	},
 }
@@ -307,7 +307,7 @@ func runWithTUI(cmd *cobra.Command, orgId, deploymentId string, run *models.Depl
 	statusDisplay.Run()
 }
 
-func runWithoutTUI(cmd *cobra.Command, orgId string, appUrl string) {
+func runWithoutTUI(cmd *cobra.Command, orgId string, deploymentId string, runId string, appUrl string, service *Deployment.DeploymentService) {
 	printer.Print(fmt.Sprintf("Deployment URL: %s", appUrl))
 	printer.Print("Monitoring deployment progress...")
 
@@ -338,6 +338,24 @@ func runWithoutTUI(cmd *cobra.Command, orgId string, appUrl string) {
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
+			// Check current deployment state via API
+			currentRun, apiErr := service.GetDeploymentRun(orgId, deploymentId, runId)
+			if apiErr == nil && currentRun != nil {
+				// If deployment is complete, report that status instead of the error
+				switch currentRun.Status {
+				case "succeeded":
+					printer.Success("Deployment completed successfully")
+					return
+				case "failed":
+					printer.Error(cmd, fmt.Errorf("deployment failed"))
+					return
+				case "canceled":
+					printer.Warning("Deployment was canceled")
+					return
+				}
+			}
+
+			// Deployment not complete or API failed, report the WebSocket error
 			printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
 			return
 		}
