@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/Hyphen/cli/internal/build"
 	Deployment "github.com/Hyphen/cli/internal/deployment"
@@ -150,18 +151,33 @@ func runWithTUI(cmd *cobra.Command, orgId, deploymentId string, run *models.Depl
 		Pipeline:       run.Pipeline,
 		Service:        *service,
 		AppUrl:         appUrl,
+		VerboseMode:    flags.VerboseFlag,
 	}
 	statusDisplay := tea.NewProgram(statusModel)
+
+	// Ticker to update waiting seconds
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			statusDisplay.Send(Deployment.WaitingTickMessage{})
+		}
+	}()
 
 	go func() {
 		client := httputil.NewHyphenHTTPClient()
 		url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
 		conn, err := client.GetWebsocketConnection(url)
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
+			statusDisplay.Send(Deployment.ErrorMessage{Error: fmt.Errorf("failed to connect to WebSocket: %w", err)})
 			return
 		}
 		defer conn.Close()
+
+		if flags.VerboseFlag {
+			statusDisplay.Send(Deployment.VerboseMessage{Content: "WebSocket connected"})
+		}
+
 		conn.WriteJSON(
 			map[string]interface{}{
 				"eventStreamTopic": "deploymentRun",
@@ -172,8 +188,13 @@ func runWithTUI(cmd *cobra.Command, orgId, deploymentId string, run *models.Depl
 		for {
 			_, message, err := conn.ReadMessage()
 			if err != nil {
-				printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
+				statusDisplay.Send(Deployment.ErrorMessage{Error: fmt.Errorf("error reading WebSocket message: %w", err)})
 				break
+			}
+
+			// TODO: For now, log every WebSocket message in verbose mode, but remove once everything is finally working
+			if flags.VerboseFlag {
+				statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("WebSocket Message: %s", string(message))})
 			}
 
 			var wsMessage Deployment.WebSocketMessage
@@ -195,6 +216,9 @@ func runWithTUI(cmd *cobra.Command, orgId, deploymentId string, run *models.Depl
 				if err != nil {
 					continue
 				}
+				if flags.VerboseFlag {
+					statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Log [%s]: %s", data.Level, data.Message)})
+				}
 			} else if _, ok := typeCheck["type"]; ok {
 				var data Deployment.RunMessageData
 				err = json.Unmarshal(wsMessage.Data, &data)
@@ -202,9 +226,16 @@ func runWithTUI(cmd *cobra.Command, orgId, deploymentId string, run *models.Depl
 					continue
 				}
 
+				if flags.VerboseFlag {
+					statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("RunMessage: Type=%s, Id=%s, Status=%s", data.Type, data.Id, data.Status)})
+				}
+
 				statusDisplay.Send(data)
 
 				if data.Type == "run" && (data.Status == "succeeded" || data.Status == "failed" || data.Status == "canceled") {
+					if flags.VerboseFlag {
+						statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Deployment reached terminal status: %s", data.Status)})
+					}
 					statusDisplay.Quit()
 					break messageListener
 				}

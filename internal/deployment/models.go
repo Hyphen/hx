@@ -38,13 +38,27 @@ type RunMessageData struct {
 	Status string `json:"status"`
 }
 
+type ErrorMessage struct {
+	Error error
+}
+
+type WaitingTickMessage struct{}
+
+type VerboseMessage struct {
+	Content string
+}
+
 type StatusModel struct {
-	Pipeline       models.DeploymentPipeline
-	OrganizationId string
-	DeploymentId   string
-	RunId          string
-	Service        DeploymentService
-	AppUrl         string
+	Pipeline        models.DeploymentPipeline
+	OrganizationId  string
+	DeploymentId    string
+	RunId           string
+	Service         DeploymentService
+	AppUrl          string
+	Error           error
+	WaitingSeconds  int
+	VerboseMode     bool
+	VerboseMessages []string
 }
 
 var (
@@ -67,6 +81,15 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		spinIcon, cmd = spinIcon.Update(msg)
 		return m, cmd
+	case WaitingTickMessage:
+		m.WaitingSeconds++
+		return m, nil
+	case VerboseMessage:
+		m.VerboseMessages = append(m.VerboseMessages, msg.Content)
+		return m, nil
+	case ErrorMessage:
+		m.Error = msg.Error
+		return m, tea.Quit
 	case RunMessageData:
 		// Fetch pipeline if we don't have it yet (on any message type)
 		if len(m.Pipeline.Steps) == 0 {
@@ -88,7 +111,29 @@ func (m StatusModel) View() string {
 	result := "-------------------------------------------------\n"
 	result += m.AppUrl + "\n"
 	result += "-------------------------------------------------\n"
+
+	if len(m.Pipeline.Steps) == 0 {
+		if m.VerboseMode {
+			result += fmt.Sprintf("%s Waiting for deployment status... (%ds)\n", spinIcon.View(), m.WaitingSeconds)
+		} else {
+			result += fmt.Sprintf("%s Waiting for deployment status...\n", spinIcon.View())
+		}
+	}
+
+	if m.VerboseMode && len(m.VerboseMessages) > 0 {
+		result += "\nVerbose messages:\n"
+		for _, msg := range m.VerboseMessages {
+			result += fmt.Sprintf("  %s\n", msg)
+		}
+		result += "\n"
+	}
+
 	result += m.RenderTree(m.Pipeline)
+
+	if m.Error != nil {
+		result += fmt.Sprintf("❗error: %v\n", m.Error)
+	}
+
 	return result
 }
 
