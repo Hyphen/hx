@@ -68,20 +68,15 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		spinIcon, cmd = spinIcon.Update(msg)
 		return m, cmd
 	case RunMessageData:
-		switch msg.Type {
-		case "run":
-			if msg.Status == "pending" {
-				// Update the top-level run variable
-				run, _ := m.Service.GetDeploymentRun(m.OrganizationId, m.DeploymentId, msg.RunId)
+		// Fetch pipeline if we don't have it yet (on any message type)
+		if len(m.Pipeline.Steps) == 0 {
+			run, _ := m.Service.GetDeploymentRun(m.OrganizationId, m.DeploymentId, m.RunId)
+			if run != nil {
 				m.Pipeline = run.Pipeline
 			}
-			// if msg.Status == "succeeded" || msg.Status == "failed" || msg.Status == "canceled" {
-			// 	return m, tea.Quit
-			// }
-			m.UpdateStatusForId(msg.Id, msg.Status)
-		case "step":
-			m.UpdateStatusForId(msg.Id, msg.Status)
-		case "task":
+		}
+		// Only update status if we have a pipeline
+		if len(m.Pipeline.Steps) > 0 {
 			m.UpdateStatusForId(msg.Id, msg.Status)
 		}
 	}
