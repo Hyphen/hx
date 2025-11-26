@@ -213,6 +213,40 @@ func runWithTUI(cmd *cobra.Command, orgId, deploymentId string, run *models.Depl
 		for {
 			_, message, err := conn.ReadMessage()
 			if err != nil {
+				if flags.VerboseFlag {
+					statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("WebSocket error: %v", err)})
+				}
+
+				// Check current deployment state via API
+				currentRun, apiErr := service.GetDeploymentRun(orgId, deploymentId, run.ID)
+				if apiErr == nil && currentRun != nil {
+					if flags.VerboseFlag {
+						statusDisplay.Send(Deployment.VerboseMessage{
+							Content: fmt.Sprintf("Status via API after WebSocket error: %s", currentRun.Status),
+						})
+					}
+
+					// Update the model with the latest data from API
+					statusDisplay.Send(Deployment.RunMessageData{
+						Type:   "run",
+						RunId:  currentRun.ID,
+						Id:     currentRun.ID,
+						Status: currentRun.Status,
+					})
+
+					// If deployment is complete, quit gracefully
+					if currentRun.Status == "succeeded" || currentRun.Status == "failed" || currentRun.Status == "canceled" {
+						if flags.VerboseFlag {
+							statusDisplay.Send(Deployment.VerboseMessage{
+								Content: fmt.Sprintf("Deployment showed complete via API: %s", currentRun.Status),
+							})
+						}
+						statusDisplay.Quit()
+						break messageListener
+					}
+				}
+
+				// Deployment not complete or API failed, report the WebSocket error
 				statusDisplay.Send(Deployment.ErrorMessage{Error: fmt.Errorf("error reading WebSocket message: %w", err)})
 				break
 			}
