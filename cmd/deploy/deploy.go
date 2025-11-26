@@ -321,6 +321,13 @@ func runWithoutTUI(cmd *cobra.Command, orgId string, appUrl string) {
 	}
 	defer conn.Close()
 
+	// Set up ping/pong handlers to keep connection alive
+	conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
+		return nil
+	})
+
 	conn.WriteJSON(
 		map[string]any{
 			"eventStreamTopic": "deploymentRun",
@@ -334,6 +341,9 @@ func runWithoutTUI(cmd *cobra.Command, orgId string, appUrl string) {
 			printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
 			return
 		}
+
+		// Reset read deadline on successful message
+		conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
 
 		var wsMessage Deployment.WebSocketMessage
 		err = json.Unmarshal(message, &wsMessage)
