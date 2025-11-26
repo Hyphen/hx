@@ -155,6 +155,24 @@ func runWithTUI(cmd *cobra.Command, orgId, deploymentId string, run *models.Depl
 	}
 	statusDisplay := tea.NewProgram(statusModel)
 
+	// This initial run call, in addition to opening the WebSocket connection, handles the case that the pipeline is already running before we establish the WebSocket connection, and therefore would otherwise mis the run message.
+	go func() {
+		initialRun, err := service.GetDeploymentRun(orgId, deploymentId, run.ID)
+		if err == nil && initialRun != nil {
+			if flags.VerboseFlag {
+				statusDisplay.Send(Deployment.VerboseMessage{
+					Content: fmt.Sprintf("Initial run check: Status=%s, Steps=%d", initialRun.Status, len(initialRun.Pipeline.Steps)),
+				})
+			}
+			statusDisplay.Send(Deployment.RunMessageData{
+				Type:   "run",
+				RunId:  initialRun.ID,
+				Id:     initialRun.ID,
+				Status: initialRun.Status,
+			})
+		}
+	}()
+
 	// Ticker to update waiting seconds
 	go func() {
 		ticker := time.NewTicker(1 * time.Second)
