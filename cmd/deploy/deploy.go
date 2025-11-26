@@ -196,6 +196,13 @@ func runWithTUI(cmd *cobra.Command, orgId, deploymentId string, run *models.Depl
 			statusDisplay.Send(Deployment.VerboseMessage{Content: "WebSocket connected"})
 		}
 
+		// Set up ping/pong handlers to keep connection alive
+		conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
+		conn.SetPongHandler(func(string) error {
+			conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
+			return nil
+		})
+
 		conn.WriteJSON(
 			map[string]interface{}{
 				"eventStreamTopic": "deploymentRun",
@@ -209,6 +216,9 @@ func runWithTUI(cmd *cobra.Command, orgId, deploymentId string, run *models.Depl
 				statusDisplay.Send(Deployment.ErrorMessage{Error: fmt.Errorf("error reading WebSocket message: %w", err)})
 				break
 			}
+
+			// Reset read deadline on successful message
+			conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
 
 			// TODO: For now, log every WebSocket message in verbose mode, but remove once everything is finally working
 			if flags.VerboseFlag {
