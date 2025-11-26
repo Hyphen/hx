@@ -33,7 +33,7 @@ type LogMessageData struct {
 // Define the second data type (new structure)
 type RunMessageData struct {
 	Type   string `json:"type"`
-	RunId  string `json:"RunId"`
+	RunId  string `json:"runId"`
 	Id     string `json:"id"`
 	Status string `json:"status"`
 }
