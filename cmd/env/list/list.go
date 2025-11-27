@@ -50,11 +50,12 @@ Examples:
   hyphen list --table
     `,
 	Args: cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		if err := RunList(args); err != nil {
-			printer.Error(cmd, err)
+			return err
 		}
+		return nil
 	},
 }
 

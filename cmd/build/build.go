@@ -31,18 +31,18 @@ Use 'hyphen build --help' for more information about available flags.
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return user.ErrorIfNotAuthenticated()
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		service := build.NewService()
 		build, err := service.RunBuild(printer, "", flags.VerboseFlag)
 
 		if err != nil {
-			printer.Error(cmd, err)
-			return
+			return err
 		}
 
 		url := hyphenapp.ApplicationBuildLink(build.Organization.ID, build.Project.ID, build.App.ID, build.Id)
 
 		printer.Info("Build successful: " + url)
+		return nil
 	},
 }

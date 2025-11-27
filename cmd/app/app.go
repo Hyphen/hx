@@ -15,8 +15,8 @@ var AppCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return user.ErrorIfNotAuthenticated()
 	},
-	Run: func(cmd *cobra.Command, args []string) {
-		list.ListCmd.Run(cmd, args)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return list.ListCmd.RunE(cmd, args)
 	},
 }
 

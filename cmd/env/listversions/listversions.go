@@ -52,11 +52,12 @@ Examples:
   hyphen list-versions my-env-id --table
     `,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		if err := RunListVersions(args[0]); err != nil {
-			printer.Error(cmd, err)
+			return err
 		}
+		return nil
 	},
 }
 

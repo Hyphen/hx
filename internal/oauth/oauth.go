@@ -59,13 +59,14 @@ type OAuthService struct {
 	httpClient    HTTPClient
 	timeProvider  timeprovider.TimeProvider
 	browserOpener BrowserOpener
+	randReader    io.Reader // This is to allow injecting a mock random reader because Go 1.24 changes rand.Read to never return an error (see https://go.dev/doc/go1.24#cryptorandpkgcryptorand); once we move to Go 1.24+ this can be removed in favor of just using rand.Read directly
 }
 
 func DefaultOAuthService() *OAuthService {
-	return NewOAuthService(&http.Client{}, timeprovider.DefaultTimeProvider(), openBrowser)
+	return NewOAuthService(&http.Client{}, timeprovider.DefaultTimeProvider(), openBrowser, rand.Reader)
 }
 
-func NewOAuthService(httpClient HTTPClient, timeProvider timeprovider.TimeProvider, browserOpener BrowserOpener) *OAuthService {
+func NewOAuthService(httpClient HTTPClient, timeProvider timeprovider.TimeProvider, browserOpener BrowserOpener, randReader io.Reader) *OAuthService {
 	baseUrl := apiconf.GetBaseAuthUrl()
 	clientID := apiconf.GetAuthClientID()
 
@@ -75,14 +76,15 @@ func NewOAuthService(httpClient HTTPClient, timeProvider timeprovider.TimeProvid
 		httpClient,
 		timeProvider,
 		browserOpener,
+		randReader,
 	}
 }
 
 func (s *OAuthService) generatePKCE() (string, string, error) {
 	codeVerifier := make([]byte, 32)
-	_, err := rand.Read(codeVerifier)
+	_, err := s.randReader.Read(codeVerifier) // As of Go 1.24 rand.Read is guaranteed to not fail, so using rand.Reader.Read won't be needed for being able to mock it in tests, and we can just move back to rand.Read
 	if err != nil {
-		return "", "", errors.Wrap(err, "Failed to generate PKCE code verifier")
+		return "", "", errors.Wrapf(err, "Failed to generate PKCE code verifier: %s", err.Error())
 	}
 
 	codeVerifierStr := base64.RawURLEncoding.EncodeToString(codeVerifier)

@@ -43,14 +43,15 @@ Examples:
 After pulling, all environment variables will be locally available and ready for use.
 `,
 	Args: cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		if version != 0 {
 			versionPtr = &version
 		}
 		if err := RunPull(args, forceFlag); err != nil {
-			printer.Error(cmd, err)
+			return err
 		}
+		return nil
 	},
 }
 

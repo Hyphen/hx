@@ -45,29 +45,26 @@ If no applications are found, you'll be informed accordingly.
 Use 'hyphen app list --help' for more information about available flags.
 `,
 	Args: cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
-			printer.Error(cmd, err)
-			return
+			return err
 		}
 		projectId, err := flags.GetProjectID()
 		if err != nil {
-			printer.Error(cmd, err)
-			return
+			return err
 		}
 		service := newService(app.NewService())
 
 		apps, err := service.ListApps(orgId, projectId, pageSize, page)
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to list apps: %w", err))
-			return
+			return fmt.Errorf("failed to list apps: %w", err)
 		}
 
 		if len(apps) == 0 {
 			printer.Info("No applications found for the specified organization.")
-			return
+			return nil
 		}
 
 		if showTable {
@@ -75,6 +72,7 @@ Use 'hyphen app list --help' for more information about available flags.
 		} else {
 			displayList(apps)
 		}
+		return nil
 	},
 }
 
