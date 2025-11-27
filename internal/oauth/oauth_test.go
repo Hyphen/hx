@@ -3,7 +3,7 @@ package oauth
 import (
 	"bytes"
 	"crypto/rand"
-	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -46,7 +46,7 @@ func TestNewOAuthService(t *testing.T) {
 	httpClient := &MockHTTPClient{}
 	timeProvider := timeprovider.NewMockTimeProvider()
 	browserOpener := func(url string) error { return nil }
-	service := NewOAuthService(httpClient, timeProvider, browserOpener)
+	service := NewOAuthService(httpClient, timeProvider, browserOpener, rand.Reader)
 	assert.NotNil(t, service)
 	assert.Equal(t, httpClient, service.httpClient)
 	assert.Equal(t, timeProvider, service.timeProvider)
@@ -65,7 +65,7 @@ func TestGeneratePKCE(t *testing.T) {
 func TestExchangeCodeForToken(t *testing.T) {
 	mockClient := new(MockHTTPClient)
 	mockTime := timeprovider.NewMockTimeProvider()
-	service := NewOAuthService(mockClient, mockTime, func(url string) error { return nil })
+	service := NewOAuthService(mockClient, mockTime, func(url string) error { return nil }, rand.Reader)
 
 	mockResp := &http.Response{
 		StatusCode: http.StatusOK,
@@ -94,7 +94,7 @@ func TestExchangeCodeForToken(t *testing.T) {
 
 func TestIsTokenExpired(t *testing.T) {
 	mockTime := timeprovider.NewMockTimeProvider()
-	service := NewOAuthService(&http.Client{}, mockTime, func(url string) error { return nil })
+	service := NewOAuthService(&http.Client{}, mockTime, func(url string) error { return nil }, rand.Reader)
 
 	mockTime.On("Now").Return(time.Unix(1000000000, 0))
 
@@ -107,7 +107,7 @@ func TestIsTokenExpired(t *testing.T) {
 func TestRefreshToken(t *testing.T) {
 	mockClient := new(MockHTTPClient)
 	mockTime := timeprovider.NewMockTimeProvider()
-	service := NewOAuthService(mockClient, mockTime, func(url string) error { return nil })
+	service := NewOAuthService(mockClient, mockTime, func(url string) error { return nil }, rand.Reader)
 
 	mockResp := &http.Response{
 		StatusCode: http.StatusOK,
@@ -147,7 +147,7 @@ func TestStartOAuthServer(t *testing.T) {
 		return nil
 	}
 
-	service := NewOAuthService(mockClient, mockTime, mockBrowserOpener)
+	service := NewOAuthService(mockClient, mockTime, mockBrowserOpener, rand.Reader)
 
 	// Mock the exchange code for token response
 	mockResp := &http.Response{
@@ -216,26 +216,25 @@ func (m *MockRandReader) Read(p []byte) (n int, err error) {
 	args := m.Called(p)
 	return args.Int(0), args.Error(1)
 }
+
 func TestGeneratePKCE_Error(t *testing.T) {
-	// Mock the rand.Read function to return an error
-	oldRandRead := rand.Reader
-	mockRandReader := new(MockRandReader)
-	rand.Reader = mockRandReader
-	defer func() { rand.Reader = oldRandRead }()
+	mockReader := new(MockRandReader)
+	mockReader.On("Read", mock.Anything).Return(0, fmt.Errorf("the fake error"))
 
-	mockRandReader.On("Read", mock.Anything).Return(0, errors.New("mock error"))
+	mockClient := new(MockHTTPClient)
+	mockTime := timeprovider.NewMockTimeProvider()
+	service := NewOAuthService(mockClient, mockTime, func(url string) error { return nil }, mockReader)
 
-	service := DefaultOAuthService()
 	_, _, err := service.generatePKCE()
-	assert.Error(t, err)
 
-	mockRandReader.AssertExpectations(t)
+	assert.EqualError(t, err, "Failed to generate PKCE code verifier: the fake error")
+	mockReader.AssertExpectations(t)
 }
 
 func TestExchangeCodeForToken_Error(t *testing.T) {
 	mockClient := new(MockHTTPClient)
 	mockTime := timeprovider.NewMockTimeProvider()
-	service := NewOAuthService(mockClient, mockTime, func(url string) error { return nil })
+	service := NewOAuthService(mockClient, mockTime, func(url string) error { return nil }, rand.Reader)
 
 	mockResp := &http.Response{
 		StatusCode: http.StatusBadRequest,
@@ -253,7 +252,7 @@ func TestExchangeCodeForToken_Error(t *testing.T) {
 func TestRefreshToken_Error(t *testing.T) {
 	mockClient := new(MockHTTPClient)
 	mockTime := timeprovider.NewMockTimeProvider()
-	service := NewOAuthService(mockClient, mockTime, func(url string) error { return nil })
+	service := NewOAuthService(mockClient, mockTime, func(url string) error { return nil }, rand.Reader)
 
 	mockResp := &http.Response{
 		StatusCode: http.StatusBadRequest,

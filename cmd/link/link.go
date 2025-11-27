@@ -52,14 +52,13 @@ Use 'hyphen link --help' for more information about available flags.
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return user.ErrorIfNotAuthenticated()
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		service := newService(zelda.NewService())
 
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
-			return
+			return fmt.Errorf("failed to get organization ID: %w", err)
 		}
 
 		if flags.VerboseFlag {
@@ -68,8 +67,7 @@ Use 'hyphen link --help' for more information about available flags.
 
 		domain, err := service.GetDomain(orgId)
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to get domain: %w", err))
-			return
+			return fmt.Errorf("failed to get domain: %w", err)
 		}
 
 		if flags.VerboseFlag {
@@ -105,8 +103,7 @@ Use 'hyphen link --help' for more information about available flags.
 
 		shortCode, err := service.GenerateShortCode(orgId, newCode)
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to generate short code: %w", err))
-			return
+			return fmt.Errorf("failed to generate short code: %w", err)
 		}
 
 		var qrCodeURL string
@@ -116,8 +113,7 @@ Use 'hyphen link --help' for more information about available flags.
 			}
 			qrCode, err := service.GenerateQR(orgId, *shortCode.ID)
 			if err != nil {
-				printer.Error(cmd, fmt.Errorf("failed to generate QR code: %w", err))
-				return
+				return fmt.Errorf("failed to generate QR code: %w", err)
 			}
 			qrCodeURL = qrCode.QRLink
 		}
@@ -154,6 +150,7 @@ Use 'hyphen link --help' for more information about available flags.
 				printer.Print(qrCodeURL)
 			}
 		}
+		return nil
 	},
 }
 

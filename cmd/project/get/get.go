@@ -38,24 +38,23 @@ After execution, you'll see a summary of the project's details.
 Note: Make sure you have the necessary permissions to access the project information.
 `,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		projectID := args[0]
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
-			return
+			return fmt.Errorf("failed to get organization ID: %w", err)
 		}
 
 		service := projects.NewService(orgId)
 		project, err := service.GetProject(projectID)
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to get project: %w", err))
-			return
+			return fmt.Errorf("failed to get project: %w", err)
 		}
 
 		printer.PrintDetail("Name", project.Name)
 		printer.PrintDetail("ID", *project.ID)
 		printer.PrintDetail("AlternateID", project.AlternateID)
+		return nil
 	},
 }

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/Hyphen/cli/cmd/app"
@@ -21,6 +20,7 @@ import (
 	"github.com/Hyphen/cli/cmd/setproject"
 	"github.com/Hyphen/cli/cmd/update"
 	"github.com/Hyphen/cli/cmd/version"
+	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/toggle"
 	"github.com/spf13/cobra"
@@ -33,6 +33,9 @@ var rootCmd = &cobra.Command{
 Hyphen CLI
 
 The Hyphen CLI is a command-line interface for managing your Hyphen projects, environments, applications, and more. It provides a set of commands to interact with various resources in your Hyphen account.`,
+	// Silence usage and errors because of the use of RunE (see https://cobra.dev/docs/how-to-guides/working-with-commands/#how-to-handle-errors-with-rune)
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 func init() {
@@ -83,7 +86,7 @@ func Execute() {
 		rootCmd.AddCommand(build.BuildCmd)
 	}
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		cprint.Error(rootCmd, err, flags.VerboseFlag)
 		os.Exit(1)
 	}
 }

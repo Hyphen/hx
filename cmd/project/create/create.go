@@ -47,13 +47,12 @@ Example:
 This will create a project named "My New Project" with an alternate ID like "my-new-project".
 `,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
-			return
+			return fmt.Errorf("failed to get organization ID: %w", err)
 		}
 
 		rawName := args[0]
@@ -80,8 +79,7 @@ This will create a project named "My New Project" with an alternate ID like "my-
 		// Call the service to create the project
 		newProject, err := service.CreateProject(project)
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to create project: %w", err))
-			return
+			return fmt.Errorf("failed to create project: %w", err)
 		}
 
 		printer.GreenPrint(fmt.Sprintf("Project '%s' created successfully!", name))
@@ -89,5 +87,6 @@ This will create a project named "My New Project" with an alternate ID like "my-
 		printer.PrintDetail("Name", newProject.Name)
 		printer.PrintDetail("ID", *newProject.ID)
 		printer.PrintDetail("AlternateID", newProject.AlternateID)
+		return nil
 	},
 }

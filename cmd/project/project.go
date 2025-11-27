@@ -25,10 +25,10 @@ Examples:
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return user.ErrorIfNotAuthenticated()
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// check if the subcommand is unsupported
 		// If no subcommand is provided, default to 'list' command
-		list.ProjectListCmd.Run(cmd, args)
+		return list.ProjectListCmd.RunE(cmd, args)
 	},
 }
 

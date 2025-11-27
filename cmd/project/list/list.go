@@ -41,25 +41,23 @@ This command does not accept any arguments. Use it to get a quick overview of al
 
 Note: The list is fetched based on your current organization context. Ensure you're in the correct organization before running this command.
 `,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 
 		orgId, err := flags.GetOrganizationID()
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to get organization ID: %w", err))
-			return
+			return fmt.Errorf("failed to get organization ID: %w", err)
 		}
 
 		service := projects.NewService(orgId)
 		projects, err := service.ListProjects()
 		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to list projects: %w", err))
-			return
+			return fmt.Errorf("failed to list projects: %w", err)
 		}
 
 		if len(projects) == 0 {
 			printer.YellowPrint("No projects found")
-			return
+			return nil
 		}
 
 		for _, project := range projects {
@@ -69,5 +67,6 @@ Note: The list is fetched based on your current organization context. Ensure you
 			printer.Print("")
 		}
 
+		return nil
 	},
 }

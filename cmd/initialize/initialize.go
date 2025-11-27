@@ -46,13 +46,14 @@ Examples:
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return user.ErrorIfNotAuthenticated()
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if isMonorepo {
 			runInitMonorepo(cmd, args)
 		} else {
 			initapp.RunInitApp(cmd, args)
 
 		}
+		return nil
 	},
 }
 

@@ -15,9 +15,10 @@ var VersionCmd = &cobra.Command{
 	Short: "Print the version number of Hyphen",
 	Args:  cobra.NoArgs,
 	Long:  `All software has versions. This is Hyphen's`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		printVersionInfo()
+		return nil
 	},
 }
 
