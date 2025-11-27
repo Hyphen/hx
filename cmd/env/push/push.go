@@ -227,7 +227,15 @@ func (s *service) putEnv(orgID, envName, appID string, e models.Env, currentSecr
 
 	// Update cloud environment
 	if err := s.envService.PutEnvironmentEnv(orgID, appID, envName, replacingSecretKeyID, e); err != nil {
-		return fmt.Errorf("failed to update cloud %s environment: %w", envName, err), false
+		// Workaround for apix#1599: API returns 400 "secretKeyId must be >= 1" when secretKeyId is 0.
+		// This happens for new environments. Retry with the project's secret key.
+		if strings.Contains(err.Error(), "secretKeyId must be >= 1") {
+			if retryErr := s.envService.PutEnvironmentEnv(orgID, appID, envName, currentSecret.SecretKeyId, e); retryErr != nil {
+				return fmt.Errorf("failed to update cloud %s environment: %w", envName, retryErr), false
+			}
+		} else {
+			return fmt.Errorf("failed to update cloud %s environment: %w", envName, err), false
+		}
 	}
 
 	// Update local environment
