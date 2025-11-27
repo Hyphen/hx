@@ -142,7 +142,7 @@ func pullForApp(args []string, forceFlag bool) error {
 	}
 
 	if envName == "" { // ALL
-		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, secret, config, forceFlag)
+		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId, secret, config, forceFlag)
 		if err != nil {
 			return err
 		}
@@ -284,17 +284,24 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secret 
 	return nil
 }
 
-func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secret models.Secret, config config.Config, force bool) ([]string, error) {
+func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId string, secret models.Secret, config config.Config, force bool) ([]string, error) {
+	// Currently, api/organizations/:orgId/dot-envs returns all stored ENV files, even if the environment has been deleted
 	allEnvs, err := s.envService.ListEnvs(orgId, appId, 100, 1)
 	if err != nil {
 		return nil, err
 	}
+
+	// Get the current list of environments that doesn't include deleted ones
+	currentEnvironments, err := s.envService.ListEnvironments(orgId, projectId, 100, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filters out the environments that have been deleted
+	envsSansDeleted := filterEnvsByCurrentEnvironments(allEnvs, currentEnvironments)
+
 	var pulledEnvs []string
-	for _, e := range allEnvs {
-		envName := "default"
-		if e.ProjectEnv != nil {
-			envName = e.ProjectEnv.AlternateID
-		}
+	for _, envName := range envsSansDeleted {
 		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secret, config, force); err != nil {
 			if !Silent {
 				printer.Warning(fmt.Sprintf("Failed to pull environment %s: %s", envName, err))
@@ -305,6 +312,33 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secret mode
 
 	}
 	return pulledEnvs, nil
+}
+
+func filterEnvsByCurrentEnvironments(allEnvs []models.Env, validEnvironments []models.Environment) []string {
+	validEnvNames := make(map[string]bool)
+	for _, env := range validEnvironments {
+		validEnvNames[env.AlternateID] = true
+	}
+
+	var filteredEnvNames []string
+	for _, e := range allEnvs {
+		envName := "default"
+		if e.ProjectEnv != nil {
+			envName = e.ProjectEnv.AlternateID
+		}
+
+		// Skip environments that no longer exist (except "default" which always exists)
+		if envName != "default" && !validEnvNames[envName] {
+			if printer != nil {
+				printer.PrintVerbose(fmt.Sprintf("Skipping deleted environment: %s", envName))
+			}
+			continue
+		}
+
+		filteredEnvNames = append(filteredEnvNames, envName)
+	}
+
+	return filteredEnvNames
 }
 
 func printPullSummary(pulledEnvs []string) {
