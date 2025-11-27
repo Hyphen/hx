@@ -316,14 +316,17 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId string, 
 	// ListEnvironments but not in ListEnvs (new environments with no secrets pushed yet)
 	missingEnvs := findMissingEnvironments(allEnvs, currentEnvironments)
 	for _, envName := range missingEnvs {
-		printer.PrintVerbose(fmt.Sprintf("Creating empty .env file for new environment %s", envName))
-		if err := createEmptyEnvFile(envName, force); err != nil {
+		created, err := createEmptyEnvFile(envName)
+		if err != nil {
 			if !Silent {
 				printer.Warning(fmt.Sprintf("Failed to create empty environment file for %s: %s", envName, err))
 			}
 			continue
 		}
-		pulledEnvs = append(pulledEnvs, envName)
+		if created {
+			printer.PrintVerbose(fmt.Sprintf("Creating empty .env file for new environment %s", envName))
+			pulledEnvs = append(pulledEnvs, envName)
+		}
 	}
 
 	return pulledEnvs, nil
@@ -357,7 +360,7 @@ func filterEnvsByCurrentEnvironments(allEnvs []models.Env, validEnvironments []m
 }
 
 // findMissingEnvironments returns environments that exist in currentEnvironments but not in allEnvs.
-// These are new environments that have no secrets pushed yet.
+// These are new environments that have no secrets pushed yet (see apix#1599).
 func findMissingEnvironments(allEnvs []models.Env, currentEnvironments []models.Environment) []string {
 	// Build a set of env names that have env files
 	existingEnvNames := make(map[string]bool)
@@ -381,20 +384,22 @@ func findMissingEnvironments(allEnvs []models.Env, currentEnvironments []models.
 }
 
 // createEmptyEnvFile creates an empty .env file for the given environment name.
-func createEmptyEnvFile(envName string, force bool) error {
+// Returns (created bool, err error) - created is true if file was created, false if it already existed.
+func createEmptyEnvFile(envName string) (bool, error) {
 	envFileName, err := env.GetFileName(envName)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	_, err = os.Stat(envFileName)
 	fileExists := !os.IsNotExist(err)
 
-	if fileExists && !force {
-		return fmt.Errorf("file %s already exists, use --force to overwrite", envFileName)
+	if fileExists {
+		// File already exists, skip without error
+		return false, nil
 	}
 
-	return os.WriteFile(envFileName, []byte(""), 0644)
+	return true, os.WriteFile(envFileName, []byte(""), 0644)
 }
 
 func printPullSummary(pulledEnvs []string) {

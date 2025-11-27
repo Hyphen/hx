@@ -181,15 +181,16 @@ func TestCreateEmptyEnvFile(t *testing.T) {
 		os.Chdir(tempDir)
 		t.Cleanup(func() { os.Chdir(originalDir) })
 
-		err := createEmptyEnvFile("staging", false)
+		created, err := createEmptyEnvFile("staging")
 
 		assert.NoError(t, err)
+		assert.True(t, created)
 		content, err := os.ReadFile(filepath.Join(tempDir, ".env.staging"))
 		assert.NoError(t, err)
 		assert.Equal(t, "", string(content))
 	})
 
-	t.Run("returns_error_when_file_exists_and_force_is_false", func(t *testing.T) {
+	t.Run("returns_false_when_file_already_exists", func(t *testing.T) {
 		tempDir := t.TempDir()
 		originalDir, _ := os.Getwd()
 		os.Chdir(tempDir)
@@ -198,27 +199,13 @@ func TestCreateEmptyEnvFile(t *testing.T) {
 		// Create existing file
 		os.WriteFile(filepath.Join(tempDir, ".env.staging"), []byte("existing"), 0644)
 
-		err := createEmptyEnvFile("staging", false)
-
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "already exists")
-	})
-
-	t.Run("overwrites_file_when_force_is_true", func(t *testing.T) {
-		tempDir := t.TempDir()
-		originalDir, _ := os.Getwd()
-		os.Chdir(tempDir)
-		t.Cleanup(func() { os.Chdir(originalDir) })
-
-		// Create existing file with content
-		os.WriteFile(filepath.Join(tempDir, ".env.staging"), []byte("existing content"), 0644)
-
-		err := createEmptyEnvFile("staging", true)
+		created, err := createEmptyEnvFile("staging")
 
 		assert.NoError(t, err)
-		content, err := os.ReadFile(filepath.Join(tempDir, ".env.staging"))
-		assert.NoError(t, err)
-		assert.Equal(t, "", string(content))
+		assert.False(t, created)
+		// Original content should be preserved
+		content, _ := os.ReadFile(filepath.Join(tempDir, ".env.staging"))
+		assert.Equal(t, "existing", string(content))
 	})
 
 	t.Run("creates_dot_env_file_for_default_environment", func(t *testing.T) {
@@ -227,9 +214,10 @@ func TestCreateEmptyEnvFile(t *testing.T) {
 		os.Chdir(tempDir)
 		t.Cleanup(func() { os.Chdir(originalDir) })
 
-		err := createEmptyEnvFile("default", false)
+		created, err := createEmptyEnvFile("default")
 
 		assert.NoError(t, err)
+		assert.True(t, created)
 		content, err := os.ReadFile(filepath.Join(tempDir, ".env"))
 		assert.NoError(t, err)
 		assert.Equal(t, "", string(content))
