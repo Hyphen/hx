@@ -324,7 +324,7 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId string, 
 			continue
 		}
 		if created {
-			printer.PrintVerbose(fmt.Sprintf("Creating empty .env file for new environment %s", envName))
+			printer.PrintVerbose(fmt.Sprintf("Creating empty .env file for missing new environment %s", envName))
 			pulledEnvs = append(pulledEnvs, envName)
 		}
 	}
