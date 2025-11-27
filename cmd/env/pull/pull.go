@@ -142,7 +142,7 @@ func pullForApp(args []string, forceFlag bool) error {
 	}
 
 	if envName == "" { // ALL
-		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, secret, config, forceFlag)
+		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId, secret, config, forceFlag)
 		if err != nil {
 			return err
 		}
@@ -284,17 +284,24 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secret 
 	return nil
 }
 
-func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secret models.Secret, config config.Config, force bool) ([]string, error) {
+func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId string, secret models.Secret, config config.Config, force bool) ([]string, error) {
+	// Currently, api/organizations/:orgId/dot-envs returns all stored ENV files, even if the environment has been deleted
 	allEnvs, err := s.envService.ListEnvs(orgId, appId, 100, 1)
 	if err != nil {
 		return nil, err
 	}
+
+	// Get the current list of environments that doesn't include deleted ones
+	currentEnvironments, err := s.envService.ListEnvironments(orgId, projectId, 100, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filters out the environments that have been deleted
+	envsSansDeleted := filterEnvsByCurrentEnvironments(allEnvs, currentEnvironments)
+
 	var pulledEnvs []string
-	for _, e := range allEnvs {
-		envName := "default"
-		if e.ProjectEnv != nil {
-			envName = e.ProjectEnv.AlternateID
-		}
+	for _, envName := range envsSansDeleted {
 		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secret, config, force); err != nil {
 			if !Silent {
 				printer.Warning(fmt.Sprintf("Failed to pull environment %s: %s", envName, err))
@@ -304,7 +311,95 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId string, secret mode
 		pulledEnvs = append(pulledEnvs, envName)
 
 	}
+
+	// Workaround for apix#1599: Create empty env files for environments that exist in
+	// ListEnvironments but not in ListEnvs (new environments with no secrets pushed yet)
+	missingEnvs := findMissingEnvironments(allEnvs, currentEnvironments)
+	for _, envName := range missingEnvs {
+		created, err := createEmptyEnvFile(envName)
+		if err != nil {
+			if !Silent {
+				printer.Warning(fmt.Sprintf("Failed to create empty environment file for %s: %s", envName, err))
+			}
+			continue
+		}
+		if created {
+			printer.PrintVerbose(fmt.Sprintf("Creating empty .env file for missing new environment %s", envName))
+			pulledEnvs = append(pulledEnvs, envName)
+		}
+	}
+
 	return pulledEnvs, nil
+}
+
+func filterEnvsByCurrentEnvironments(allEnvs []models.Env, validEnvironments []models.Environment) []string {
+	validEnvNames := make(map[string]bool)
+	for _, env := range validEnvironments {
+		validEnvNames[env.AlternateID] = true
+	}
+
+	var filteredEnvNames []string
+	for _, e := range allEnvs {
+		envName := "default"
+		if e.ProjectEnv != nil {
+			envName = e.ProjectEnv.AlternateID
+		}
+
+		// Skip environments that no longer exist (except "default" which always exists)
+		if envName != "default" && !validEnvNames[envName] {
+			if printer != nil {
+				printer.PrintVerbose(fmt.Sprintf("Skipping deleted environment: %s", envName))
+			}
+			continue
+		}
+
+		filteredEnvNames = append(filteredEnvNames, envName)
+	}
+
+	return filteredEnvNames
+}
+
+// findMissingEnvironments returns environments that exist in currentEnvironments but not in allEnvs.
+// These are new environments that have no secrets pushed yet (see apix#1599).
+func findMissingEnvironments(allEnvs []models.Env, currentEnvironments []models.Environment) []string {
+	// Build a set of env names that have env files
+	existingEnvNames := make(map[string]bool)
+	for _, e := range allEnvs {
+		envName := "default"
+		if e.ProjectEnv != nil {
+			envName = e.ProjectEnv.AlternateID
+		}
+		existingEnvNames[envName] = true
+	}
+
+	// Find environments that don't have env files yet
+	var missingEnvs []string
+	for _, env := range currentEnvironments {
+		if !existingEnvNames[env.AlternateID] {
+			missingEnvs = append(missingEnvs, env.AlternateID)
+		}
+	}
+
+	return missingEnvs
+}
+
+// createEmptyEnvFile creates an empty .env file for the given environment name.
+// Returns (created bool, err error) - created is true if file was created, false if it already existed.
+func createEmptyEnvFile(envName string) (bool, error) {
+	envFileName, err := env.GetFileName(envName)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = os.Stat(envFileName)
+	fileExists := !os.IsNotExist(err)
+
+	if fileExists {
+		// File already exists, skip without error
+		return false, nil
+	}
+
+	return true, os.WriteFile(envFileName, []byte(""), 0644)
 }
 
 func printPullSummary(pulledEnvs []string) {
