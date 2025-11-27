@@ -33,18 +33,32 @@ type LogMessageData struct {
 // Define the second data type (new structure)
 type RunMessageData struct {
 	Type   string `json:"type"`
-	RunId  string `json:"RunId"`
+	RunId  string `json:"runId"`
 	Id     string `json:"id"`
 	Status string `json:"status"`
 }
 
+type ErrorMessage struct {
+	Error error
+}
+
+type WaitingTickMessage struct{}
+
+type VerboseMessage struct {
+	Content string
+}
+
 type StatusModel struct {
-	Pipeline       models.DeploymentPipeline
-	OrganizationId string
-	DeploymentId   string
-	RunId          string
-	Service        DeploymentService
-	AppUrl         string
+	Pipeline        models.DeploymentPipeline
+	OrganizationId  string
+	DeploymentId    string
+	RunId           string
+	Service         DeploymentService
+	AppUrl          string
+	Error           error
+	WaitingSeconds  int
+	VerboseMode     bool
+	VerboseMessages []string
 }
 
 var (
@@ -67,21 +81,25 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		spinIcon, cmd = spinIcon.Update(msg)
 		return m, cmd
+	case WaitingTickMessage:
+		m.WaitingSeconds++
+		return m, nil
+	case VerboseMessage:
+		m.VerboseMessages = append(m.VerboseMessages, msg.Content)
+		return m, nil
+	case ErrorMessage:
+		m.Error = msg.Error
+		return m, tea.Quit
 	case RunMessageData:
-		switch msg.Type {
-		case "run":
-			if msg.Status == "pending" {
-				// Update the top-level run variable
-				run, _ := m.Service.GetDeploymentRun(m.OrganizationId, m.DeploymentId, msg.RunId)
+		// Fetch pipeline if we don't have it yet (on any message type)
+		if len(m.Pipeline.Steps) == 0 {
+			run, _ := m.Service.GetDeploymentRun(m.OrganizationId, m.DeploymentId, m.RunId)
+			if run != nil {
 				m.Pipeline = run.Pipeline
 			}
-			// if msg.Status == "succeeded" || msg.Status == "failed" || msg.Status == "canceled" {
-			// 	return m, tea.Quit
-			// }
-			m.UpdateStatusForId(msg.Id, msg.Status)
-		case "step":
-			m.UpdateStatusForId(msg.Id, msg.Status)
-		case "task":
+		}
+		// Only update status if we have a pipeline
+		if len(m.Pipeline.Steps) > 0 {
 			m.UpdateStatusForId(msg.Id, msg.Status)
 		}
 	}
@@ -93,7 +111,29 @@ func (m StatusModel) View() string {
 	result := "-------------------------------------------------\n"
 	result += m.AppUrl + "\n"
 	result += "-------------------------------------------------\n"
+
+	if len(m.Pipeline.Steps) == 0 {
+		if m.VerboseMode {
+			result += fmt.Sprintf("%s Waiting for deployment status... (%ds)\n", spinIcon.View(), m.WaitingSeconds)
+		} else {
+			result += fmt.Sprintf("%s Waiting for deployment status...\n", spinIcon.View())
+		}
+	}
+
+	if m.VerboseMode && len(m.VerboseMessages) > 0 {
+		result += "\nVerbose messages:\n"
+		for _, msg := range m.VerboseMessages {
+			result += fmt.Sprintf("  %s\n", msg)
+		}
+		result += "\n"
+	}
+
 	result += m.RenderTree(m.Pipeline)
+
+	if m.Error != nil {
+		result += fmt.Sprintf("\n❗error: %v\n", m.Error)
+	}
+
 	return result
 }
 

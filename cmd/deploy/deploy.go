@@ -3,6 +3,8 @@ package deploy
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/Hyphen/cli/internal/build"
 	Deployment "github.com/Hyphen/cli/internal/deployment"
@@ -15,6 +17,7 @@ import (
 	"github.com/Hyphen/cli/pkg/prompt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -121,84 +124,282 @@ Use 'hyphen deploy --help' for more information about available flags.
 			return fmt.Errorf("failed to create run: %w", err)
 		}
 
-		statusModel := Deployment.StatusModel{
-			OrganizationId: orgId,
-			DeploymentId:   selectedDeployment.ID,
-			RunId:          run.ID,
-			Pipeline:       run.Pipeline,
-			Service:        *service,
-			AppUrl:         fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID),
+		appUrl := fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID)
+
+		if shouldUseTUI() {
+			runWithTUI(cmd, orgId, selectedDeployment.ID, run, appUrl, service)
+		} else {
+			runWithoutTUI(cmd, orgId, selectedDeployment.ID, run.ID, appUrl, service)
 		}
-		statusDisplay := tea.NewProgram(statusModel)
 
-		go func() {
-			client := httputil.NewHyphenHTTPClient()
-			url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
-			conn, err := client.GetWebsocketConnection(url)
-			if err != nil {
-				printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
-				return
+		return nil
+	},
+}
+
+func shouldUseTUI() bool {
+	return term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+func runWithTUI(cmd *cobra.Command, orgId, deploymentId string, run *models.DeploymentRun, appUrl string, service *Deployment.DeploymentService) {
+	statusModel := Deployment.StatusModel{
+		OrganizationId: orgId,
+		DeploymentId:   deploymentId,
+		RunId:          run.ID,
+		Pipeline:       run.Pipeline,
+		Service:        *service,
+		AppUrl:         appUrl,
+		VerboseMode:    flags.VerboseFlag,
+	}
+	statusDisplay := tea.NewProgram(statusModel)
+
+	// This initial run call, in addition to opening the WebSocket connection, handles the case that the pipeline is already running before we establish the WebSocket connection, and therefore would otherwise mis the run message.
+	go func() {
+		initialRun, err := service.GetDeploymentRun(orgId, deploymentId, run.ID)
+		if err == nil && initialRun != nil {
+			if flags.VerboseFlag {
+				statusDisplay.Send(Deployment.VerboseMessage{
+					Content: fmt.Sprintf("Initial run check: Status=%s, Steps=%d", initialRun.Status, len(initialRun.Pipeline.Steps)),
+				})
 			}
-			defer conn.Close()
-			conn.WriteJSON(
-				map[string]interface{}{
-					"eventStreamTopic": "deploymentRun",
-					"organizationId":   orgId,
-				},
-			)
-		messageListener:
-			for {
-				_, message, err := conn.ReadMessage()
-				if err != nil {
-					printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
-					break
+			statusDisplay.Send(Deployment.RunMessageData{
+				Type:   "run",
+				RunId:  initialRun.ID,
+				Id:     initialRun.ID,
+				Status: initialRun.Status,
+			})
+		}
+	}()
+
+	// Ticker to update waiting seconds
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			statusDisplay.Send(Deployment.WaitingTickMessage{})
+		}
+	}()
+
+	go func() {
+		client := httputil.NewHyphenHTTPClient()
+		url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
+		conn, err := client.GetWebsocketConnection(url)
+		if err != nil {
+			statusDisplay.Send(Deployment.ErrorMessage{Error: fmt.Errorf("failed to connect to WebSocket: %w", err)})
+			return
+		}
+		defer conn.Close()
+
+		if flags.VerboseFlag {
+			statusDisplay.Send(Deployment.VerboseMessage{Content: "WebSocket connected"})
+		}
+
+		// Set up ping/pong handlers to keep connection alive
+		conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
+		conn.SetPongHandler(func(string) error {
+			conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
+			return nil
+		})
+
+		conn.WriteJSON(
+			map[string]interface{}{
+				"eventStreamTopic": "deploymentRun",
+				"organizationId":   orgId,
+			},
+		)
+	messageListener:
+		for {
+			_, message, err := conn.ReadMessage()
+			if err != nil {
+				if flags.VerboseFlag {
+					statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("WebSocket error: %v", err)})
 				}
 
-				var wsMessage Deployment.WebSocketMessage
-				err = json.Unmarshal(message, &wsMessage)
-				if err != nil {
-					continue
-				}
-
-				var typeCheck map[string]interface{}
-				err = json.Unmarshal(wsMessage.Data, &typeCheck)
-				if err != nil {
-					printer.Error(cmd, fmt.Errorf("error unmarshalling Data for type check: %w", err))
-					continue
-				}
-
-				if _, ok := typeCheck["level"]; ok {
-					var data Deployment.LogMessageData
-					err = json.Unmarshal(wsMessage.Data, &data)
-					if err != nil {
-						continue
+				// Check current deployment state via API
+				currentRun, apiErr := service.GetDeploymentRun(orgId, deploymentId, run.ID)
+				if apiErr == nil && currentRun != nil {
+					if flags.VerboseFlag {
+						statusDisplay.Send(Deployment.VerboseMessage{
+							Content: fmt.Sprintf("Status via API after WebSocket error: %s", currentRun.Status),
+						})
 					}
 
-					// TODO: this should go in a second pane or something
-					// timestamp := time.UnixMilli(data.Timestamp)
-					// formattedTime := timestamp.Format("15:04:05")
-					// log := fmt.Sprintf("[%s] %s: %s", formattedTime, data.Level, data.Message)
-					// printer.PrintVerbose(log)
-				} else if _, ok := typeCheck["type"]; ok {
-					var data Deployment.RunMessageData
-					err = json.Unmarshal(wsMessage.Data, &data)
-					if err != nil {
-						continue
-					}
+					// Update the model with the latest data from API
+					statusDisplay.Send(Deployment.RunMessageData{
+						Type:   "run",
+						RunId:  currentRun.ID,
+						Id:     currentRun.ID,
+						Status: currentRun.Status,
+					})
 
-					statusDisplay.Send(data)
-
-					if data.Type == "run" && (data.Status == "succeeded" || data.Status == "failed" || data.Status == "canceled") {
+					// If deployment is complete, quit gracefully
+					if currentRun.Status == "succeeded" || currentRun.Status == "failed" || currentRun.Status == "canceled" {
+						if flags.VerboseFlag {
+							statusDisplay.Send(Deployment.VerboseMessage{
+								Content: fmt.Sprintf("Deployment showed complete via API: %s", currentRun.Status),
+							})
+						}
 						statusDisplay.Quit()
 						break messageListener
 					}
 				}
-			}
-		}()
-		statusDisplay.Run()
 
+				// Deployment not complete or API failed, report the WebSocket error
+				statusDisplay.Send(Deployment.ErrorMessage{Error: fmt.Errorf("error reading WebSocket message: %w", err)})
+				break
+			}
+
+			// Reset read deadline on successful message
+			conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
+
+			// TODO: For now, log every WebSocket message in verbose mode, but remove once everything is finally working
+			if flags.VerboseFlag {
+				statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("WebSocket Message: %s", string(message))})
+			}
+
+			var wsMessage Deployment.WebSocketMessage
+			err = json.Unmarshal(message, &wsMessage)
+			if err != nil {
+				continue
+			}
+
+			var typeCheck map[string]interface{}
+			err = json.Unmarshal(wsMessage.Data, &typeCheck)
+			if err != nil {
+				printer.Error(cmd, fmt.Errorf("error unmarshalling Data for type check: %w", err))
+				continue
+			}
+
+			if _, ok := typeCheck["level"]; ok {
+				var data Deployment.LogMessageData
+				err = json.Unmarshal(wsMessage.Data, &data)
+				if err != nil {
+					continue
+				}
+				if flags.VerboseFlag {
+					statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Log [%s]: %s", data.Level, data.Message)})
+				}
+			} else if _, ok := typeCheck["type"]; ok {
+				var data Deployment.RunMessageData
+				err = json.Unmarshal(wsMessage.Data, &data)
+				if err != nil {
+					continue
+				}
+
+				if flags.VerboseFlag {
+					statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("RunMessage: Type=%s, Id=%s, Status=%s", data.Type, data.Id, data.Status)})
+				}
+
+				statusDisplay.Send(data)
+
+				if data.Type == "run" && (data.Status == "succeeded" || data.Status == "failed" || data.Status == "canceled") {
+					if flags.VerboseFlag {
+						statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Deployment reached terminal status: %s", data.Status)})
+					}
+					statusDisplay.Quit()
+					break messageListener
+				}
+			}
+		}
+	}()
+	statusDisplay.Run()
+}
+
+func runWithoutTUI(cmd *cobra.Command, orgId string, deploymentId string, runId string, appUrl string, service *Deployment.DeploymentService) {
+	printer.Print(fmt.Sprintf("Deployment URL: %s", appUrl))
+	printer.Print("Monitoring deployment progress...")
+
+	client := httputil.NewHyphenHTTPClient()
+	url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
+
+	conn, err := client.GetWebsocketConnection(url)
+	if err != nil {
+		printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
+		return
+	}
+	defer conn.Close()
+
+	// Set up ping/pong handlers to keep connection alive
+	conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
 		return nil
-	},
+	})
+
+	conn.WriteJSON(
+		map[string]any{
+			"eventStreamTopic": "deploymentRun",
+			"organizationId":   orgId,
+		},
+	)
+
+	for {
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			// Check current deployment state via API
+			currentRun, apiErr := service.GetDeploymentRun(orgId, deploymentId, runId)
+			if apiErr == nil && currentRun != nil {
+				// If deployment is complete, report that status instead of the error
+				switch currentRun.Status {
+				case "succeeded":
+					printer.Success("Deployment completed successfully")
+					return
+				case "failed":
+					printer.Error(cmd, fmt.Errorf("deployment failed"))
+					return
+				case "canceled":
+					printer.Warning("Deployment was canceled")
+					return
+				}
+			}
+
+			// Deployment not complete or API failed, report the WebSocket error
+			printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
+			return
+		}
+
+		// Reset read deadline on successful message
+		conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
+
+		var wsMessage Deployment.WebSocketMessage
+		err = json.Unmarshal(message, &wsMessage)
+		if err != nil {
+			continue
+		}
+
+		var typeCheck map[string]interface{}
+		err = json.Unmarshal(wsMessage.Data, &typeCheck)
+		if err != nil {
+			continue
+		}
+
+		if _, ok := typeCheck["type"]; ok {
+			var data Deployment.RunMessageData
+			err = json.Unmarshal(wsMessage.Data, &data)
+			if err != nil {
+				continue
+			}
+
+			// Print status updates
+			switch data.Type {
+			case "step", "task":
+				printer.Print(fmt.Sprintf("  %s: %s", data.Type, data.Status))
+			case "run":
+				printer.Print(fmt.Sprintf("Deployment: %s", data.Status))
+
+				switch data.Status {
+				case "succeeded":
+					printer.Success("Deployment completed successfully")
+					return
+				case "failed":
+					printer.Error(cmd, fmt.Errorf("deployment failed"))
+					return
+				case "canceled":
+					printer.Warning("Deployment was canceled")
+					return
+				}
+			}
+		}
+	}
 }
 
 func FindStepOrTaskByID(pipeline models.DeploymentPipeline, id string) (interface{}, bool) {
