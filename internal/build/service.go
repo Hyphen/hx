@@ -133,7 +133,7 @@ func (bs *BuildService) FindRegistryConnection(organizationId, projectId string)
 
 }
 
-func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string, verbose bool) (*models.Build, error) {
+func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string, verbose bool, dockerfilePath string) (*models.Build, error) {
 	// grab the manifest to get app details
 	config, err := config.RestoreConfig()
 	if err != nil {
@@ -153,16 +153,25 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string,
 
 	// Try to find a docker file to run
 	printer.PrintVerbose("Looking for Docker File")
-	dockerfilePath, err := dockerutil.FindDockerFile()
-	if err != nil || dockerfilePath == "" {
-		coder := code.NewService()
-		err = coder.GenerateDocker(printer, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate docker file: %w", err)
+	var dockerfilePathOrDir string
+	if dockerfilePath != "" {
+		// Use the provided dockerfile path (file)
+		printer.PrintVerbose(fmt.Sprintf("Using provided dockerfile path: %s", dockerfilePath))
+		dockerfilePathOrDir = dockerfilePath
+	} else {
+		// Search for dockerfile automatically (returns directory)
+		dockerfileDir, err := dockerutil.FindDockerFile()
+		if err != nil || dockerfileDir == "" {
+			coder := code.NewService()
+			err = coder.GenerateDocker(printer, nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate docker file: %w", err)
+			}
+			dockerfileDir, _ = dockerutil.FindDockerFile()
 		}
-		dockerfilePath, _ = dockerutil.FindDockerFile()
+		dockerfilePathOrDir = dockerfileDir
 	}
-	printer.PrintVerbose(fmt.Sprintf("found docker file at %s", dockerfilePath))
+	printer.PrintVerbose(fmt.Sprintf("found docker file at %s", dockerfilePathOrDir))
 
 	containerRegistry, err := bs.FindRegistryConnection(config.OrganizationId, *config.ProjectId)
 	if err != nil {
@@ -178,7 +187,7 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string,
 
 	// Run build on the docker file
 	printer.Print(fmt.Sprintf("Building %s", *config.AppAlternateId))
-	name, _, err := dockerutil.Build(dockerfilePath, *config.AppAlternateId, commitSha, verbose)
+	name, _, err := dockerutil.Build(dockerfilePathOrDir, *config.AppAlternateId, commitSha, verbose)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build docker image: %w", err)
 	}

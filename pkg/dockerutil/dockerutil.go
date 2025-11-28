@@ -88,21 +88,34 @@ func IsLoggedIn(registryUrl string) bool {
 	return false
 }
 
-func Build(dockerFilePath, name, tag string, verbose bool) (string, string, error) {
+func Build(dockerFilePathOrDir, name, tag string, verbose bool) (string, string, error) {
 	var nameTag = name
 	if tag != "" {
 		nameTag = name + ":" + tag
 	}
 	// TODO: consider allowing platform to be passed in. However, the most common
 	// supported platform in the clouds is linux/amd64
-	cmd := exec.Command("docker", "build", "--platform", "linux/amd64", "-t", nameTag, dockerFilePath)
+
+	var args []string
+	fileInfo, err := os.Stat(dockerFilePathOrDir)
+	if err == nil && !fileInfo.IsDir() {
+		// dockerFilePathOrDir is a file (from --dockerfile flag)
+		// Use -f flag and current directory as context
+		args = []string{"build", "--platform", "linux/amd64", "-f", dockerFilePathOrDir, "-t", nameTag, "."}
+	} else {
+		// dockerFilePathOrDir is a directory (from FindDockerFile)
+		// Use directory as context, Docker will find Dockerfile automatically
+		args = []string{"build", "--platform", "linux/amd64", "-t", nameTag, dockerFilePathOrDir}
+	}
+
+	cmd := exec.Command("docker", args...)
 
 	if verbose {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		return "", "", err
 	}
