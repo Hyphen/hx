@@ -1,8 +1,8 @@
 package deploy
 
 import (
-	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/Hyphen/cli/internal/build"
 	Deployment "github.com/Hyphen/cli/internal/deployment"
@@ -11,8 +11,8 @@ import (
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
-	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/Hyphen/cli/pkg/prompt"
+	"github.com/Hyphen/cli/pkg/socketio"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
@@ -131,71 +131,74 @@ Use 'hyphen deploy --help' for more information about available flags.
 		}
 		statusDisplay := tea.NewProgram(statusModel)
 
+		var wg sync.WaitGroup
+		wg.Add(1)
+
 		go func() {
-			client := httputil.NewHyphenHTTPClient()
-			url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
-			conn, err := client.GetWebsocketConnection(url)
-			if err != nil {
-				printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
+			defer wg.Done()
+
+			ioService := socketio.NewService()
+			if err := ioService.Connect(orgId); err != nil {
+				printer.Error(cmd, fmt.Errorf("failed to connect to Socket.io: %w", err))
 				return
 			}
-			defer conn.Close()
-			conn.WriteJSON(
-				map[string]interface{}{
-					"eventStreamTopic": "deploymentRun",
-					"organizationId":   orgId,
-				},
-			)
-		messageListener:
-			for {
-				_, message, err := conn.ReadMessage()
-				if err != nil {
-					printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
-					break
+			defer ioService.Disconnect()
+
+			done := make(chan struct{})
+
+			ioService.On("Event:Run", func(args ...any) {
+				if len(args) == 0 {
+					return
 				}
 
-				var wsMessage Deployment.WebSocketMessage
-				err = json.Unmarshal(message, &wsMessage)
-				if err != nil {
-					continue
+				payload, ok := args[0].(map[string]any)
+				if !ok {
+					return
 				}
 
-				var typeCheck map[string]interface{}
-				err = json.Unmarshal(wsMessage.Data, &typeCheck)
-				if err != nil {
-					printer.Error(cmd, fmt.Errorf("error unmarshalling Data for type check: %w", err))
-					continue
+				runId, _ := payload["runId"].(string)
+				if runId != run.ID {
+					return
 				}
 
-				if _, ok := typeCheck["level"]; ok {
-					var data Deployment.LogMessageData
-					err = json.Unmarshal(wsMessage.Data, &data)
-					if err != nil {
-						continue
-					}
-
-					// TODO: this should go in a second pane or something
-					// timestamp := time.UnixMilli(data.Timestamp)
-					// formattedTime := timestamp.Format("15:04:05")
-					// log := fmt.Sprintf("[%s] %s: %s", formattedTime, data.Level, data.Message)
-					// printer.PrintVerbose(log)
-				} else if _, ok := typeCheck["type"]; ok {
-					var data Deployment.RunMessageData
-					err = json.Unmarshal(wsMessage.Data, &data)
-					if err != nil {
-						continue
-					}
-
-					statusDisplay.Send(data)
-
-					if data.Type == "run" && (data.Status == "succeeded" || data.Status == "failed" || data.Status == "canceled") {
-						statusDisplay.Quit()
-						break messageListener
-					}
+				data, ok := payload["data"].(map[string]any)
+				if !ok {
+					return
 				}
-			}
+
+				msgType, _ := data["type"].(string)
+				status, _ := data["status"].(string)
+				id, _ := data["id"].(string)
+
+				statusDisplay.Send(Deployment.RunMessageData{
+					Type:   msgType,
+					RunId:  runId,
+					Id:     id,
+					Status: status,
+				})
+
+				if msgType == "run" && (status == "succeeded" || status == "failed" || status == "canceled") {
+					statusDisplay.Quit()
+					close(done)
+				}
+			})
+
+			// Start log streaming
+			ioService.Emit("Stream:RunLog:Start", map[string]any{
+				"runId": run.ID,
+			})
+
+			// Wait for completion or context cancellation
+			<-done
+
+			// Stop log streaming
+			ioService.Emit("Stream:RunLog:Stop", map[string]any{
+				"runId": run.ID,
+			})
 		}()
+
 		statusDisplay.Run()
+		wg.Wait()
 
 		return nil
 	},
