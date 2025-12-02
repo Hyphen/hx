@@ -98,6 +98,8 @@ Use 'hyphen deploy --help' for more information about available flags.
 		if noBuild {
 			// check for build ID
 		} else {
+			// TODO: right now we are only supporting building one app at a time
+			// we'll need to come back and fix this SOON
 			firstApp := selectedDeployment.Apps[0]
 
 			service := build.NewService()

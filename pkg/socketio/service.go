@@ -80,9 +80,6 @@ func (s *Service) Connect(orgId string) error {
 		s.mu.Lock()
 		s.connected = true
 		s.mu.Unlock()
-		if flags.VerboseFlag {
-			fmt.Println("[Socket.io] Connected")
-		}
 		close(s.connectedCh)
 	})
 
