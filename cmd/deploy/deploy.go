@@ -166,32 +166,33 @@ Use 'hyphen deploy --help' for more information about available flags.
 					return
 				}
 
-				msgType, _ := data["type"].(string)
-				status, _ := data["status"].(string)
-				id, _ := data["id"].(string)
+				runStatus, _ := data["status"].(string)
+				if runStatus != "" {
+					statusDisplay.Send(Deployment.RunMessageData{
+						Type:   "run",
+						RunId:  runId,
+						Id:     runId,
+						Status: runStatus,
+					})
 
-				statusDisplay.Send(Deployment.RunMessageData{
-					Type:   msgType,
-					RunId:  runId,
-					Id:     id,
-					Status: status,
-				})
+					if runStatus == "succeeded" || runStatus == "failed" || runStatus == "canceled" {
+						statusDisplay.Quit()
+						close(done)
+						return
+					}
+				}
 
-				if msgType == "run" && (status == "succeeded" || status == "failed" || status == "canceled") {
-					statusDisplay.Quit()
-					close(done)
+				if pipelineData, ok := data["pipeline"].(map[string]any); ok {
+					extractStatusUpdates(pipelineData, runId, statusDisplay)
 				}
 			})
 
-			// Start log streaming
 			ioService.Emit("Stream:RunLog:Start", map[string]any{
 				"runId": run.ID,
 			})
 
-			// Wait for completion or context cancellation
 			<-done
 
-			// Stop log streaming
 			ioService.Emit("Stream:RunLog:Stop", map[string]any{
 				"runId": run.ID,
 			})
@@ -204,24 +205,74 @@ Use 'hyphen deploy --help' for more information about available flags.
 	},
 }
 
+func extractStatusUpdates(data map[string]any, runId string, statusDisplay *tea.Program) {
+	if steps, ok := data["steps"].([]any); ok {
+		for _, stepRaw := range steps {
+			step, ok := stepRaw.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			stepId, _ := step["id"].(string)
+			stepStatus, _ := step["status"].(string)
+
+			if stepId != "" && stepStatus != "" {
+				statusDisplay.Send(Deployment.RunMessageData{
+					Type:   "step",
+					RunId:  runId,
+					Id:     stepId,
+					Status: stepStatus,
+				})
+			}
+
+			if tasks, ok := step["tasks"].([]any); ok {
+				for _, taskRaw := range tasks {
+					task, ok := taskRaw.(map[string]any)
+					if !ok {
+						continue
+					}
+
+					taskId, _ := task["id"].(string)
+					taskStatus, _ := task["status"].(string)
+
+					if taskId != "" && taskStatus != "" {
+						statusDisplay.Send(Deployment.RunMessageData{
+							Type:   "task",
+							RunId:  runId,
+							Id:     taskId,
+							Status: taskStatus,
+						})
+					}
+				}
+			}
+
+			if parallelSteps, ok := step["parallelSteps"].([]any); ok {
+				for _, psRaw := range parallelSteps {
+					ps, ok := psRaw.(map[string]any)
+					if !ok {
+						continue
+					}
+					extractStatusUpdates(map[string]any{"steps": []any{ps}}, runId, statusDisplay)
+				}
+			}
+		}
+	}
+}
+
 func FindStepOrTaskByID(pipeline models.DeploymentPipeline, id string) (interface{}, bool) {
-	// Helper function to recursively search steps
 	var searchSteps func(steps []models.DeploymentStep) (interface{}, bool)
 	searchSteps = func(steps []models.DeploymentStep) (interface{}, bool) {
 		for _, step := range steps {
-			// Check if the current step matches the ID
 			if step.ID == id {
 				return step, true
 			}
 
-			// Check tasks within the step
 			for _, task := range step.Tasks {
 				if task.ID == id {
 					return task, true
 				}
 			}
 
-			// Recursively search in parallel steps
 			if result, found := searchSteps(step.ParallelSteps); found {
 				return result, true
 			}
@@ -229,7 +280,6 @@ func FindStepOrTaskByID(pipeline models.DeploymentPipeline, id string) (interfac
 		return nil, false
 	}
 
-	// Start searching from the top-level steps
 	return searchSteps(pipeline.Steps)
 }
 
