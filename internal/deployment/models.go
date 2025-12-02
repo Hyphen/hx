@@ -70,15 +70,16 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case RunMessageData:
 		switch msg.Type {
 		case "run":
-			if msg.Status == "pending" {
-				// Update the top-level run variable
-				run, _ := m.Service.GetDeploymentRun(m.OrganizationId, m.DeploymentId, msg.RunId)
-				m.Pipeline = run.Pipeline
+			if len(m.Pipeline.Steps) == 0 {
+				run, err := m.Service.GetDeploymentRun(m.OrganizationId, m.DeploymentId, msg.RunId)
+				if err == nil {
+					m.Pipeline = run.Pipeline
+				}
 			}
-			// if msg.Status == "succeeded" || msg.Status == "failed" || msg.Status == "canceled" {
-			// 	return m, tea.Quit
-			// }
 			m.UpdateStatusForId(msg.Id, msg.Status)
+			if msg.Status == "succeeded" || msg.Status == "failed" || msg.Status == "canceled" {
+				return m, tea.Quit
+			}
 		case "step":
 			m.UpdateStatusForId(msg.Id, msg.Status)
 		case "task":
