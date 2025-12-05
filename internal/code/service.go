@@ -3,15 +3,15 @@ package code
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/run"
-	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/gitutil"
-	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/Hyphen/cli/pkg/prompt"
+	"github.com/Hyphen/cli/pkg/socketio"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
@@ -64,51 +64,58 @@ func (cs *CodeService) GenerateDocker(printer *cprint.CPrinter, cmd *cobra.Comma
 
 	statusDisplay := tea.NewProgram(modelThing)
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+
 	go func() {
-		client := httputil.NewHyphenHTTPClient()
-		url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
-		conn, err := client.GetWebsocketConnection(url)
-		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
+		defer wg.Done()
+
+		ioService := socketio.NewService()
+		if err := ioService.Connect(orgId); err != nil {
+			printer.Error(cmd, fmt.Errorf("failed to connect to Socket.io: %w", err))
 			return
 		}
-		defer conn.Close()
-		conn.WriteJSON(
-			map[string]interface{}{
-				"eventStreamTopic": "run",
-				"organizationId":   orgId,
-			},
-		)
-	messageListener:
-		for {
-			_, message, err := conn.ReadMessage()
-			if err != nil {
-				printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
-				break
+		defer ioService.Disconnect()
+
+		done := make(chan struct{})
+
+		ioService.On("Event:Run", func(args ...any) {
+			if len(args) == 0 {
+				return
 			}
 
-			var wsMessage WebSocketMessage
-			err = json.Unmarshal(message, &wsMessage)
-			if err != nil {
-				continue
+			payload, ok := args[0].(map[string]any)
+			if !ok {
+				return
 			}
 
-			var typeCheck map[string]interface{}
-			err = json.Unmarshal(wsMessage.Data, &typeCheck)
-			if err != nil {
-				printer.Error(cmd, fmt.Errorf("error unmarshalling Data for type check: %w", err))
-				continue
+			runId, _ := payload["runId"].(string)
+			if runId != hyphenRun.ID {
+				return
 			}
 
-			var data RunData
+			action, _ := payload["action"].(string)
 
-			err = json.Unmarshal(wsMessage.Data, &data)
-			if err != nil {
-				continue
+			// Extract run data
+			runDataRaw, ok := payload["run"].(map[string]any)
+			if !ok {
+				return
 			}
 
-			if data.RunId != hyphenRun.ID {
-				continue
+			runJSON, err := json.Marshal(runDataRaw)
+			if err != nil {
+				return
+			}
+
+			var runObj run.Run
+			if err := json.Unmarshal(runJSON, &runObj); err != nil {
+				return
+			}
+
+			data := RunData{
+				Action: action,
+				RunId:  runId,
+				Run:    runObj,
 			}
 
 			statusDisplay.Send(data)
@@ -118,16 +125,20 @@ func (cs *CodeService) GenerateDocker(printer *cprint.CPrinter, cmd *cobra.Comma
 				err := json.Unmarshal(data.Run.Data, &codeChanges)
 				if err != nil {
 					printer.Error(cmd, fmt.Errorf("error unmarshaling to CodeChangeRunData: %w", err))
-					break messageListener
+					close(done)
+					return
 				}
 
 				gitutil.ApplyDiffs(codeChanges.Changes)
 				statusDisplay.Send(tea.KeyMsg{Type: tea.KeyEsc})
-				break messageListener
+				close(done)
 			}
+		})
 
-		}
+		<-done
 	}()
+
 	statusDisplay.Run()
+	wg.Wait()
 	return nil
 }
