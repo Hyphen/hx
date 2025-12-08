@@ -3,12 +3,33 @@ package deployment
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+var debugLog *os.File
+
+func initDebugLog() {
+	if debugLog == nil {
+		var err error
+		debugLog, err = os.OpenFile("/tmp/hx-deploy-debug.log", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			debugLog = nil
+		}
+	}
+}
+
+func logDebug(format string, args ...interface{}) {
+	initDebugLog()
+	if debugLog != nil {
+		fmt.Fprintf(debugLog, format+"\n", args...)
+		debugLog.Sync()
+	}
+}
 
 type WebSocketMessage struct {
 	EventStreamTopic string          `json:"eventStreamTopic"`
@@ -52,6 +73,7 @@ var (
 )
 
 func (m StatusModel) Init() tea.Cmd {
+	logDebug("StatusModel.Init() called")
 	spinIcon.Spinner = spinner.Line
 	return spinIcon.Tick
 }
@@ -59,6 +81,7 @@ func (m StatusModel) Init() tea.Cmd {
 func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		logDebug("KeyMsg received: %s", msg.String())
 		switch msg.String() {
 		case "ctrl+c", "q", "esc":
 			return m, tea.Quit
@@ -68,16 +91,25 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		spinIcon, cmd = spinIcon.Update(msg)
 		return m, cmd
 	case RunMessageData:
+		logDebug("RunMessageData received - Type: %s, Id: %s, Status: %s", msg.Type, msg.Id, msg.Status)
+
+		// Load pipeline if empty (regardless of message type)
+		if len(m.Pipeline.Steps) == 0 {
+			logDebug("Pipeline empty, fetching from API...")
+			run, err := m.Service.GetDeploymentRun(m.OrganizationId, m.DeploymentId, m.RunId)
+			if err == nil {
+				m.Pipeline = run.Pipeline
+				logDebug("Pipeline loaded with %d steps", len(m.Pipeline.Steps))
+			} else {
+				logDebug("Error fetching pipeline: %v", err)
+			}
+		}
+
 		switch msg.Type {
 		case "run":
-			if len(m.Pipeline.Steps) == 0 {
-				run, err := m.Service.GetDeploymentRun(m.OrganizationId, m.DeploymentId, msg.RunId)
-				if err == nil {
-					m.Pipeline = run.Pipeline
-				}
-			}
 			m.UpdateStatusForId(msg.Id, msg.Status)
 			if msg.Status == "succeeded" || msg.Status == "failed" || msg.Status == "canceled" {
+				logDebug("Run finished with status: %s", msg.Status)
 				return m, tea.Quit
 			}
 		case "step":
@@ -85,6 +117,8 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "task":
 			m.UpdateStatusForId(msg.Id, msg.Status)
 		}
+	default:
+		logDebug("Unknown message type: %T", msg)
 	}
 
 	return m, nil
@@ -94,7 +128,13 @@ func (m StatusModel) View() string {
 	result := "-------------------------------------------------\n"
 	result += m.AppUrl + "\n"
 	result += "-------------------------------------------------\n"
-	result += m.RenderTree(m.Pipeline)
+
+	if len(m.Pipeline.Steps) == 0 {
+		result += fmt.Sprintf("%s Waiting for deployment status...\n", spinIcon.View())
+	} else {
+		result += m.RenderTree(m.Pipeline)
+	}
+
 	return result
 }
 
@@ -127,14 +167,18 @@ func (m StatusModel) RenderTree(pipeLine models.DeploymentPipeline) string {
 
 func getMarkerBasedOnStatus(status string) string {
 	switch status {
-	case "Success":
+	case "succeeded", "Success":
 		return "[✓]"
-	case "Error":
+	case "failed", "Error":
 		return "[✗]"
-	case "Running":
+	case "running", "Running":
 		return fmt.Sprintf("[%s]", spinIcon.View())
+	case "pending", "queued":
+		return "[○]"
+	case "canceled":
+		return "[⊘]"
 	default:
-		return "[ ]" // Default marker for unknown status
+		return "[ ]"
 	}
 }
 
