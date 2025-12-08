@@ -309,7 +309,7 @@ func CreateGitignoredFile(cmd *cobra.Command, fileName string) error {
 	}
 	defer file.Close()
 
-	// Write '# KEY=Value' to the file
+	// Write default env contents to the file
 	_, err = file.WriteString(env.DEFAULT_ENV_CONTENTS)
 	if err != nil {
 		printer.Error(cmd, fmt.Errorf("error writing to %s: %w", fileName, err))
