@@ -103,7 +103,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 			firstApp := selectedDeployment.Apps[0]
 
 			service := build.NewService()
-			result, err := service.RunBuild(printer, firstApp.DeploymentSettings.ProjectEnvironment.ID, flags.VerboseFlag)
+			result, err := service.RunBuild(printer, firstApp.DeploymentSettings.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag)
 			if err != nil {
 				return err
 			}
@@ -286,4 +286,5 @@ func FindStepOrTaskByID(pipeline models.DeploymentPipeline, id string) (interfac
 
 func init() {
 	DeployCmd.Flags().BoolVar(&noBuild, "no-build", false, "Skip the build step")
+	DeployCmd.Flags().StringVarP(&flags.DockerfileFlag, "dockerfile", "f", "", "Path to Dockerfile (e.g., ./Dockerfile or ./docker/Dockerfile.prod)")
 }
