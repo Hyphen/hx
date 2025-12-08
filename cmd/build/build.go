@@ -34,7 +34,7 @@ Use 'hyphen build --help' for more information about available flags.
 	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		service := build.NewService()
-		build, err := service.RunBuild(printer, "", flags.VerboseFlag, flags.DockerfileFlag)
+		build, err := service.RunBuild(cmd, printer, "", flags.VerboseFlag, flags.DockerfileFlag)
 
 		if err != nil {
 			return err
