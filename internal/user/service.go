@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/models"
+	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/httputil"
@@ -33,13 +33,12 @@ func ErrorIfNotAuthenticated() error {
 		return nil
 	}
 
-	if mc.HyphenAccessToken != nil {
-		if mc.ExpiryTime != nil && *mc.ExpiryTime > time.Now().Unix() {
-			return nil
-		}
+	oauthService := oauth.DefaultOAuthService()
+	_, err = oauthService.GetValidToken()
+	if err != nil {
+		return fmt.Errorf("You are not authenticated. Please run `hx auth` and try again")
 	}
-
-	return fmt.Errorf("You are not authenticated. Please run `hx auth` and try again")
+	return nil
 }
 
 func NewService() UserServicer {
