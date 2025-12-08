@@ -16,10 +16,11 @@
       //"HYPHEN_Local": "true"
     },
     "args": [
-     "deploy", "Location-Staging", //"--no-build" //"--verbose" //, "--no-build"
+     //"deploy", "Location-Staging", //"--no-build" //"--verbose" //, "--no-build"
      //"env", "pull", "--force"
      //"code", "docker"
      //"build"
+     "auth"
     ],
     "showLog": true,
     "console": "integratedTerminal"
