@@ -135,11 +135,10 @@ Use 'hyphen deploy --help' for more information about available flags.
 		wg.Add(1)
 
 		go func() {
-			defer wg.Done()
-
 			ioService := socketio.NewService()
 			if err := ioService.Connect(orgId); err != nil {
 				printer.Error(cmd, fmt.Errorf("failed to connect to Socket.io: %w", err))
+				wg.Done()
 				return
 			}
 			defer ioService.Disconnect()
@@ -176,6 +175,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 					})
 
 					if runStatus == "succeeded" || runStatus == "failed" || runStatus == "canceled" {
+						statusDisplay.Quit()
 						close(done)
 						return
 					}
@@ -195,6 +195,8 @@ Use 'hyphen deploy --help' for more information about available flags.
 			ioService.Emit("Stream:RunLog:Stop", map[string]any{
 				"runId": run.ID,
 			})
+
+			wg.Done()
 		}()
 
 		statusDisplay.Run()
