@@ -19,6 +19,7 @@ import (
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/gitutil"
 	"github.com/Hyphen/cli/pkg/httputil"
+	"github.com/spf13/cobra"
 )
 
 type BuildService struct {
@@ -133,7 +134,7 @@ func (bs *BuildService) FindRegistryConnection(organizationId, projectId string)
 
 }
 
-func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string, verbose bool, dockerfilePath string) (*models.Build, error) {
+func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, environmentId string, verbose bool, dockerfilePath string) (*models.Build, error) {
 	// grab the manifest to get app details
 	config, err := config.RestoreConfig()
 	if err != nil {
@@ -163,7 +164,7 @@ func (bs *BuildService) RunBuild(printer *cprint.CPrinter, environmentId string,
 		dockerfileDir, err := dockerutil.FindDockerFile()
 		if err != nil || dockerfileDir == "" {
 			coder := code.NewService()
-			err = coder.GenerateDocker(printer, nil)
+			err = coder.GenerateDocker(printer, cmd)
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate docker file: %w", err)
 			}
