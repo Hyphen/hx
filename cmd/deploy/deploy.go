@@ -128,6 +128,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 			Pipeline:       run.Pipeline,
 			Service:        *service,
 			AppUrl:         fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID),
+			VerboseMode:    flags.VerboseFlag,
 		}
 		statusDisplay := tea.NewProgram(statusModel)
 
@@ -136,8 +137,16 @@ Use 'hyphen deploy --help' for more information about available flags.
 
 		go func() {
 			ioService := socketio.NewService()
+
+			// Set up verbose callback to send messages to the TUI
+			if flags.VerboseFlag {
+				ioService.SetVerboseCallback(func(msg string) {
+					statusDisplay.Send(Deployment.VerboseMessage{Content: msg})
+				})
+			}
+
 			if err := ioService.Connect(orgId); err != nil {
-				printer.Error(cmd, fmt.Errorf("failed to connect to Socket.io: %w", err))
+				statusDisplay.Send(Deployment.ErrorMessage{Error: fmt.Errorf("failed to connect to Socket.io: %w", err)})
 				wg.Done()
 				return
 			}
@@ -167,6 +176,10 @@ Use 'hyphen deploy --help' for more information about available flags.
 
 				runStatus, _ := data["status"].(string)
 				if runStatus != "" {
+					if flags.VerboseFlag {
+						statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Run status update: %s", runStatus)})
+					}
+
 					statusDisplay.Send(Deployment.RunMessageData{
 						Type:   "run",
 						RunId:  runId,
@@ -175,6 +188,9 @@ Use 'hyphen deploy --help' for more information about available flags.
 					})
 
 					if runStatus == "succeeded" || runStatus == "failed" || runStatus == "canceled" {
+						if flags.VerboseFlag {
+							statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Deployment ended with status: %s", runStatus)})
+						}
 						statusDisplay.Quit()
 						close(done)
 						return
@@ -185,6 +201,10 @@ Use 'hyphen deploy --help' for more information about available flags.
 					extractStatusUpdates(pipelineData, runId, statusDisplay)
 				}
 			})
+
+			if flags.VerboseFlag {
+				statusDisplay.Send(Deployment.VerboseMessage{Content: "Starting run log stream"})
+			}
 
 			ioService.Emit("Stream:RunLog:Start", map[string]any{
 				"runId": run.ID,

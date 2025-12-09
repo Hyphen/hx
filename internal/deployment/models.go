@@ -33,18 +33,29 @@ type LogMessageData struct {
 // Define the second data type (new structure)
 type RunMessageData struct {
 	Type   string `json:"type"`
-	RunId  string `json:"RunId"`
+	RunId  string `json:"runId"`
 	Id     string `json:"id"`
 	Status string `json:"status"`
 }
 
+type ErrorMessage struct {
+	Error error
+}
+
+type VerboseMessage struct {
+	Content string
+}
+
 type StatusModel struct {
-	Pipeline       models.DeploymentPipeline
-	OrganizationId string
-	DeploymentId   string
-	RunId          string
-	Service        DeploymentService
-	AppUrl         string
+	Pipeline        models.DeploymentPipeline
+	OrganizationId  string
+	DeploymentId    string
+	RunId           string
+	Service         DeploymentService
+	AppUrl          string
+	Error           error
+	VerboseMode     bool
+	VerboseMessages []string
 }
 
 var (
@@ -67,6 +78,12 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		spinIcon, cmd = spinIcon.Update(msg)
 		return m, cmd
+	case VerboseMessage:
+		m.VerboseMessages = append(m.VerboseMessages, msg.Content)
+		return m, nil
+	case ErrorMessage:
+		m.Error = msg.Error
+		return m, tea.Quit
 	case RunMessageData:
 		// Load pipeline if empty (regardless of message type)
 		if len(m.Pipeline.Steps) == 0 {
@@ -97,10 +114,21 @@ func (m StatusModel) View() string {
 	result += m.AppUrl + "\n"
 	result += "-------------------------------------------------\n"
 
+	if m.VerboseMode && len(m.VerboseMessages) > 0 {
+		for _, msg := range m.VerboseMessages {
+			result += fmt.Sprintf("  %s\n", msg)
+		}
+		result += "\n"
+	}
+
 	if len(m.Pipeline.Steps) == 0 {
 		result += fmt.Sprintf("%s Waiting for deployment status...\n", spinIcon.View())
 	} else {
 		result += m.RenderTree(m.Pipeline)
+	}
+
+	if m.Error != nil {
+		result += fmt.Sprintf("\n❗error: %v\n", m.Error)
 	}
 
 	return result
