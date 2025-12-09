@@ -95,11 +95,19 @@ func (s *Service) Connect(orgId string) error {
 	s.organizationId = orgId
 
 	client.On("connect", func(args ...any) {
-		s.logVerbose("Connected successfully")
 		s.mu.Lock()
+		// We track whether we were previously connected to detect reconnects
+		wasConnected := s.connected
 		s.connected = true
 		s.mu.Unlock()
-		close(s.connectedCh)
+
+		// If this is a reconnect, the connected channel will already have been closed, and trying to close it again will panic
+		if wasConnected {
+			s.logVerbose("Reconnected successfully")
+		} else {
+			s.logVerbose("Connected successfully")
+			close(s.connectedCh)
+		}
 	})
 
 	client.On("connect_error", func(args ...any) {
