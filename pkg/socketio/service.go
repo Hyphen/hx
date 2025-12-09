@@ -68,10 +68,8 @@ func (s *Service) Connect(orgId string) error {
 		"organizationId": orgId,
 	}
 
-	authMethod := "token"
 	if cfg.HyphenAPIKey != nil {
 		auth["apiKey"] = *cfg.HyphenAPIKey
-		authMethod = "apiKey"
 	} else {
 		token, err := s.oauthService.GetValidToken()
 		if err != nil {
@@ -83,12 +81,12 @@ func (s *Service) Connect(orgId string) error {
 	opts.SetAuth(auth)
 
 	baseUrl := apiconf.GetIOBaseUrl()
-	s.logVerbose(fmt.Sprintf("Connecting to %s/socket with auth method %s", baseUrl, authMethod))
+	s.logVerbose("Connecting to stream server")
 
 	client, err := socket.Connect(baseUrl, opts)
 	if err != nil {
 		s.mu.Unlock()
-		return errors.Wrap(err, "Failed to connect to Socket.io server")
+		return errors.Wrap(err, "Failed to connect to stream server")
 	}
 
 	s.client = client

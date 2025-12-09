@@ -179,7 +179,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 				runStatus, _ := data["status"].(string)
 				if runStatus != "" {
 					if flags.VerboseFlag {
-						statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Run status update: %s", runStatus)})
+						statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Run status updated to %s", runStatus)})
 					}
 
 					statusDisplay.Send(Deployment.RunMessageData{
@@ -191,7 +191,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 
 					if runStatus == "succeeded" || runStatus == "failed" || runStatus == "canceled" {
 						if flags.VerboseFlag {
-							statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Deployment ended with status: %s", runStatus)})
+							statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Deployment ended with status %s", runStatus)})
 						}
 						statusDisplay.Quit()
 						doneOnce.Do(func() { close(done) })
