@@ -23,7 +23,7 @@ func NewService() *CodeService {
 	return &CodeService{}
 }
 
-func (cs *CodeService) GenerateDocker(printer *cprint.CPrinter, cmd *cobra.Command) error {
+func (cs *CodeService) GenerateDocker(_ *cprint.CPrinter, cmd *cobra.Command) error {
 
 	hasChanges, _ := gitutil.CheckForChangesNotOnRemote()
 	if hasChanges {
@@ -32,8 +32,6 @@ func (cs *CodeService) GenerateDocker(printer *cprint.CPrinter, cmd *cobra.Comma
 			return fmt.Errorf("stopped")
 		}
 	}
-
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 
 	config, err := config.RestoreConfig()
 	if err != nil {
@@ -59,7 +57,8 @@ func (cs *CodeService) GenerateDocker(printer *cprint.CPrinter, cmd *cobra.Comma
 	}
 
 	modelThing := GenerateDockerRunModel{
-		Run: hyphenRun,
+		Run:         hyphenRun,
+		VerboseMode: flags.VerboseFlag,
 	}
 
 	statusDisplay := tea.NewProgram(modelThing)
@@ -71,13 +70,23 @@ func (cs *CodeService) GenerateDocker(printer *cprint.CPrinter, cmd *cobra.Comma
 		defer wg.Done()
 
 		ioService := socketio.NewService()
+
+		// Set up verbose callback to send messages to the TUI
+		if flags.VerboseFlag {
+			ioService.SetVerboseCallback(func(msg string) {
+				statusDisplay.Send(VerboseMessage{Content: msg})
+			})
+		}
+
 		if err := ioService.Connect(orgId); err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to connect to Socket.io: %w", err))
+			statusDisplay.Send(ErrorMessage{Error: fmt.Errorf("failed to connect to Socket.io: %w", err)})
 			return
 		}
 		defer ioService.Disconnect()
 
 		done := make(chan struct{})
+		// This semaphore is defensive in case we get another message after we're "done" to avoid panicing from closing the done channel twice
+		var doneOnce sync.Once
 
 		ioService.On("Event:Run", func(args ...any) {
 			if len(args) == 0 {
@@ -124,14 +133,14 @@ func (cs *CodeService) GenerateDocker(printer *cprint.CPrinter, cmd *cobra.Comma
 				var codeChanges run.CodeChangeRunData
 				err := json.Unmarshal(data.Run.Data, &codeChanges)
 				if err != nil {
-					printer.Error(cmd, fmt.Errorf("error unmarshaling to CodeChangeRunData: %w", err))
-					close(done)
+					statusDisplay.Send(ErrorMessage{Error: fmt.Errorf("error unmarshaling to CodeChangeRunData: %w", err)})
+					doneOnce.Do(func() { close(done) })
 					return
 				}
 
 				gitutil.ApplyDiffs(codeChanges.Changes)
 				statusDisplay.Send(tea.KeyMsg{Type: tea.KeyEsc})
-				close(done)
+				doneOnce.Do(func() { close(done) })
 			}
 		})
 
