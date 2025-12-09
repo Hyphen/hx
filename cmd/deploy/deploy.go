@@ -153,6 +153,8 @@ Use 'hyphen deploy --help' for more information about available flags.
 			defer ioService.Disconnect()
 
 			done := make(chan struct{})
+			// This semaphore is defensive in case we get another message after we're "done" to avoid panicing from closing the done channel twice
+			var doneOnce sync.Once
 
 			ioService.On("Event:Run", func(args ...any) {
 				if len(args) == 0 {
@@ -192,7 +194,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 							statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Deployment ended with status: %s", runStatus)})
 						}
 						statusDisplay.Quit()
-						close(done)
+						doneOnce.Do(func() { close(done) })
 						return
 					}
 				}
