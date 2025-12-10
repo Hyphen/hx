@@ -33,3 +33,5 @@ cli
 .env.dev
 .env
 .env.local
+
+.idea

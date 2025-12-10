@@ -1,10 +1,9 @@
 package deploy
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"time"
+	"sync"
 
 	"github.com/Hyphen/cli/internal/build"
 	Deployment "github.com/Hyphen/cli/internal/deployment"
@@ -13,8 +12,8 @@ import (
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
-	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/Hyphen/cli/pkg/prompt"
+	"github.com/Hyphen/cli/pkg/socketio"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -106,7 +105,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 			firstApp := selectedDeployment.Apps[0]
 
 			service := build.NewService()
-			result, err := service.RunBuild(printer, firstApp.DeploymentSettings.ProjectEnvironment.ID, flags.VerboseFlag)
+			result, err := service.RunBuild(cmd, printer, firstApp.DeploymentSettings.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag)
 			if err != nil {
 				return err
 			}
@@ -127,9 +126,9 @@ Use 'hyphen deploy --help' for more information about available flags.
 		appUrl := fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID)
 
 		if shouldUseTUI() {
-			runWithTUI(cmd, orgId, selectedDeployment.ID, run, appUrl, service)
+			runWithTUI(orgId, selectedDeployment.ID, run, appUrl, service)
 		} else {
-			runWithoutTUI(cmd, orgId, selectedDeployment.ID, run.ID, appUrl, service)
+			runWithoutTUI(orgId, selectedDeployment.ID, run, appUrl, service)
 		}
 
 		return nil
@@ -140,7 +139,7 @@ func shouldUseTUI() bool {
 	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
-func runWithTUI(cmd *cobra.Command, orgId, deploymentId string, run *models.DeploymentRun, appUrl string, service *Deployment.DeploymentService) {
+func runWithTUI(orgId, deploymentId string, run *models.DeploymentRun, appUrl string, service *Deployment.DeploymentService) {
 	statusModel := Deployment.StatusModel{
 		OrganizationId: orgId,
 		DeploymentId:   deploymentId,
@@ -150,287 +149,269 @@ func runWithTUI(cmd *cobra.Command, orgId, deploymentId string, run *models.Depl
 		AppUrl:         appUrl,
 		VerboseMode:    flags.VerboseFlag,
 	}
+
 	statusDisplay := tea.NewProgram(statusModel)
 
-	// This initial run call, in addition to opening the WebSocket connection, handles the case that the pipeline is already running before we establish the WebSocket connection, and therefore would otherwise mis the run message.
+	var wg sync.WaitGroup
+	wg.Add(1)
+
 	go func() {
-		initialRun, err := service.GetDeploymentRun(orgId, deploymentId, run.ID)
-		if err == nil && initialRun != nil {
-			if flags.VerboseFlag {
-				statusDisplay.Send(Deployment.VerboseMessage{
-					Content: fmt.Sprintf("Initial run check: Status=%s, Steps=%d", initialRun.Status, len(initialRun.Pipeline.Steps)),
-				})
-			}
-			statusDisplay.Send(Deployment.RunMessageData{
-				Type:   "run",
-				RunId:  initialRun.ID,
-				Id:     initialRun.ID,
-				Status: initialRun.Status,
+		ioService := socketio.NewService()
+
+		// Set up verbose callback to send messages to the TUI
+		if flags.VerboseFlag {
+			ioService.SetVerboseCallback(func(msg string) {
+				statusDisplay.Send(Deployment.VerboseMessage{Content: msg})
 			})
 		}
-	}()
 
-	// Ticker to update waiting seconds
-	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			statusDisplay.Send(Deployment.WaitingTickMessage{})
-		}
-	}()
-
-	go func() {
-		client := httputil.NewHyphenHTTPClient()
-		url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
-		conn, err := client.GetWebsocketConnection(url)
-		if err != nil {
-			statusDisplay.Send(Deployment.ErrorMessage{Error: fmt.Errorf("failed to connect to WebSocket: %w", err)})
+		if err := ioService.Connect(orgId); err != nil {
+			statusDisplay.Send(Deployment.ErrorMessage{Error: fmt.Errorf("failed to connect to Socket.io: %w", err)})
+			wg.Done()
 			return
 		}
-		defer conn.Close()
+		defer ioService.Disconnect()
 
-		if flags.VerboseFlag {
-			statusDisplay.Send(Deployment.VerboseMessage{Content: "WebSocket connected"})
-		}
+		done := make(chan struct{})
+		// This semaphore is defensive in case we get another message after we're "done" to avoid panicing from closing the done channel twice
+		var doneOnce sync.Once
 
-		// Set up ping/pong handlers to keep connection alive
-		conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
-		conn.SetPongHandler(func(string) error {
-			conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
-			return nil
-		})
+		ioService.On("Event:Run", func(args ...any) {
+			if len(args) == 0 {
+				return
+			}
 
-		conn.WriteJSON(
-			map[string]interface{}{
-				"eventStreamTopic": "deploymentRun",
-				"organizationId":   orgId,
-			},
-		)
-	messageListener:
-		for {
-			_, message, err := conn.ReadMessage()
-			if err != nil {
+			payload, ok := args[0].(map[string]any)
+			if !ok {
+				return
+			}
+
+			runId, _ := payload["runId"].(string)
+			if runId != run.ID {
+				return
+			}
+
+			data, ok := payload["data"].(map[string]any)
+			if !ok {
+				return
+			}
+
+			runStatus, _ := data["status"].(string)
+			if runStatus != "" {
 				if flags.VerboseFlag {
-					statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("WebSocket error: %v", err)})
+					statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Run status updated to %s", runStatus)})
 				}
 
-				// Check current deployment state via API
-				currentRun, apiErr := service.GetDeploymentRun(orgId, deploymentId, run.ID)
-				if apiErr == nil && currentRun != nil {
+				statusDisplay.Send(Deployment.RunMessageData{
+					Type:   "run",
+					RunId:  runId,
+					Id:     runId,
+					Status: runStatus,
+				})
+
+				if runStatus == "succeeded" || runStatus == "failed" || runStatus == "canceled" {
 					if flags.VerboseFlag {
-						statusDisplay.Send(Deployment.VerboseMessage{
-							Content: fmt.Sprintf("Status via API after WebSocket error: %s", currentRun.Status),
-						})
-					}
-
-					// Update the model with the latest data from API
-					statusDisplay.Send(Deployment.RunMessageData{
-						Type:   "run",
-						RunId:  currentRun.ID,
-						Id:     currentRun.ID,
-						Status: currentRun.Status,
-					})
-
-					// If deployment is complete, quit gracefully
-					if currentRun.Status == "succeeded" || currentRun.Status == "failed" || currentRun.Status == "canceled" {
-						if flags.VerboseFlag {
-							statusDisplay.Send(Deployment.VerboseMessage{
-								Content: fmt.Sprintf("Deployment showed complete via API: %s", currentRun.Status),
-							})
-						}
-						statusDisplay.Quit()
-						break messageListener
-					}
-				}
-
-				// Deployment not complete or API failed, report the WebSocket error
-				statusDisplay.Send(Deployment.ErrorMessage{Error: fmt.Errorf("error reading WebSocket message: %w", err)})
-				break
-			}
-
-			// Reset read deadline on successful message
-			conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
-
-			// TODO: For now, log every WebSocket message in verbose mode, but remove once everything is finally working
-			if flags.VerboseFlag {
-				statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("WebSocket Message: %s", string(message))})
-			}
-
-			var wsMessage Deployment.WebSocketMessage
-			err = json.Unmarshal(message, &wsMessage)
-			if err != nil {
-				continue
-			}
-
-			var typeCheck map[string]interface{}
-			err = json.Unmarshal(wsMessage.Data, &typeCheck)
-			if err != nil {
-				printer.Error(cmd, fmt.Errorf("error unmarshalling Data for type check: %w", err))
-				continue
-			}
-
-			if _, ok := typeCheck["level"]; ok {
-				var data Deployment.LogMessageData
-				err = json.Unmarshal(wsMessage.Data, &data)
-				if err != nil {
-					continue
-				}
-				if flags.VerboseFlag {
-					statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Log [%s]: %s", data.Level, data.Message)})
-				}
-			} else if _, ok := typeCheck["type"]; ok {
-				var data Deployment.RunMessageData
-				err = json.Unmarshal(wsMessage.Data, &data)
-				if err != nil {
-					continue
-				}
-
-				if flags.VerboseFlag {
-					statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("RunMessage: Type=%s, Id=%s, Status=%s", data.Type, data.Id, data.Status)})
-				}
-
-				statusDisplay.Send(data)
-
-				if data.Type == "run" && (data.Status == "succeeded" || data.Status == "failed" || data.Status == "canceled") {
-					if flags.VerboseFlag {
-						statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Deployment reached terminal status: %s", data.Status)})
+						statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Deployment ended with status %s", runStatus)})
 					}
 					statusDisplay.Quit()
-					break messageListener
+					doneOnce.Do(func() { close(done) })
+					return
 				}
 			}
+
+			if pipelineData, ok := data["pipeline"].(map[string]any); ok {
+				extractStatusUpdates(pipelineData, runId, statusDisplay)
+			}
+		})
+
+		if flags.VerboseFlag {
+			statusDisplay.Send(Deployment.VerboseMessage{Content: "Starting run log stream"})
 		}
+
+		ioService.Emit("Stream:RunLog:Start", map[string]any{
+			"runId": run.ID,
+		})
+
+		<-done
+
+		ioService.Emit("Stream:RunLog:Stop", map[string]any{
+			"runId": run.ID,
+		})
+
+		wg.Done()
 	}()
+
 	statusDisplay.Run()
+	wg.Wait()
 }
 
-func runWithoutTUI(cmd *cobra.Command, orgId string, deploymentId string, runId string, appUrl string, service *Deployment.DeploymentService) {
+func runWithoutTUI(orgId string, deploymentId string, run *models.DeploymentRun, appUrl string, service *Deployment.DeploymentService) {
 	printer.Print(fmt.Sprintf("Deployment URL: %s", appUrl))
 	printer.Print("Monitoring deployment progress...")
 
-	client := httputil.NewHyphenHTTPClient()
-	url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
+	ioService := socketio.NewService()
 
-	conn, err := client.GetWebsocketConnection(url)
-	if err != nil {
-		printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
+	if flags.VerboseFlag {
+		ioService.SetVerboseCallback(func(msg string) {
+			printer.Print(fmt.Sprintf("  [verbose] %s", msg))
+		})
+	}
+
+	if err := ioService.Connect(orgId); err != nil {
+		printer.Print(fmt.Sprintf("Failed to connect to Socket.io: %v", err))
 		return
 	}
-	defer conn.Close()
+	defer ioService.Disconnect()
 
-	// Set up ping/pong handlers to keep connection alive
-	conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
-	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
-		return nil
-	})
+	done := make(chan struct{})
+	var doneOnce sync.Once
 
-	conn.WriteJSON(
-		map[string]any{
-			"eventStreamTopic": "deploymentRun",
-			"organizationId":   orgId,
-		},
-	)
-
-	for {
-		_, message, err := conn.ReadMessage()
-		if err != nil {
-			// Check current deployment state via API
-			currentRun, apiErr := service.GetDeploymentRun(orgId, deploymentId, runId)
-			if apiErr == nil && currentRun != nil {
-				// If deployment is complete, report that status instead of the error
-				switch currentRun.Status {
-				case "succeeded":
-					printer.Success("Deployment completed successfully")
-					return
-				case "failed":
-					printer.Error(cmd, fmt.Errorf("deployment failed"))
-					return
-				case "canceled":
-					printer.Warning("Deployment was canceled")
-					return
-				}
-			}
-
-			// Deployment not complete or API failed, report the WebSocket error
-			printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
+	ioService.On("Event:Run", func(args ...any) {
+		if len(args) == 0 {
 			return
 		}
 
-		// Reset read deadline on successful message
-		conn.SetReadDeadline(time.Now().Add(15 * time.Minute))
-
-		var wsMessage Deployment.WebSocketMessage
-		err = json.Unmarshal(message, &wsMessage)
-		if err != nil {
-			continue
+		payload, ok := args[0].(map[string]any)
+		if !ok {
+			return
 		}
 
-		var typeCheck map[string]interface{}
-		err = json.Unmarshal(wsMessage.Data, &typeCheck)
-		if err != nil {
-			continue
+		runId, _ := payload["runId"].(string)
+		if runId != run.ID {
+			return
 		}
 
-		if _, ok := typeCheck["type"]; ok {
-			var data Deployment.RunMessageData
-			err = json.Unmarshal(wsMessage.Data, &data)
-			if err != nil {
+		data, ok := payload["data"].(map[string]any)
+		if !ok {
+			return
+		}
+
+		runStatus, _ := data["status"].(string)
+		if runStatus != "" {
+			printer.Print(fmt.Sprintf("Deployment: %s", runStatus))
+
+			switch runStatus {
+			case "succeeded":
+				printer.Success("Deployment completed successfully")
+				doneOnce.Do(func() { close(done) })
+				return
+			case "failed":
+				printer.Print("Deployment failed")
+				doneOnce.Do(func() { close(done) })
+				return
+			case "canceled":
+				printer.Warning("Deployment was canceled")
+				doneOnce.Do(func() { close(done) })
+				return
+			}
+		}
+
+		// Print step/task updates
+		if pipelineData, ok := data["pipeline"].(map[string]any); ok {
+			printPipelineUpdates(pipelineData)
+		}
+	})
+
+	ioService.Emit("Stream:RunLog:Start", map[string]any{
+		"runId": run.ID,
+	})
+
+	<-done
+
+	ioService.Emit("Stream:RunLog:Stop", map[string]any{
+		"runId": run.ID,
+	})
+}
+
+func printPipelineUpdates(pipelineData map[string]any) {
+	if steps, ok := pipelineData["steps"].([]any); ok {
+		for _, stepRaw := range steps {
+			step, ok := stepRaw.(map[string]any)
+			if !ok {
 				continue
 			}
 
-			// Print status updates
-			switch data.Type {
-			case "step", "task":
-				printer.Print(fmt.Sprintf("  %s: %s", data.Type, data.Status))
-			case "run":
-				printer.Print(fmt.Sprintf("Deployment: %s", data.Status))
+			stepName, _ := step["name"].(string)
+			stepStatus, _ := step["status"].(string)
 
-				switch data.Status {
-				case "succeeded":
-					printer.Success("Deployment completed successfully")
-					return
-				case "failed":
-					printer.Error(cmd, fmt.Errorf("deployment failed"))
-					return
-				case "canceled":
-					printer.Warning("Deployment was canceled")
-					return
+			if stepName != "" && stepStatus != "" {
+				printer.Print(fmt.Sprintf("  Step %s: %s", stepName, stepStatus))
+			}
+
+			if tasks, ok := step["tasks"].([]any); ok {
+				for _, taskRaw := range tasks {
+					task, ok := taskRaw.(map[string]any)
+					if !ok {
+						continue
+					}
+
+					taskType, _ := task["type"].(string)
+					taskStatus, _ := task["status"].(string)
+
+					if taskType != "" && taskStatus != "" {
+						printer.Print(fmt.Sprintf("    Task %s: %s", taskType, taskStatus))
+					}
 				}
 			}
 		}
 	}
 }
 
-func FindStepOrTaskByID(pipeline models.DeploymentPipeline, id string) (interface{}, bool) {
-	// Helper function to recursively search steps
-	var searchSteps func(steps []models.DeploymentStep) (interface{}, bool)
-	searchSteps = func(steps []models.DeploymentStep) (interface{}, bool) {
-		for _, step := range steps {
-			// Check if the current step matches the ID
-			if step.ID == id {
-				return step, true
+func extractStatusUpdates(data map[string]any, runId string, statusDisplay *tea.Program) {
+	if steps, ok := data["steps"].([]any); ok {
+		for _, stepRaw := range steps {
+			step, ok := stepRaw.(map[string]any)
+			if !ok {
+				continue
 			}
 
-			// Check tasks within the step
-			for _, task := range step.Tasks {
-				if task.ID == id {
-					return task, true
+			stepId, _ := step["id"].(string)
+			stepStatus, _ := step["status"].(string)
+
+			if stepId != "" && stepStatus != "" {
+				statusDisplay.Send(Deployment.RunMessageData{
+					Type:   "step",
+					RunId:  runId,
+					Id:     stepId,
+					Status: stepStatus,
+				})
+			}
+
+			if tasks, ok := step["tasks"].([]any); ok {
+				for _, taskRaw := range tasks {
+					task, ok := taskRaw.(map[string]any)
+					if !ok {
+						continue
+					}
+
+					taskId, _ := task["id"].(string)
+					taskStatus, _ := task["status"].(string)
+
+					if taskId != "" && taskStatus != "" {
+						statusDisplay.Send(Deployment.RunMessageData{
+							Type:   "task",
+							RunId:  runId,
+							Id:     taskId,
+							Status: taskStatus,
+						})
+					}
 				}
 			}
 
-			// Recursively search in parallel steps
-			if result, found := searchSteps(step.ParallelSteps); found {
-				return result, true
+			if parallelSteps, ok := step["parallelSteps"].([]any); ok {
+				for _, psRaw := range parallelSteps {
+					ps, ok := psRaw.(map[string]any)
+					if !ok {
+						continue
+					}
+					extractStatusUpdates(map[string]any{"steps": []any{ps}}, runId, statusDisplay)
+				}
 			}
 		}
-		return nil, false
 	}
-
-	// Start searching from the top-level steps
-	return searchSteps(pipeline.Steps)
 }
 
 func init() {
 	DeployCmd.Flags().BoolVar(&noBuild, "no-build", false, "Skip the build step")
+	DeployCmd.Flags().StringVarP(&flags.DockerfileFlag, "dockerfile", "f", "", "Path to Dockerfile (e.g., ./Dockerfile or ./docker/Dockerfile.prod)")
 }

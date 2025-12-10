@@ -10,21 +10,23 @@ type MockEnvService struct {
 	mock.Mock
 }
 
+var _ EnvServicer = (*MockEnvService)(nil)
+
 // GetEnvironment mocks the GetEnvironment method
-func (m *MockEnvService) GetEnvironment(organizationId, appId, env string) (models.Environment, bool, error) {
-	args := m.Called(organizationId, appId, env)
+func (m *MockEnvService) GetEnvironment(organizationId, projectId, environment string) (models.Environment, bool, error) {
+	args := m.Called(organizationId, projectId, environment)
 	return args.Get(0).(models.Environment), args.Bool(1), args.Error(2)
 }
 
-// PutEnv mocks the PutEnv method
-func (m *MockEnvService) PutEnv(organizationId, appId, env string) error {
-	args := m.Called(organizationId, appId, env)
+// PutEnvironmentEnv mocks the PutEnvironmentEnv method
+func (m *MockEnvService) PutEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId int64, env models.Env) error {
+	args := m.Called(organizationId, appId, environmentId, secretKeyId, env)
 	return args.Error(0)
 }
 
-// GetEnv mocks the GetEnv method
-func (m *MockEnvService) GetEnv(organizationId, appId, env string) (models.Env, error) {
-	args := m.Called(organizationId, appId, env)
+// GetEnvironmentEnv mocks the GetEnvironmentEnv method
+func (m *MockEnvService) GetEnvironmentEnv(organizationId, appId, environmentId string, secretKeyId *int64, version *int) (models.Env, error) {
+	args := m.Called(organizationId, appId, environmentId, secretKeyId, version)
 	return args.Get(0).(models.Env), args.Error(1)
 }
 
@@ -32,6 +34,18 @@ func (m *MockEnvService) GetEnv(organizationId, appId, env string) (models.Env, 
 func (m *MockEnvService) ListEnvs(organizationId, appId string, size, page int) ([]models.Env, error) {
 	args := m.Called(organizationId, appId, size, page)
 	return args.Get(0).([]models.Env), args.Error(1)
+}
+
+// ListEnvVersions mocks the ListEnvVersions method
+func (m *MockEnvService) ListEnvVersions(organizationId, appId, environmentId string, size, page int) ([]models.Env, error) {
+	args := m.Called(organizationId, appId, environmentId, size, page)
+	return args.Get(0).([]models.Env), args.Error(1)
+}
+
+// ListEnvironments mocks the ListEnvironments method
+func (m *MockEnvService) ListEnvironments(organizationId, projectId string, size, page int) ([]models.Environment, error) {
+	args := m.Called(organizationId, projectId, size, page)
+	return args.Get(0).([]models.Environment), args.Error(1)
 }
 
 // NewMockEnvService creates a new instance of MockEnvService

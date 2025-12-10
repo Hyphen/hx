@@ -3,15 +3,15 @@ package code
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/run"
-	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/gitutil"
-	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/Hyphen/cli/pkg/prompt"
+	"github.com/Hyphen/cli/pkg/socketio"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
@@ -23,7 +23,7 @@ func NewService() *CodeService {
 	return &CodeService{}
 }
 
-func (cs *CodeService) GenerateDocker(printer *cprint.CPrinter, cmd *cobra.Command) error {
+func (cs *CodeService) GenerateDocker(_ *cprint.CPrinter, cmd *cobra.Command) error {
 
 	hasChanges, _ := gitutil.CheckForChangesNotOnRemote()
 	if hasChanges {
@@ -32,8 +32,6 @@ func (cs *CodeService) GenerateDocker(printer *cprint.CPrinter, cmd *cobra.Comma
 			return fmt.Errorf("stopped")
 		}
 	}
-
-	printer = cprint.NewCPrinter(flags.VerboseFlag)
 
 	config, err := config.RestoreConfig()
 	if err != nil {
@@ -59,75 +57,140 @@ func (cs *CodeService) GenerateDocker(printer *cprint.CPrinter, cmd *cobra.Comma
 	}
 
 	modelThing := GenerateDockerRunModel{
-		Run: hyphenRun,
+		Run:         hyphenRun,
+		VerboseMode: flags.VerboseFlag,
 	}
 
 	statusDisplay := tea.NewProgram(modelThing)
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+
 	go func() {
-		client := httputil.NewHyphenHTTPClient()
-		url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
-		conn, err := client.GetWebsocketConnection(url)
-		if err != nil {
-			printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
+		ioService := socketio.NewService()
+
+		// Set up verbose callback to send messages to the TUI
+		if flags.VerboseFlag {
+			ioService.SetVerboseCallback(func(msg string) {
+				statusDisplay.Send(VerboseMessage{Content: msg})
+			})
+		}
+
+		if err := ioService.Connect(orgId); err != nil {
+			statusDisplay.Send(ErrorMessage{Error: fmt.Errorf("failed to connect to Socket.io: %w", err)})
+			wg.Done()
 			return
 		}
-		defer conn.Close()
-		conn.WriteJSON(
-			map[string]interface{}{
-				"eventStreamTopic": "run",
-				"organizationId":   orgId,
-			},
-		)
-	messageListener:
-		for {
-			_, message, err := conn.ReadMessage()
-			if err != nil {
-				printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
-				break
+		defer ioService.Disconnect()
+
+		done := make(chan struct{})
+		// This semaphore is defensive in case we get another message after we're "done" to avoid panicing from closing the done channel twice
+		var doneOnce sync.Once
+
+		// Helper to apply changes and exit
+		applyChangesAndExit := func(changes []run.DiffResult) {
+			if flags.VerboseFlag {
+				statusDisplay.Send(VerboseMessage{Content: fmt.Sprintf("Applying %d changes", len(changes))})
+			}
+			gitutil.ApplyDiffs(changes)
+			statusDisplay.Quit()
+			doneOnce.Do(func() { close(done) })
+		}
+
+		// Helper to handle errors and exit
+		handleErrorAndExit := func(err error) {
+			statusDisplay.Send(ErrorMessage{Error: err})
+			doneOnce.Do(func() { close(done) })
+		}
+
+		ioService.On("Event:Run", func(args ...any) {
+			if len(args) == 0 {
+				return
 			}
 
-			var wsMessage WebSocketMessage
-			err = json.Unmarshal(message, &wsMessage)
-			if err != nil {
-				continue
+			payload, ok := args[0].(map[string]any)
+			if !ok {
+				return
 			}
 
-			var typeCheck map[string]interface{}
-			err = json.Unmarshal(wsMessage.Data, &typeCheck)
-			if err != nil {
-				printer.Error(cmd, fmt.Errorf("error unmarshalling Data for type check: %w", err))
-				continue
+			runId, _ := payload["runId"].(string)
+			if runId != hyphenRun.ID {
+				return
 			}
 
-			var data RunData
+			action, _ := payload["action"].(string)
 
-			err = json.Unmarshal(wsMessage.Data, &data)
-			if err != nil {
-				continue
-			}
-
-			if data.RunId != hyphenRun.ID {
-				continue
-			}
-
-			statusDisplay.Send(data)
-
-			if data.Action == "update" && data.Run.Status == "succeeded" {
-				var codeChanges run.CodeChangeRunData
-				err := json.Unmarshal(data.Run.Data, &codeChanges)
+			// Handle two possible event formats:
+			// 1. Legacy format: payload["run"] contains a Run object with status and data
+			// 2. New format: payload["data"] contains status and changes directly
+			if runDataRaw, ok := payload["run"].(map[string]any); ok {
+				runJSON, err := json.Marshal(runDataRaw)
 				if err != nil {
-					printer.Error(cmd, fmt.Errorf("error unmarshaling to CodeChangeRunData: %w", err))
-					break messageListener
+					return
 				}
 
-				gitutil.ApplyDiffs(codeChanges.Changes)
-				statusDisplay.Send(tea.KeyMsg{Type: tea.KeyEsc})
-				break messageListener
-			}
+				var runObj run.Run
+				if err := json.Unmarshal(runJSON, &runObj); err != nil {
+					return
+				}
 
-		}
+				statusDisplay.Send(RunData{Action: action, RunId: runId, Run: runObj})
+
+				if action == "update" && runObj.Status == "succeeded" {
+					var codeChanges run.CodeChangeRunData
+					if err := json.Unmarshal(runObj.Data, &codeChanges); err != nil {
+						handleErrorAndExit(fmt.Errorf("error unmarshaling CodeChangeRunData: %w", err))
+						return
+					}
+					applyChangesAndExit(codeChanges.Changes)
+					return
+				}
+			} else if dataRaw, ok := payload["data"].(map[string]any); ok {
+				status, _ := dataRaw["status"].(string)
+
+				if flags.VerboseFlag {
+					statusDisplay.Send(VerboseMessage{Content: fmt.Sprintf("Event: action=%s, status=%s", action, status)})
+				}
+
+				if action == "update" && status == "succeeded" {
+					innerData, ok := dataRaw["data"].(map[string]any)
+					if !ok {
+						if flags.VerboseFlag {
+							statusDisplay.Send(VerboseMessage{Content: "No inner 'data' field, waiting..."})
+						}
+						return
+					}
+
+					changesRaw, ok := innerData["changes"].([]any)
+					if !ok || len(changesRaw) == 0 {
+						if flags.VerboseFlag {
+							statusDisplay.Send(VerboseMessage{Content: "No changes in inner data, waiting..."})
+						}
+						return
+					}
+
+					changesJSON, err := json.Marshal(changesRaw)
+					if err != nil {
+						handleErrorAndExit(fmt.Errorf("error marshaling changes: %w", err))
+						return
+					}
+
+					var changes []run.DiffResult
+					if err := json.Unmarshal(changesJSON, &changes); err != nil {
+						handleErrorAndExit(fmt.Errorf("error unmarshaling changes: %w", err))
+						return
+					}
+
+					applyChangesAndExit(changes)
+				}
+			}
+		})
+
+		<-done
+		wg.Done()
 	}()
+
 	statusDisplay.Run()
+	wg.Wait()
 	return nil
 }

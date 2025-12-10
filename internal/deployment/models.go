@@ -42,8 +42,6 @@ type ErrorMessage struct {
 	Error error
 }
 
-type WaitingTickMessage struct{}
-
 type VerboseMessage struct {
 	Content string
 }
@@ -56,7 +54,6 @@ type StatusModel struct {
 	Service         DeploymentService
 	AppUrl          string
 	Error           error
-	WaitingSeconds  int
 	VerboseMode     bool
 	VerboseMessages []string
 }
@@ -81,9 +78,6 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		spinIcon, cmd = spinIcon.Update(msg)
 		return m, cmd
-	case WaitingTickMessage:
-		m.WaitingSeconds++
-		return m, nil
 	case VerboseMessage:
 		m.VerboseMessages = append(m.VerboseMessages, msg.Content)
 		return m, nil
@@ -91,15 +85,23 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Error = msg.Error
 		return m, tea.Quit
 	case RunMessageData:
-		// Fetch pipeline if we don't have it yet (on any message type)
+		// Load pipeline if empty (regardless of message type)
 		if len(m.Pipeline.Steps) == 0 {
-			run, _ := m.Service.GetDeploymentRun(m.OrganizationId, m.DeploymentId, m.RunId)
-			if run != nil {
+			run, err := m.Service.GetDeploymentRun(m.OrganizationId, m.DeploymentId, m.RunId)
+			if err == nil {
 				m.Pipeline = run.Pipeline
 			}
 		}
-		// Only update status if we have a pipeline
-		if len(m.Pipeline.Steps) > 0 {
+
+		switch msg.Type {
+		case "run":
+			m.UpdateStatusForId(msg.Id, msg.Status)
+			if msg.Status == "succeeded" || msg.Status == "failed" || msg.Status == "canceled" {
+				return m, tea.Quit
+			}
+		case "step":
+			m.UpdateStatusForId(msg.Id, msg.Status)
+		case "task":
 			m.UpdateStatusForId(msg.Id, msg.Status)
 		}
 	}
@@ -112,23 +114,18 @@ func (m StatusModel) View() string {
 	result += m.AppUrl + "\n"
 	result += "-------------------------------------------------\n"
 
-	if len(m.Pipeline.Steps) == 0 {
-		if m.VerboseMode {
-			result += fmt.Sprintf("%s Waiting for deployment status... (%ds)\n", spinIcon.View(), m.WaitingSeconds)
-		} else {
-			result += fmt.Sprintf("%s Waiting for deployment status...\n", spinIcon.View())
-		}
-	}
-
 	if m.VerboseMode && len(m.VerboseMessages) > 0 {
-		result += "\nVerbose messages:\n"
 		for _, msg := range m.VerboseMessages {
 			result += fmt.Sprintf("  %s\n", msg)
 		}
 		result += "\n"
 	}
 
-	result += m.RenderTree(m.Pipeline)
+	if len(m.Pipeline.Steps) == 0 {
+		result += fmt.Sprintf("%s Waiting for deployment status...\n", spinIcon.View())
+	} else {
+		result += m.RenderTree(m.Pipeline)
+	}
 
 	if m.Error != nil {
 		result += fmt.Sprintf("\n❗error: %v\n", m.Error)
@@ -166,14 +163,18 @@ func (m StatusModel) RenderTree(pipeLine models.DeploymentPipeline) string {
 
 func getMarkerBasedOnStatus(status string) string {
 	switch status {
-	case "Success":
+	case "succeeded", "Success":
 		return "[✓]"
-	case "Error":
+	case "failed", "Error":
 		return "[✗]"
-	case "Running":
+	case "running", "Running":
 		return fmt.Sprintf("[%s]", spinIcon.View())
+	case "pending", "queued":
+		return "[○]"
+	case "canceled":
+		return "[⊘]"
 	default:
-		return "[ ]" // Default marker for unknown status
+		return "[ ]"
 	}
 }
 
