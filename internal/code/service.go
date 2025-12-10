@@ -172,6 +172,11 @@ func (cs *CodeService) streamDockerGenEvents(orgId string, hyphenRun *run.Run, c
 				callbacks.onVerbose(fmt.Sprintf("Event: action=%s, status=%s", action, status))
 			}
 
+			// Update status for any status change
+			if status != "" && callbacks.onStatus != nil {
+				callbacks.onStatus(run.RunStatus(status))
+			}
+
 			if status == "failed" {
 				closeWithError(fmt.Errorf("dockerfile generation failed"))
 				return
@@ -242,7 +247,7 @@ func (cs *CodeService) generateDockerWithTUI(orgId string, hyphenRun *run.Run) e
 				statusDisplay.Send(RunData{Run: run.Run{Status: status}})
 			},
 			onSuccess: func(changes []run.DiffResult) {
-				statusDisplay.Quit()
+				// TUI model handles quit when it receives the succeeded status
 			},
 			onError: func(err error) {
 				statusDisplay.Send(ErrorMessage{Error: err})

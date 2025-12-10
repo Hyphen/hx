@@ -144,12 +144,13 @@ func (s *Service) Emit(event string, data ...any) {
 
 func (s *Service) Disconnect() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	client := s.client
+	s.client = nil
+	s.connected = false
+	s.mu.Unlock()
 
-	if s.client != nil {
-		s.client.Disconnect()
-		s.client = nil
-		s.connected = false
+	if client != nil {
+		client.Disconnect()
 	}
 }
 
