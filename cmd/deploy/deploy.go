@@ -139,6 +139,96 @@ func shouldUseTUI() bool {
 	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
+// deployCallbacks provides callbacks for the deployment event handler
+type deployCallbacks struct {
+	onVerbose        func(msg string)
+	onStatus         func(runId, status string)
+	onPipelineUpdate func(pipelineData map[string]any, runId string)
+	onComplete       func(status string)
+	onError          func(err error)
+}
+
+func streamDeployEvents(orgId string, runID string, callbacks deployCallbacks) error {
+	ioService := socketio.NewService()
+
+	if flags.VerboseFlag && callbacks.onVerbose != nil {
+		ioService.SetVerboseCallback(callbacks.onVerbose)
+	}
+
+	if err := ioService.Connect(orgId); err != nil {
+		return fmt.Errorf("failed to connect to Socket.io: %w", err)
+	}
+	defer ioService.Disconnect()
+
+	done := make(chan struct{})
+	var doneOnce sync.Once
+
+	ioService.On("Event:Run", func(args ...any) {
+		if len(args) == 0 {
+			return
+		}
+
+		payload, ok := args[0].(map[string]any)
+		if !ok {
+			return
+		}
+
+		eventRunId, _ := payload["runId"].(string)
+		if eventRunId != runID {
+			return
+		}
+
+		data, ok := payload["data"].(map[string]any)
+		if !ok {
+			return
+		}
+
+		runStatus, _ := data["status"].(string)
+		if runStatus != "" {
+			if flags.VerboseFlag && callbacks.onVerbose != nil {
+				callbacks.onVerbose(fmt.Sprintf("Run status updated to %s", runStatus))
+			}
+
+			if callbacks.onStatus != nil {
+				callbacks.onStatus(eventRunId, runStatus)
+			}
+
+			if runStatus == "succeeded" || runStatus == "failed" || runStatus == "canceled" {
+				if flags.VerboseFlag && callbacks.onVerbose != nil {
+					callbacks.onVerbose(fmt.Sprintf("Deployment ended with status %s", runStatus))
+				}
+				if callbacks.onComplete != nil {
+					callbacks.onComplete(runStatus)
+				}
+				doneOnce.Do(func() { close(done) })
+				return
+			}
+		}
+
+		if pipelineData, ok := data["pipeline"].(map[string]any); ok {
+			if callbacks.onPipelineUpdate != nil {
+				callbacks.onPipelineUpdate(pipelineData, eventRunId)
+			}
+		}
+	})
+
+	if flags.VerboseFlag && callbacks.onVerbose != nil {
+		callbacks.onVerbose("Starting run log stream")
+	}
+
+	ioService.Emit("Stream:RunLog:Start", map[string]any{
+		"runId": runID,
+	})
+
+	<-done
+
+	ioService.Emit("Stream:RunLog:Stop", map[string]any{
+		"runId": runID,
+	})
+
+	return nil
+}
+
 func runWithTUI(orgId, deploymentId string, run *models.DeploymentRun, appUrl string, service *Deployment.DeploymentService) {
 	statusModel := Deployment.StatusModel{
 		OrganizationId: orgId,
@@ -156,89 +246,34 @@ func runWithTUI(orgId, deploymentId string, run *models.DeploymentRun, appUrl st
 	wg.Add(1)
 
 	go func() {
-		ioService := socketio.NewService()
+		defer wg.Done()
 
-		// Set up verbose callback to send messages to the TUI
-		if flags.VerboseFlag {
-			ioService.SetVerboseCallback(func(msg string) {
+		err := streamDeployEvents(orgId, run.ID, deployCallbacks{
+			onVerbose: func(msg string) {
 				statusDisplay.Send(Deployment.VerboseMessage{Content: msg})
-			})
-		}
-
-		if err := ioService.Connect(orgId); err != nil {
-			statusDisplay.Send(Deployment.ErrorMessage{Error: fmt.Errorf("failed to connect to Socket.io: %w", err)})
-			wg.Done()
-			return
-		}
-		defer ioService.Disconnect()
-
-		done := make(chan struct{})
-		// This semaphore is defensive in case we get another message after we're "done" to avoid panicing from closing the done channel twice
-		var doneOnce sync.Once
-
-		ioService.On("Event:Run", func(args ...any) {
-			if len(args) == 0 {
-				return
-			}
-
-			payload, ok := args[0].(map[string]any)
-			if !ok {
-				return
-			}
-
-			runId, _ := payload["runId"].(string)
-			if runId != run.ID {
-				return
-			}
-
-			data, ok := payload["data"].(map[string]any)
-			if !ok {
-				return
-			}
-
-			runStatus, _ := data["status"].(string)
-			if runStatus != "" {
-				if flags.VerboseFlag {
-					statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Run status updated to %s", runStatus)})
-				}
-
+			},
+			onStatus: func(runId, status string) {
 				statusDisplay.Send(Deployment.RunMessageData{
 					Type:   "run",
 					RunId:  runId,
 					Id:     runId,
-					Status: runStatus,
+					Status: status,
 				})
-
-				if runStatus == "succeeded" || runStatus == "failed" || runStatus == "canceled" {
-					if flags.VerboseFlag {
-						statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Deployment ended with status %s", runStatus)})
-					}
-					statusDisplay.Quit()
-					doneOnce.Do(func() { close(done) })
-					return
-				}
-			}
-
-			if pipelineData, ok := data["pipeline"].(map[string]any); ok {
+			},
+			onPipelineUpdate: func(pipelineData map[string]any, runId string) {
 				extractStatusUpdates(pipelineData, runId, statusDisplay)
-			}
+			},
+			onComplete: func(status string) {
+				statusDisplay.Quit()
+			},
+			onError: func(err error) {
+				statusDisplay.Send(Deployment.ErrorMessage{Error: err})
+			},
 		})
 
-		if flags.VerboseFlag {
-			statusDisplay.Send(Deployment.VerboseMessage{Content: "Starting run log stream"})
+		if err != nil {
+			statusDisplay.Send(Deployment.ErrorMessage{Error: err})
 		}
-
-		ioService.Emit("Stream:RunLog:Start", map[string]any{
-			"runId": run.ID,
-		})
-
-		<-done
-
-		ioService.Emit("Stream:RunLog:Stop", map[string]any{
-			"runId": run.ID,
-		})
-
-		wg.Done()
 	}()
 
 	statusDisplay.Run()
@@ -249,78 +284,32 @@ func runWithoutTUI(orgId string, deploymentId string, run *models.DeploymentRun,
 	printer.Print(fmt.Sprintf("Deployment URL: %s", appUrl))
 	printer.Print("Monitoring deployment progress...")
 
-	ioService := socketio.NewService()
-
-	if flags.VerboseFlag {
-		ioService.SetVerboseCallback(func(msg string) {
+	err := streamDeployEvents(orgId, run.ID, deployCallbacks{
+		onVerbose: func(msg string) {
 			printer.Print(fmt.Sprintf("  [verbose] %s", msg))
-		})
-	}
-
-	if err := ioService.Connect(orgId); err != nil {
-		printer.Print(fmt.Sprintf("Failed to connect to Socket.io: %v", err))
-		return
-	}
-	defer ioService.Disconnect()
-
-	done := make(chan struct{})
-	var doneOnce sync.Once
-
-	ioService.On("Event:Run", func(args ...any) {
-		if len(args) == 0 {
-			return
-		}
-
-		payload, ok := args[0].(map[string]any)
-		if !ok {
-			return
-		}
-
-		runId, _ := payload["runId"].(string)
-		if runId != run.ID {
-			return
-		}
-
-		data, ok := payload["data"].(map[string]any)
-		if !ok {
-			return
-		}
-
-		runStatus, _ := data["status"].(string)
-		if runStatus != "" {
-			printer.Print(fmt.Sprintf("Deployment: %s", runStatus))
-
-			switch runStatus {
+		},
+		onStatus: func(runId, status string) {
+			printer.Print(fmt.Sprintf("Deployment: %s", status))
+		},
+		onPipelineUpdate: func(pipelineData map[string]any, runId string) {
+			printPipelineUpdates(pipelineData)
+		},
+		onComplete: func(status string) {
+			switch status {
 			case "succeeded":
 				printer.Success("Deployment completed successfully")
-				doneOnce.Do(func() { close(done) })
-				return
 			case "failed":
 				printer.Print("Deployment failed")
-				doneOnce.Do(func() { close(done) })
-				return
 			case "canceled":
 				printer.Warning("Deployment was canceled")
-				doneOnce.Do(func() { close(done) })
-				return
 			}
-		}
-
-		// Print step/task updates
-		if pipelineData, ok := data["pipeline"].(map[string]any); ok {
-			printPipelineUpdates(pipelineData)
-		}
+		},
+		onError: nil,
 	})
 
-	ioService.Emit("Stream:RunLog:Start", map[string]any{
-		"runId": run.ID,
-	})
-
-	<-done
-
-	ioService.Emit("Stream:RunLog:Stop", map[string]any{
-		"runId": run.ID,
-	})
+	if err != nil {
+		printer.Print(fmt.Sprintf("Error: %v", err))
+	}
 }
 
 func printPipelineUpdates(pipelineData map[string]any) {
