@@ -143,6 +143,7 @@ func (cs *CodeService) GenerateDocker(_ *cprint.CPrinter, cmd *cobra.Command) er
 						return
 					}
 					applyChangesAndExit(codeChanges.Changes)
+					return
 				}
 			} else if dataRaw, ok := payload["data"].(map[string]any); ok {
 				status, _ := dataRaw["status"].(string)
