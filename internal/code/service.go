@@ -67,8 +67,6 @@ func (cs *CodeService) GenerateDocker(_ *cprint.CPrinter, cmd *cobra.Command) er
 	wg.Add(1)
 
 	go func() {
-		defer wg.Done()
-
 		ioService := socketio.NewService()
 
 		// Set up verbose callback to send messages to the TUI
@@ -80,6 +78,7 @@ func (cs *CodeService) GenerateDocker(_ *cprint.CPrinter, cmd *cobra.Command) er
 
 		if err := ioService.Connect(orgId); err != nil {
 			statusDisplay.Send(ErrorMessage{Error: fmt.Errorf("failed to connect to Socket.io: %w", err)})
+			wg.Done()
 			return
 		}
 		defer ioService.Disconnect()
@@ -187,6 +186,7 @@ func (cs *CodeService) GenerateDocker(_ *cprint.CPrinter, cmd *cobra.Command) er
 		})
 
 		<-done
+		wg.Done()
 	}()
 
 	statusDisplay.Run()
