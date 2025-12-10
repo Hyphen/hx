@@ -93,7 +93,7 @@ func (cs *CodeService) GenerateDocker(_ *cprint.CPrinter, cmd *cobra.Command) er
 				statusDisplay.Send(VerboseMessage{Content: fmt.Sprintf("Applying %d changes", len(changes))})
 			}
 			gitutil.ApplyDiffs(changes)
-			statusDisplay.Send(tea.KeyMsg{Type: tea.KeyEsc})
+			statusDisplay.Quit()
 			doneOnce.Do(func() { close(done) })
 		}
 
