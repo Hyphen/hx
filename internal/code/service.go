@@ -88,6 +88,22 @@ func (cs *CodeService) GenerateDocker(_ *cprint.CPrinter, cmd *cobra.Command) er
 		// This semaphore is defensive in case we get another message after we're "done" to avoid panicing from closing the done channel twice
 		var doneOnce sync.Once
 
+		// Helper to apply changes and exit
+		applyChangesAndExit := func(changes []run.DiffResult) {
+			if flags.VerboseFlag {
+				statusDisplay.Send(VerboseMessage{Content: fmt.Sprintf("Applying %d changes", len(changes))})
+			}
+			gitutil.ApplyDiffs(changes)
+			statusDisplay.Send(tea.KeyMsg{Type: tea.KeyEsc})
+			doneOnce.Do(func() { close(done) })
+		}
+
+		// Helper to handle errors and exit
+		handleErrorAndExit := func(err error) {
+			statusDisplay.Send(ErrorMessage{Error: err})
+			doneOnce.Do(func() { close(done) })
+		}
+
 		ioService.On("Event:Run", func(args ...any) {
 			if len(args) == 0 {
 				return
@@ -105,42 +121,68 @@ func (cs *CodeService) GenerateDocker(_ *cprint.CPrinter, cmd *cobra.Command) er
 
 			action, _ := payload["action"].(string)
 
-			// Extract run data
-			runDataRaw, ok := payload["run"].(map[string]any)
-			if !ok {
-				return
-			}
-
-			runJSON, err := json.Marshal(runDataRaw)
-			if err != nil {
-				return
-			}
-
-			var runObj run.Run
-			if err := json.Unmarshal(runJSON, &runObj); err != nil {
-				return
-			}
-
-			data := RunData{
-				Action: action,
-				RunId:  runId,
-				Run:    runObj,
-			}
-
-			statusDisplay.Send(data)
-
-			if data.Action == "update" && data.Run.Status == "succeeded" {
-				var codeChanges run.CodeChangeRunData
-				err := json.Unmarshal(data.Run.Data, &codeChanges)
+			// Handle two possible event formats:
+			// 1. Legacy format: payload["run"] contains a Run object with status and data
+			// 2. New format: payload["data"] contains status and changes directly
+			if runDataRaw, ok := payload["run"].(map[string]any); ok {
+				runJSON, err := json.Marshal(runDataRaw)
 				if err != nil {
-					statusDisplay.Send(ErrorMessage{Error: fmt.Errorf("error unmarshaling to CodeChangeRunData: %w", err)})
-					doneOnce.Do(func() { close(done) })
 					return
 				}
 
-				gitutil.ApplyDiffs(codeChanges.Changes)
-				statusDisplay.Send(tea.KeyMsg{Type: tea.KeyEsc})
-				doneOnce.Do(func() { close(done) })
+				var runObj run.Run
+				if err := json.Unmarshal(runJSON, &runObj); err != nil {
+					return
+				}
+
+				statusDisplay.Send(RunData{Action: action, RunId: runId, Run: runObj})
+
+				if action == "update" && runObj.Status == "succeeded" {
+					var codeChanges run.CodeChangeRunData
+					if err := json.Unmarshal(runObj.Data, &codeChanges); err != nil {
+						handleErrorAndExit(fmt.Errorf("error unmarshaling CodeChangeRunData: %w", err))
+						return
+					}
+					applyChangesAndExit(codeChanges.Changes)
+				}
+			} else if dataRaw, ok := payload["data"].(map[string]any); ok {
+				status, _ := dataRaw["status"].(string)
+
+				if flags.VerboseFlag {
+					statusDisplay.Send(VerboseMessage{Content: fmt.Sprintf("Event: action=%s, status=%s", action, status)})
+				}
+
+				if action == "update" && status == "succeeded" {
+					innerData, ok := dataRaw["data"].(map[string]any)
+					if !ok {
+						if flags.VerboseFlag {
+							statusDisplay.Send(VerboseMessage{Content: "No inner 'data' field, waiting..."})
+						}
+						return
+					}
+
+					changesRaw, ok := innerData["changes"].([]any)
+					if !ok || len(changesRaw) == 0 {
+						if flags.VerboseFlag {
+							statusDisplay.Send(VerboseMessage{Content: "No changes in inner data, waiting..."})
+						}
+						return
+					}
+
+					changesJSON, err := json.Marshal(changesRaw)
+					if err != nil {
+						handleErrorAndExit(fmt.Errorf("error marshaling changes: %w", err))
+						return
+					}
+
+					var changes []run.DiffResult
+					if err := json.Unmarshal(changesJSON, &changes); err != nil {
+						handleErrorAndExit(fmt.Errorf("error unmarshaling changes: %w", err))
+						return
+					}
+
+					applyChangesAndExit(changes)
+				}
 			}
 		})
 
