@@ -187,7 +187,7 @@ func TestCreateEmptyEnvFile(t *testing.T) {
 		assert.True(t, created)
 		content, err := os.ReadFile(filepath.Join(tempDir, ".env.staging"))
 		assert.NoError(t, err)
-		assert.Equal(t, "", string(content))
+		assert.Equal(t, env.DEFAULT_ENV_CONTENTS, string(content))
 	})
 
 	t.Run("returns_false_when_file_already_exists", func(t *testing.T) {
@@ -220,7 +220,7 @@ func TestCreateEmptyEnvFile(t *testing.T) {
 		assert.True(t, created)
 		content, err := os.ReadFile(filepath.Join(tempDir, ".env"))
 		assert.NoError(t, err)
-		assert.Equal(t, "", string(content))
+		assert.Equal(t, env.DEFAULT_ENV_CONTENTS, string(content))
 	})
 }
 

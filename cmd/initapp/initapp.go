@@ -113,18 +113,13 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	mc, err := config.RestoreConfig()
+	projectID, err := flags.GetProjectID()
 	if err != nil {
 		printer.Error(cmd, err)
 		return
 	}
 
-	if mc.ProjectId == nil {
-		printer.Error(cmd, fmt.Errorf("No project found in .hx file"))
-		return
-	}
-
-	newApp, err := appService.CreateApp(orgID, *mc.ProjectId, appAlternateId, appName)
+	newApp, err := appService.CreateApp(orgID, projectID, appAlternateId, appName)
 	if err != nil {
 		if !errors.Is(err, errors.ErrConflict) {
 			printer.Error(cmd, err)
@@ -145,13 +140,11 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 	}
 
 	mcl := config.Config{
-		ProjectId:          mc.ProjectId,
-		ProjectAlternateId: mc.ProjectAlternateId,
-		ProjectName:        mc.ProjectName,
-		OrganizationId:     mc.OrganizationId,
-		AppName:            &newApp.Name,
-		AppAlternateId:     &newApp.AlternateId,
-		AppId:              &newApp.ID,
+		ProjectId:      &projectID,
+		OrganizationId: orgID,
+		AppName:        &newApp.Name,
+		AppAlternateId: &newApp.AlternateId,
+		AppId:          &newApp.ID,
 	}
 
 	err = config.InitializeConfig(mcl, config.ManifestConfigFile)
@@ -204,7 +197,7 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	PrintInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID, *mc.ProjectAlternateId)
+	PrintInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID, projectID)
 }
 
 func GetAppName(cmd *cobra.Command, args []string) (string, bool, error) {
@@ -309,8 +302,8 @@ func CreateGitignoredFile(cmd *cobra.Command, fileName string) error {
 	}
 	defer file.Close()
 
-	// Write '# KEY=Value' to the file
-	_, err = file.WriteString("# Example\n# KEY=Value\n")
+	// Write default env contents to the file
+	_, err = file.WriteString(env.DEFAULT_ENV_CONTENTS)
 	if err != nil {
 		printer.Error(cmd, fmt.Errorf("error writing to %s: %w", fileName, err))
 		return err

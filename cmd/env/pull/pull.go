@@ -13,6 +13,7 @@ import (
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
+	"github.com/Hyphen/cli/pkg/gitutil"
 	"github.com/spf13/cobra"
 )
 
@@ -98,11 +99,10 @@ func RunPull(args []string, forceFlag bool) error {
 		return nil
 	}
 
-	// If not a monorepo, proceed with regular pull
+	// If not a monorepo, proceed with regular pull for top-level app
 	return pullForApp(args, forceFlag)
 }
 
-// pullForApp contains the original pull logic
 func pullForApp(args []string, forceFlag bool) error {
 	db, err := database.Restore()
 	if err != nil {
@@ -141,7 +141,8 @@ func pullForApp(args []string, forceFlag bool) error {
 		return err
 	}
 
-	if envName == "" { // ALL
+	switch envName {
+	case "": // ALL
 		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId, secret, config, forceFlag)
 		if err != nil {
 			return err
@@ -151,7 +152,7 @@ func pullForApp(args []string, forceFlag bool) error {
 			printPullSummary(pulledEnvs)
 		}
 		return nil
-	} else if envName == "default" {
+	case "default":
 		if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, secret, config, forceFlag); err != nil {
 			return err
 		}
@@ -160,7 +161,7 @@ func pullForApp(args []string, forceFlag bool) error {
 			printPullSummary([]string{"default"})
 		}
 		return nil
-	} else { // we have a specific env name
+	default: // we have a specific env name
 		err = service.checkForEnvironment(orgId, envName, projectId)
 		if err != nil {
 			return err
@@ -198,10 +199,10 @@ func newService(envService env.EnvServicer, db database.Database, vinzService vi
 func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
 	_, exist, err := s.envService.GetEnvironment(orgId, projectId, envName)
 	if !exist && err == nil {
-		return fmt.Errorf("Environment %s not found", envName)
+		return fmt.Errorf("environment %s not found", envName)
 	}
 	if err != nil {
-		return fmt.Errorf("Error: %s", err)
+		return fmt.Errorf("error: %s", err)
 	}
 
 	return nil
@@ -231,7 +232,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secret 
 			actual := currentLocal.HashData()
 			expectedHash := currentLocalSecret.Hash
 			if actual != expectedHash && !force {
-				return fmt.Errorf("Local \"%s\" environment has been modified. Use --force to overwrite", envName)
+				return fmt.Errorf("local \"%s\" environment has been modified. Use --force to overwrite", envName)
 			}
 		}
 	}
@@ -278,8 +279,11 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secret 
 	}
 
 	if _, err = e.DecryptVarsAndSaveIntoFile(envFileName, secret); err != nil {
-		return fmt.Errorf("Failed to save decrypted environment: %s, variables to file: %s", envName, envFileName)
+		return fmt.Errorf("failed to save decrypted environment: %s, variables to file: %s", envName, envFileName)
 	}
+
+	// attempt to add this to .gitignore for the user. Do not fail out if we can't
+	_ = gitutil.EnsureGitignore(envFileName)
 
 	return nil
 }
@@ -395,11 +399,22 @@ func createEmptyEnvFile(envName string) (bool, error) {
 	fileExists := !os.IsNotExist(err)
 
 	if fileExists {
+		// attempt to add this to .gitignore for the user. Do not fail out if we can't
+		_ = gitutil.EnsureGitignore(envFileName)
+
 		// File already exists, skip without error
 		return false, nil
 	}
 
-	return true, os.WriteFile(envFileName, []byte(""), 0644)
+	err = os.WriteFile(envFileName, []byte(env.DEFAULT_ENV_CONTENTS), 0644)
+	if err != nil {
+		return false, err
+	}
+
+	// attempt to add this to .gitignore for the user. Do not fail out if we can't
+	_ = gitutil.EnsureGitignore(envFileName)
+
+	return true, nil
 }
 
 func printPullSummary(pulledEnvs []string) {
