@@ -33,18 +33,29 @@ type LogMessageData struct {
 // Define the second data type (new structure)
 type RunMessageData struct {
 	Type   string `json:"type"`
-	RunId  string `json:"RunId"`
+	RunId  string `json:"runId"`
 	Id     string `json:"id"`
 	Status string `json:"status"`
 }
 
+type ErrorMessage struct {
+	Error error
+}
+
+type VerboseMessage struct {
+	Content string
+}
+
 type StatusModel struct {
-	Pipeline       models.DeploymentPipeline
-	OrganizationId string
-	DeploymentId   string
-	RunId          string
-	Service        DeploymentService
-	AppUrl         string
+	Pipeline        models.DeploymentPipeline
+	OrganizationId  string
+	DeploymentId    string
+	RunId           string
+	Service         DeploymentService
+	AppUrl          string
+	Error           error
+	VerboseMode     bool
+	VerboseMessages []string
 }
 
 var (
@@ -67,18 +78,27 @@ func (m StatusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		spinIcon, cmd = spinIcon.Update(msg)
 		return m, cmd
+	case VerboseMessage:
+		m.VerboseMessages = append(m.VerboseMessages, msg.Content)
+		return m, nil
+	case ErrorMessage:
+		m.Error = msg.Error
+		return m, tea.Quit
 	case RunMessageData:
-		switch msg.Type {
-		case "run":
-			if msg.Status == "pending" {
-				// Update the top-level run variable
-				run, _ := m.Service.GetDeploymentRun(m.OrganizationId, m.DeploymentId, msg.RunId)
+		// Load pipeline if empty (regardless of message type)
+		if len(m.Pipeline.Steps) == 0 {
+			run, err := m.Service.GetDeploymentRun(m.OrganizationId, m.DeploymentId, m.RunId)
+			if err == nil {
 				m.Pipeline = run.Pipeline
 			}
-			// if msg.Status == "succeeded" || msg.Status == "failed" || msg.Status == "canceled" {
-			// 	return m, tea.Quit
-			// }
+		}
+
+		switch msg.Type {
+		case "run":
 			m.UpdateStatusForId(msg.Id, msg.Status)
+			if msg.Status == "succeeded" || msg.Status == "failed" || msg.Status == "canceled" {
+				return m, tea.Quit
+			}
 		case "step":
 			m.UpdateStatusForId(msg.Id, msg.Status)
 		case "task":
@@ -93,7 +113,24 @@ func (m StatusModel) View() string {
 	result := "-------------------------------------------------\n"
 	result += m.AppUrl + "\n"
 	result += "-------------------------------------------------\n"
-	result += m.RenderTree(m.Pipeline)
+
+	if m.VerboseMode && len(m.VerboseMessages) > 0 {
+		for _, msg := range m.VerboseMessages {
+			result += fmt.Sprintf("  %s\n", msg)
+		}
+		result += "\n"
+	}
+
+	if len(m.Pipeline.Steps) == 0 {
+		result += fmt.Sprintf("%s Waiting for deployment status...\n", spinIcon.View())
+	} else {
+		result += m.RenderTree(m.Pipeline)
+	}
+
+	if m.Error != nil {
+		result += fmt.Sprintf("\n❗error: %v\n", m.Error)
+	}
+
 	return result
 }
 
@@ -126,14 +163,18 @@ func (m StatusModel) RenderTree(pipeLine models.DeploymentPipeline) string {
 
 func getMarkerBasedOnStatus(status string) string {
 	switch status {
-	case "Success":
+	case "succeeded", "Success":
 		return "[✓]"
-	case "Error":
+	case "failed", "Error":
 		return "[✗]"
-	case "Running":
+	case "running", "Running":
 		return fmt.Sprintf("[%s]", spinIcon.View())
+	case "pending", "queued":
+		return "[○]"
+	case "canceled":
+		return "[⊘]"
 	default:
-		return "[ ]" // Default marker for unknown status
+		return "[ ]"
 	}
 }
 

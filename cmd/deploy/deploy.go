@@ -1,8 +1,8 @@
 package deploy
 
 import (
-	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/Hyphen/cli/internal/build"
 	Deployment "github.com/Hyphen/cli/internal/deployment"
@@ -11,8 +11,8 @@ import (
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
-	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/Hyphen/cli/pkg/prompt"
+	"github.com/Hyphen/cli/pkg/socketio"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
@@ -128,97 +128,174 @@ Use 'hyphen deploy --help' for more information about available flags.
 			Pipeline:       run.Pipeline,
 			Service:        *service,
 			AppUrl:         fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID),
+			VerboseMode:    flags.VerboseFlag,
 		}
 		statusDisplay := tea.NewProgram(statusModel)
 
+		var wg sync.WaitGroup
+		wg.Add(1)
+
 		go func() {
-			client := httputil.NewHyphenHTTPClient()
-			url := fmt.Sprintf("%s/api/websockets/eventStream", apiconf.GetBaseWebsocketUrl())
-			conn, err := client.GetWebsocketConnection(url)
-			if err != nil {
-				printer.Error(cmd, fmt.Errorf("failed to connect to WebSocket: %w", err))
+			ioService := socketio.NewService()
+
+			// Set up verbose callback to send messages to the TUI
+			if flags.VerboseFlag {
+				ioService.SetVerboseCallback(func(msg string) {
+					statusDisplay.Send(Deployment.VerboseMessage{Content: msg})
+				})
+			}
+
+			if err := ioService.Connect(orgId); err != nil {
+				statusDisplay.Send(Deployment.ErrorMessage{Error: fmt.Errorf("failed to connect to Socket.io: %w", err)})
+				wg.Done()
 				return
 			}
-			defer conn.Close()
-			conn.WriteJSON(
-				map[string]interface{}{
-					"eventStreamTopic": "deploymentRun",
-					"organizationId":   orgId,
-				},
-			)
-		messageListener:
-			for {
-				_, message, err := conn.ReadMessage()
-				if err != nil {
-					printer.Error(cmd, fmt.Errorf("error reading WebSocket message: %w", err))
-					break
+			defer ioService.Disconnect()
+
+			done := make(chan struct{})
+			// This semaphore is defensive in case we get another message after we're "done" to avoid panicing from closing the done channel twice
+			var doneOnce sync.Once
+
+			ioService.On("Event:Run", func(args ...any) {
+				if len(args) == 0 {
+					return
 				}
 
-				var wsMessage Deployment.WebSocketMessage
-				err = json.Unmarshal(message, &wsMessage)
-				if err != nil {
-					continue
+				payload, ok := args[0].(map[string]any)
+				if !ok {
+					return
 				}
 
-				var typeCheck map[string]interface{}
-				err = json.Unmarshal(wsMessage.Data, &typeCheck)
-				if err != nil {
-					printer.Error(cmd, fmt.Errorf("error unmarshalling Data for type check: %w", err))
-					continue
+				runId, _ := payload["runId"].(string)
+				if runId != run.ID {
+					return
 				}
 
-				if _, ok := typeCheck["level"]; ok {
-					var data Deployment.LogMessageData
-					err = json.Unmarshal(wsMessage.Data, &data)
-					if err != nil {
-						continue
+				data, ok := payload["data"].(map[string]any)
+				if !ok {
+					return
+				}
+
+				runStatus, _ := data["status"].(string)
+				if runStatus != "" {
+					if flags.VerboseFlag {
+						statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Run status updated to %s", runStatus)})
 					}
 
-					// TODO: this should go in a second pane or something
-					// timestamp := time.UnixMilli(data.Timestamp)
-					// formattedTime := timestamp.Format("15:04:05")
-					// log := fmt.Sprintf("[%s] %s: %s", formattedTime, data.Level, data.Message)
-					// printer.PrintVerbose(log)
-				} else if _, ok := typeCheck["type"]; ok {
-					var data Deployment.RunMessageData
-					err = json.Unmarshal(wsMessage.Data, &data)
-					if err != nil {
-						continue
-					}
+					statusDisplay.Send(Deployment.RunMessageData{
+						Type:   "run",
+						RunId:  runId,
+						Id:     runId,
+						Status: runStatus,
+					})
 
-					statusDisplay.Send(data)
-
-					if data.Type == "run" && (data.Status == "succeeded" || data.Status == "failed" || data.Status == "canceled") {
+					if runStatus == "succeeded" || runStatus == "failed" || runStatus == "canceled" {
+						if flags.VerboseFlag {
+							statusDisplay.Send(Deployment.VerboseMessage{Content: fmt.Sprintf("Deployment ended with status %s", runStatus)})
+						}
 						statusDisplay.Quit()
-						break messageListener
+						doneOnce.Do(func() { close(done) })
+						return
 					}
 				}
+
+				if pipelineData, ok := data["pipeline"].(map[string]any); ok {
+					extractStatusUpdates(pipelineData, runId, statusDisplay)
+				}
+			})
+
+			if flags.VerboseFlag {
+				statusDisplay.Send(Deployment.VerboseMessage{Content: "Starting run log stream"})
 			}
+
+			ioService.Emit("Stream:RunLog:Start", map[string]any{
+				"runId": run.ID,
+			})
+
+			<-done
+
+			ioService.Emit("Stream:RunLog:Stop", map[string]any{
+				"runId": run.ID,
+			})
+
+			wg.Done()
 		}()
+
 		statusDisplay.Run()
+		wg.Wait()
 
 		return nil
 	},
 }
 
+func extractStatusUpdates(data map[string]any, runId string, statusDisplay *tea.Program) {
+	if steps, ok := data["steps"].([]any); ok {
+		for _, stepRaw := range steps {
+			step, ok := stepRaw.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			stepId, _ := step["id"].(string)
+			stepStatus, _ := step["status"].(string)
+
+			if stepId != "" && stepStatus != "" {
+				statusDisplay.Send(Deployment.RunMessageData{
+					Type:   "step",
+					RunId:  runId,
+					Id:     stepId,
+					Status: stepStatus,
+				})
+			}
+
+			if tasks, ok := step["tasks"].([]any); ok {
+				for _, taskRaw := range tasks {
+					task, ok := taskRaw.(map[string]any)
+					if !ok {
+						continue
+					}
+
+					taskId, _ := task["id"].(string)
+					taskStatus, _ := task["status"].(string)
+
+					if taskId != "" && taskStatus != "" {
+						statusDisplay.Send(Deployment.RunMessageData{
+							Type:   "task",
+							RunId:  runId,
+							Id:     taskId,
+							Status: taskStatus,
+						})
+					}
+				}
+			}
+
+			if parallelSteps, ok := step["parallelSteps"].([]any); ok {
+				for _, psRaw := range parallelSteps {
+					ps, ok := psRaw.(map[string]any)
+					if !ok {
+						continue
+					}
+					extractStatusUpdates(map[string]any{"steps": []any{ps}}, runId, statusDisplay)
+				}
+			}
+		}
+	}
+}
+
 func FindStepOrTaskByID(pipeline models.DeploymentPipeline, id string) (interface{}, bool) {
-	// Helper function to recursively search steps
 	var searchSteps func(steps []models.DeploymentStep) (interface{}, bool)
 	searchSteps = func(steps []models.DeploymentStep) (interface{}, bool) {
 		for _, step := range steps {
-			// Check if the current step matches the ID
 			if step.ID == id {
 				return step, true
 			}
 
-			// Check tasks within the step
 			for _, task := range step.Tasks {
 				if task.ID == id {
 					return task, true
 				}
 			}
 
-			// Recursively search in parallel steps
 			if result, found := searchSteps(step.ParallelSteps); found {
 				return result, true
 			}
@@ -226,7 +303,6 @@ func FindStepOrTaskByID(pipeline models.DeploymentPipeline, id string) (interfac
 		return nil, false
 	}
 
-	// Start searching from the top-level steps
 	return searchSteps(pipeline.Steps)
 }
 

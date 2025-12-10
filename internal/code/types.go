@@ -21,9 +21,20 @@ type RunData struct {
 	Run    run.Run `json:"run"`
 }
 
+type ErrorMessage struct {
+	Error error
+}
+
+type VerboseMessage struct {
+	Content string
+}
+
 type GenerateDockerRunModel struct {
-	RunID string
-	Run   *run.Run
+	RunID           string
+	Run             *run.Run
+	VerboseMode     bool
+	VerboseMessages []string
+	Error           error
 }
 
 var (
@@ -46,6 +57,12 @@ func (m GenerateDockerRunModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		spinIcon, cmd = spinIcon.Update(msg)
 		return m, cmd
+	case VerboseMessage:
+		m.VerboseMessages = append(m.VerboseMessages, msg.Content)
+		return m, nil
+	case ErrorMessage:
+		m.Error = msg.Error
+		return m, tea.Quit
 	case RunData:
 		m.Run.Status = msg.Run.Status
 	}
@@ -54,8 +71,21 @@ func (m GenerateDockerRunModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m GenerateDockerRunModel) View() string {
 	result := "-------------------------------------------------\n"
+
+	if m.VerboseMode && len(m.VerboseMessages) > 0 {
+		for _, msg := range m.VerboseMessages {
+			result += fmt.Sprintf("  %s\n", msg)
+		}
+		result += "\n"
+	}
+
 	result += getMarkerBasedOnStatus(m.Run.Status) + "\n"
 	result += "-------------------------------------------------\n"
+
+	if m.Error != nil {
+		result += fmt.Sprintf("\n❗error: %v\n", m.Error)
+	}
+
 	return result
 }
 
