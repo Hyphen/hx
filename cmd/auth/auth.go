@@ -144,6 +144,33 @@ func login(cmd *cobra.Command) error {
 
 	defaultProject := projectList[0]
 
+	if len(projectList) > 1 {
+		choices := make([]prompt.Choice, len(projectList))
+		for i, project := range projectList {
+			choices[i] = prompt.Choice{
+				Id:      *project.ID,
+				Display: fmt.Sprintf("%s (%s)", project.Name, *project.ID),
+			}
+		}
+
+		choice, err := prompt.PromptSelection(choices, "Select a default project:")
+
+		if err != nil {
+			return err
+		}
+
+		if choice.Id == "" {
+			printer.YellowPrint(("no choice made, defaulting to first project"))
+		} else {
+			for _, project := range projectList {
+				if *project.ID == choice.Id {
+					defaultProject = project
+					break
+				}
+			}
+		}
+	}
+
 	mc := config.Config{
 		ProjectId:          defaultProject.ID,
 		ProjectName:        &defaultProject.Name,
