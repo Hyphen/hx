@@ -65,6 +65,9 @@ func (m GenerateDockerRunModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case RunData:
 		m.Run.Status = msg.Run.Status
+		if msg.Run.Status == run.RunStatusSucceeded || msg.Run.Status == run.RunStatusFailed || msg.Run.Status == run.RunStatusCanceled {
+			return m, tea.Quit
+		}
 	}
 	return m, nil
 }
