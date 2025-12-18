@@ -95,6 +95,18 @@ Use 'hyphen deploy --help' for more information about available flags.
 			}
 		}
 
+		if !selectedDeployment.IsReady {
+			printer.Print("❌ Cannot deploy: there are integration issues that need to be resolved")
+			for _, issue := range selectedDeployment.ReadinessIssues {
+				if issue.Cloud != "" {
+					printer.Print(fmt.Sprintf("  • %s (%s)", issue.Error, issue.Cloud))
+				} else {
+					printer.Print(fmt.Sprintf("  • %s", issue.Error))
+				}
+			}
+			return nil
+		}
+
 		appSources := []Deployment.AppSources{}
 
 		if noBuild {
