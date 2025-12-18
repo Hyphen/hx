@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Hyphen/cli/cmd/setorg"
 	"github.com/Hyphen/cli/internal/config"
-	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/oauth"
 	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
+	"github.com/Hyphen/cli/pkg/helpers"
 	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/Hyphen/cli/pkg/toggle"
 	"github.com/spf13/cobra"
@@ -131,80 +132,32 @@ func login(cmd *cobra.Command) error {
 		return fmt.Errorf("failed to get user information: %w", err)
 	}
 
-	organizationID := executionContext.Member.Organization.ID
-
-	projectService := projects.NewService(organizationID)
-	projectList, err := projectService.ListProjects()
-	if err != nil {
-		return err
-	}
-	if len(projectList) == 0 {
-		return fmt.Errorf("no projects found")
-	}
-
-	defaultProject := projectList[0]
-
-	if len(projectList) > 1 {
-		choices := make([]prompt.Choice, len(projectList))
-		for i, project := range projectList {
-			choices[i] = prompt.Choice{
-				Id:      *project.ID,
-				Display: fmt.Sprintf("%s (%s)", project.Name, *project.ID),
-			}
+	if !helpers.IsInTerminal() {
+		organizationID := executionContext.Member.Organization.ID
+		mc := config.Config{
+			OrganizationId: organizationID,
 		}
 
-		choice, err := prompt.PromptSelection(choices, "Select a default project:")
-
-		if err != nil {
+		projectService := projects.NewService(organizationID)
+		projects, _ := projectService.ListProjects()
+		if projects != nil || len(projects) > 0 {
+			proj := projects[0]
+			mc.ProjectId = proj.ID
+			mc.ProjectName = &proj.Name
+			mc.ProjectAlternateId = &proj.AlternateID
+		}
+		if err := config.GlobalInitializeConfig(mc); err != nil {
 			return err
 		}
 
-		if choice.Id == "" {
-			printer.YellowPrint(("no choice made, defaulting to first project"))
-		} else {
-			for _, project := range projectList {
-				if *project.ID == choice.Id {
-					defaultProject = project
-					break
-				}
-			}
+	} else {
+		err = setorg.SetOrganization(cmd, "")
+		if err != nil {
+			return fmt.Errorf("failed to set organization: %w", err)
 		}
-	}
-
-	mc := config.Config{
-		ProjectId:          defaultProject.ID,
-		ProjectName:        &defaultProject.Name,
-		ProjectAlternateId: &defaultProject.AlternateID,
-		OrganizationId:     organizationID,
-		ExpiryTime:         expiryTime,
-		HyphenAccessToken:  accessToken,
-		HyphenRefreshToken: refreshToken,
-		HypenIDToken:       idToken,
-		HyphenAPIKey:       apiKey,
-		AppId:              nil,
-		AppName:            nil,
-		AppAlternateId:     nil,
-	}
-
-	if err := config.GlobalInitializeConfig(mc); err != nil {
-		return err
 	}
 
 	toggle.HandleAuth(executionContext)
 
-	printAuthenticationSummary(&executionContext, organizationID, *defaultProject.ID)
 	return nil
-}
-
-func printAuthenticationSummary(executionContext *models.ExecutionContext, organizationID string, projectID string) {
-	if flags.VerboseFlag {
-		printer.PrintHeader("Authentication Summary")
-		printer.Success("Login successful!")
-		printer.Print("") // Add an empty line for better spacing
-		printer.PrintDetail("User", executionContext.User.Name)
-		printer.PrintDetail("Organization ID", organizationID)
-		printer.PrintDetail("Default Project ID", projectID)
-		printer.Print("") // Add an empty line for better spacing
-	}
-	printer.GreenPrint("You are now authenticated and ready to use Hyphen CLI.")
 }
