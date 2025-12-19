@@ -215,8 +215,9 @@ func PromptSelection(choices []Choice, prompt string) (Choice, error) {
 }
 
 type Choice struct {
-	Id      string
-	Display string
+	Id           string
+	Display      string
+	OriginalData any
 }
 
 type model struct {

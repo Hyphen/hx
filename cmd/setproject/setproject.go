@@ -4,74 +4,69 @@ import (
 	"fmt"
 
 	"github.com/Hyphen/cli/internal/config"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
-	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
+	"github.com/Hyphen/cli/pkg/helpers"
 	"github.com/spf13/cobra"
 )
 
 var (
-	globalFlag bool
-	printer    *cprint.CPrinter
+	printer *cprint.CPrinter
 )
 
 var SetProjectCmd = &cobra.Command{
-	Use:   "set-project <id>",
-	Short: "Set the project ID",
-	Long:  `Set the project ID for the Hyphen CLI to use.`,
-	Args:  cobra.ExactArgs(1),
+	Use:   "set-project <id/alternate_id>",
+	Short: "Set the defaultd project",
+	Long:  `Set the default project for the Hyphen CLI to use.`,
+	Args:  cobra.MaximumNArgs(1),
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return user.ErrorIfNotAuthenticated()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
-		projectID := args[0]
-		var err error
-
-		restoredConfig, err := config.RestoreConfig()
+		organizationID, err := flags.GetOrganizationID()
+		projectID := ""
+		if len(args) > 0 {
+			projectID = args[0]
+		}
 		if err != nil {
-			return errors.Wrapf(err, "failed to restore config")
+			printer.Error(cmd, fmt.Errorf("failed to get organization ID: %v", err))
+			return err
 		}
 
-		orgID := restoredConfig.OrganizationId
-		projectService := projects.NewService(orgID)
-		project, err := projectService.GetProject(projectID)
-		if err != nil {
-			return errors.Wrapf(err, "failed to get project %q. Is that a valid project ID or alternate ID?", projectID)
-		}
+		return SetProject(cmd, organizationID, projectID)
 
-		if globalFlag {
-			err = config.UpsertGlobalProject(project)
-		} else {
-			err = config.UpsertProject(project)
-		}
-
-		if err != nil {
-			return fmt.Errorf("failed to update project ID: %w", err)
-		}
-		printProjectUpdateSuccess(projectID, globalFlag)
-		return nil
 	},
 }
 
-func init() {
-	SetProjectCmd.Flags().BoolVar(&globalFlag, "global", false, "Set the project ID globally")
-}
+func SetProject(cmd *cobra.Command, organizationID, projectID string) error {
+	projectService := projects.NewService(organizationID)
+	var project models.Project
+	if projectID == "" {
+		proj, err := helpers.SelectProject(organizationID, "Select a defualt project:")
+		if err != nil {
+			printer.Error(cmd, fmt.Errorf("failed to select project: %v", err))
+			return err
+		}
+		project = proj
+	} else {
+		proj, err := projectService.GetProject(projectID)
+		if err != nil {
+			printer.Error(cmd, fmt.Errorf("failed to get project %q: %v", projectID, err))
+			return err
+		}
+		project = proj
+	}
 
-func printProjectUpdateSuccess(projectID string, isGlobal bool) {
-	printer.PrintHeader("--- Project Update ---")
-	if isGlobal {
-		printer.Success("Successfully updated global project ID")
-	} else {
-		printer.Success("Successfully updated project ID")
+	err := config.UpsertGlobalProject(project)
+	if err != nil {
+		printer.Error(cmd, fmt.Errorf("failed to update default project: %v", err))
+		return err
 	}
-	printer.PrintDetail("New Project ID", projectID)
-	fmt.Println()
-	if isGlobal {
-		printer.GreenPrint("Hyphen CLI is now set to use the new project globally.")
-	} else {
-		printer.GreenPrint("Hyphen CLI is now set to use the new project.")
-	}
+	printer.Success(fmt.Sprintf("successfully update default project to %s (%s)", project.Name, *project.ID))
+
+	return nil
 }

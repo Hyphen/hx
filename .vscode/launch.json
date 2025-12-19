@@ -10,7 +10,7 @@
     "mode": "debug",
     "host": "127.0.0.1",
     "program": "${workspaceRoot}",
-    "cwd": "D:\\hyphen-tilde\\location",
+    //"cwd": "D:\\hyphen-tilde\\location",
     "env": {
       "HYPHEN_DEV": "true",
       //"HYPHEN_Local": "true"
@@ -20,7 +20,7 @@
      //"env", "pull", "--force"
      //"code", "docker"
      //"build"
-     "auth"
+     "set-org"
     ],
     "showLog": true,
     "console": "integratedTerminal"
