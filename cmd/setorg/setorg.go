@@ -3,81 +3,91 @@ package setorg
 import (
 	"fmt"
 
+	"github.com/Hyphen/cli/cmd/setproject"
 	"github.com/Hyphen/cli/internal/config"
-	"github.com/Hyphen/cli/internal/projects"
+	"github.com/Hyphen/cli/internal/models"
+	"github.com/Hyphen/cli/internal/organizations"
 	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
+	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/spf13/cobra"
 )
 
 var (
-	globalFlag bool
-	printer    *cprint.CPrinter
+	printer *cprint.CPrinter
 )
 
 var SetOrgCmd = &cobra.Command{
 	Use:   "set-org <id>",
 	Short: "Set the organization ID",
 	Long:  `Set the organization ID for the Hyphen CLI to use.`,
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return user.ErrorIfNotAuthenticated()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		printer = cprint.NewCPrinter(flags.VerboseFlag)
-		orgID := args[0]
-		var err error
-
-		projectService := projects.NewService(orgID)
-		projectList, err := projectService.ListProjects()
-		if err != nil {
-			return err
+		organizationID := ""
+		if len(args) > 0 {
+			organizationID = args[0]
 		}
-		if len(projectList) == 0 {
-			return fmt.Errorf("no projects found")
-		}
-		defaultProject := projectList[0]
-
-		if globalFlag {
-			err = config.UpsertGlobalOrganizationID(orgID)
-		} else {
-			err = config.UpsertOrganizationID(orgID)
-		}
-		if err != nil {
-			return fmt.Errorf("failed to update organization ID: %w", err)
-		}
-
-		if globalFlag {
-			err = config.UpsertGlobalProject(defaultProject)
-		} else {
-			err = config.UpsertProject(defaultProject)
-		}
-		if err != nil {
-			return fmt.Errorf("failed to update project ID: %w", err)
-		}
-
-		printOrgUpdateSuccess(orgID, globalFlag)
-		return nil
+		return SetOrganization(cmd, organizationID)
 	},
 }
 
-func init() {
-	SetOrgCmd.Flags().BoolVar(&globalFlag, "global", false, "Set the organization ID globally")
-}
+func SetOrganization(cmd *cobra.Command, organizationID string) error {
+	printer = cprint.NewCPrinter(flags.VerboseFlag)
+	var organization models.Organization
+	organizationService := organizations.NewService()
+	if organizationID == "" {
+		orgs, err := organizationService.ListOrganizations()
+		if err != nil {
+			return fmt.Errorf("failed to list organizations: %w", err)
+		}
+		if orgs.Total == 0 {
+			return fmt.Errorf("no organizations found")
+		}
+		if orgs.Total == 1 {
+			organization = orgs.Data[0]
+			printer.Print(fmt.Sprintf("You only have access to one organization, automatically choosing %s", organization.Name))
+		} else {
+			// TODO: handle pagination
+			choices := make([]prompt.Choice, len(orgs.Data))
+			for i, org := range orgs.Data {
+				choices[i] = prompt.Choice{
+					Id:           org.ID,
+					Display:      fmt.Sprintf("%s (%s)", org.Name, org.ID),
+					OriginalData: org,
+				}
+			}
+			choice, err := prompt.PromptSelection(choices, "Select an organization:")
+			if err != nil {
+				return fmt.Errorf("failed to select organization: %w", err)
+			}
+			organization = choice.OriginalData.(models.Organization)
+		}
 
-func printOrgUpdateSuccess(orgID string, isGlobal bool) {
-	printer.PrintHeader("--- Organization Update ---")
-	if isGlobal {
-		printer.Success("Successfully updated global organization ID")
 	} else {
-		printer.Success("Successfully updated organization ID")
+		org, err := organizationService.GetOrganization(organizationID)
+		if err != nil {
+			return fmt.Errorf("failed to get organization %q: %w", organizationID, err)
+		}
+		organization = org
 	}
-	printer.PrintDetail("New Organization ID", orgID)
-	fmt.Println()
-	if isGlobal {
-		printer.GreenPrint("Hyphen CLI is now set to use the new organization globally.")
-	} else {
-		printer.GreenPrint("Hyphen CLI is now set to use the new organization.")
+
+	var err error
+	err = config.UpsertGlobalOrganizationID(organization.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update organization ID: %w", err)
 	}
+	printer.Success(fmt.Sprintf("successfully update default organization to %s (%s)", organization.Name, organization.ID))
+
+	// Make them select a new default project since projects are organization specific
+	printer.Print("Because you changed organizations")
+	err = setproject.SetProject(cmd, organization.ID, "")
+	if err != nil {
+		return fmt.Errorf("failed to set default project for new organization: %w", err)
+	}
+
+	return nil
 }
