@@ -14,12 +14,20 @@ type DeploymentApp struct {
 	DeploymentSettings DeploymentAppSettings `json:"deploymentSettings"`
 }
 
+type ReadinessIssue struct {
+	Error     string `json:"error"`
+	Cloud     string `json:"cloud,omitempty"`
+	ProjectId string `json:"projectId"`
+}
+
 type Deployment struct {
-	ID           string                `json:"id"`
-	Name         string                `json:"name"`
-	Description  string                `json:"description"`
-	Organization OrganizationReference `json:"organization"`
-	Apps         []DeploymentApp       `json:"apps"`
+	ID              string                `json:"id"`
+	Name            string                `json:"name"`
+	Description     string                `json:"description"`
+	Organization    OrganizationReference `json:"organization"`
+	Apps            []DeploymentApp       `json:"apps"`
+	IsReady         bool                  `json:"isReady"`
+	ReadinessIssues []ReadinessIssue      `json:"readinessIssues"`
 }
 
 type DeploymentRun struct {
