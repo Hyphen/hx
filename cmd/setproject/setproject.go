@@ -46,7 +46,7 @@ func SetProject(cmd *cobra.Command, organizationID, projectID string) error {
 	projectService := projects.NewService(organizationID)
 	var project models.Project
 	if projectID == "" {
-		proj, err := helpers.SelectProject(organizationID, "Select a defualt project:")
+		proj, err := helpers.SelectProject(organizationID, "Select a default project:")
 		if err != nil {
 			printer.Error(cmd, fmt.Errorf("failed to select project: %v", err))
 			return err
