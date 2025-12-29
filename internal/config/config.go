@@ -199,7 +199,16 @@ func readAndUnmarshalConfigJSON[T any](filename string) (T, error) {
 }
 
 func RestoreConfig() (Config, error) {
-	return RestoreConfigFromFile(ManifestConfigFile)
+	config, err := RestoreConfigFromFile(ManifestConfigFile)
+	if err != nil {
+		return Config{}, err
+	}
+	if os.Getenv("HYPHEN_API_KEY") != "" {
+		key := os.Getenv("HYPHEN_API_KEY")
+		config.HyphenAPIKey = &key
+	}
+
+	return config, nil
 }
 
 func ExistsLocal() bool {
