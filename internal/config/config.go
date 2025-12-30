@@ -203,10 +203,6 @@ func RestoreConfig() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	if os.Getenv("HYPHEN_API_KEY") != "" {
-		key := os.Getenv("HYPHEN_API_KEY")
-		config.HyphenAPIKey = &key
-	}
 
 	return config, nil
 }

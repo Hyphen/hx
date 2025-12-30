@@ -58,6 +58,8 @@ func login(cmd *cobra.Command) error {
 	var expiryTime *int64
 	var apiKey *string
 
+	var mc config.Config
+
 	// Check for standard login flow (oauth)
 	if !flags.UseApiKeyFlag && flags.SetApiKeyFlag == "" {
 		oauthService := oauth.DefaultOAuthService()
@@ -75,7 +77,7 @@ func login(cmd *cobra.Command) error {
 		idToken = &token.IDToken
 		expiryTime = &token.ExpiryTime
 
-		mc := config.Config{
+		mc = config.Config{
 			HyphenAccessToken:  accessToken,
 			HyphenRefreshToken: refreshToken,
 			HypenIDToken:       idToken,
@@ -114,7 +116,7 @@ func login(cmd *cobra.Command) error {
 			apiKey = &flags.SetApiKeyFlag
 		}
 
-		mc := config.Config{
+		mc = config.Config{
 			HyphenAPIKey: apiKey,
 		}
 
@@ -134,9 +136,7 @@ func login(cmd *cobra.Command) error {
 
 	if !helpers.IsInTerminal() {
 		organizationID := executionContext.Member.Organization.ID
-		mc := config.Config{
-			OrganizationId: organizationID,
-		}
+		mc.OrganizationId = organizationID
 
 		projectService := projects.NewService(organizationID)
 		projects, _ := projectService.ListProjects()
@@ -146,7 +146,8 @@ func login(cmd *cobra.Command) error {
 			mc.ProjectName = &proj.Name
 			mc.ProjectAlternateId = &proj.AlternateID
 		}
-		if err := config.GlobalInitializeConfig(mc); err != nil {
+
+		if err := config.UpsertGlobalConfig(mc); err != nil {
 			return err
 		}
 
