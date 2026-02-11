@@ -174,7 +174,7 @@ func (s *OAuthService) StartOAuthServer() (*TokenResponse, error) {
 	query.Set("redirect_uri", redirectURI)
 	query.Set("code_challenge", codeChallenge)
 	query.Set("code_challenge_method", "S256")
-	query.Set("scope", "openid offline_access")
+	query.Set("scope", "openid offline_access profile email")
 
 	// Generate a random base64-encoded string to be state. It's unused but required.
 	state := make([]byte, 32)
