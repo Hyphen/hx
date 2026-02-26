@@ -117,7 +117,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 			firstApp := selectedDeployment.Apps[0]
 
 			service := build.NewService()
-			result, err := service.RunBuild(cmd, printer, firstApp.DeploymentSettings.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag)
+			result, err := service.RunBuild(cmd, printer, firstApp.DeploymentSettings.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag, false)
 			if err != nil {
 				return err
 			}

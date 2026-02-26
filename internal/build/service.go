@@ -35,12 +35,15 @@ func NewService() *BuildService {
 	}
 }
 
-func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commitSha, dockerUri string, ports []int) (*models.Build, error) {
+func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commitSha, dockerUri string, ports []int, preview bool) (*models.Build, error) {
 
 	///api/organizations/{organizationId}/apps/{appId}/builds/
 	queryParams := url.Values{}
 	if environmentId != "" {
 		queryParams.Add("environmentId", environmentId)
+	}
+	if preview {
+		queryParams.Add("preview", "true")
 	}
 	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/builds?%s", bs.baseUrl, organizationId, appId, queryParams.Encode())
 
@@ -134,7 +137,7 @@ func (bs *BuildService) FindRegistryConnection(organizationId, projectId string)
 
 }
 
-func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, environmentId string, verbose bool, dockerfilePath string) (*models.Build, error) {
+func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, environmentId string, verbose bool, dockerfilePath string, preview bool) (*models.Build, error) {
 	// grab the manifest to get app details
 	config, err := config.RestoreConfig()
 	if err != nil {
@@ -232,7 +235,7 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 	}
 
 	// Tell Hyphen about the build
-	build, err := bs.CreateBuild(config.OrganizationId, *config.AppId, environmentId, commitSha, containerUrl, ports)
+	build, err := bs.CreateBuild(config.OrganizationId, *config.AppId, environmentId, commitSha, containerUrl, ports, preview)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create build: %w", err)

@@ -7,6 +7,7 @@ var (
 	EnvironmentFlag  string
 	NoFlag           bool
 	OrganizationFlag string
+	PreviewFlag      bool
 	ProjectFlag      string
 	SetApiKeyFlag    string
 	UseApiKeyFlag    bool
