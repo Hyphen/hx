@@ -28,6 +28,7 @@ type Deployment struct {
 	Apps            []DeploymentApp       `json:"apps"`
 	IsReady         bool                  `json:"isReady"`
 	ReadinessIssues []ReadinessIssue      `json:"readinessIssues"`
+	Previews        []DeploymentPreview   `json:"previews"`
 }
 
 type DeploymentRun struct {
@@ -56,4 +57,10 @@ type DeploymentTask struct {
 
 type DeploymentPipeline struct {
 	Steps []DeploymentStep `json:"steps"`
+}
+
+type DeploymentPreview struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	HostPrefix string `json:"hostPrefix"`
 }
