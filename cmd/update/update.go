@@ -157,7 +157,7 @@ func (u *Updater) RunAuto(cmd *cobra.Command) error {
 
 	printAutoUpdatePlan(currentVersion, latestVersion)
 
-	updateURL := fmt.Sprintf(u.URLTemplate, "latest", osType)
+	updateURL := fmt.Sprintf(u.URLTemplate, latestVersion, osType)
 	if err := u.DownloadAndUpdate(updateURL); err != nil {
 		return fmt.Errorf("failed to update Hyphen CLI: %w", err)
 	}
