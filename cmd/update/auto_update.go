@@ -50,7 +50,7 @@ func RunAutoUpdate(cmd *cobra.Command) {
 
 func shouldSkipAutoUpdateForCommand(cmd *cobra.Command) bool {
 	if cmd == nil {
-		return false
+		return true
 	}
 	return shouldSkipAutoUpdateCommandPath(cmd.CommandPath())
 }
