@@ -139,6 +139,33 @@ func (u *Updater) Run(cmd *cobra.Command, args []string) {
 	printUpdateSummary(cliVersion.GetVersion(), latestVersion, osType)
 }
 
+func (u *Updater) RunAuto(cmd *cobra.Command) error {
+	osType := u.DetectPlatform()
+	if !isValidOs(osType) {
+		return fmt.Errorf("unsupported operating system: %s", osType)
+	}
+
+	latestVersion, err := u.fetchLatestVersion()
+	if err != nil {
+		return fmt.Errorf("failed to fetch latest version: %w", err)
+	}
+
+	currentVersion := cliVersion.GetVersion()
+	if latestVersion == currentVersion {
+		return nil
+	}
+
+	printAutoUpdatePlan(currentVersion, latestVersion)
+
+	updateURL := fmt.Sprintf(u.URLTemplate, "latest", osType)
+	if err := u.DownloadAndUpdate(updateURL); err != nil {
+		return fmt.Errorf("failed to update Hyphen CLI: %w", err)
+	}
+
+	printUpdateSummary(currentVersion, latestVersion, osType)
+	return nil
+}
+
 func (u *Updater) fetchLatestVersion() (string, error) {
 	url := fmt.Sprintf("%s/api/downloads/hyphen-cli/versions?latest=true", u.BaseURL)
 	resp, err := u.HTTPClient.Get(url)
@@ -313,4 +340,11 @@ func printUpdateSummary(currentVersion, latestVersion, osType string) {
 	printer.PrintDetail("Update method", "In-place update")
 	fmt.Println()
 	printer.GreenPrint("Hyphen CLI is now up-to-date and ready for use.")
+}
+
+func printAutoUpdatePlan(currentVersion, latestVersion string) {
+	printer.PrintHeader("--- Auto Update ---")
+	printer.PrintDetail("Current version", currentVersion)
+	printer.PrintDetail("New version", latestVersion)
+	printer.Print("A newer version is available. Updating now...")
 }
