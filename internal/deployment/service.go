@@ -156,7 +156,7 @@ func (ds *DeploymentService) CreatePreview(organizationId string, deployment mod
 		Name:       name,
 		HostPrefix: hostPrefix,
 	}
-	allPreviews := append([]models.DeploymentPreview{newPreview}, currentPreviews...)
+	allPreviews := append(currentPreviews, newPreview)
 
 	requestPayload := map[string]interface{}{
 		"previews": allPreviews,
