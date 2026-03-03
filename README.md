@@ -35,6 +35,7 @@ Available Commands:
 -   `auth`: Authenticate with Hyphen
 -   `init`: Initialize an app
 -   `update`: Update the Hyphen CLI
+-   `config`: Manage CLI settings
 -   `set-org`: Set the organization ID
 -   `set-project`: Set the project ID
 -   `version`: Display the version of the Hyphen CLI
@@ -121,6 +122,21 @@ Update the Hyphen CLI.
 Usage:
 ```bash
 hyphen update
+```
+
+The CLI can also auto-update on regular command execution. Auto-update is skipped in CI environments and can be turned off with:
+
+```bash
+hyphen config auto-update off
+```
+
+## Config Command
+### `hyphen config auto-update`
+Enable or disable automatic updates for the CLI by writing to global `.hx` config.
+
+Usage:
+```bash
+hyphen config auto-update <on|off>
 ```
 
 ## Set Organization Command

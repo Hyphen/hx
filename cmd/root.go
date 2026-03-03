@@ -7,6 +7,7 @@ import (
 	"github.com/Hyphen/cli/cmd/auth"
 	"github.com/Hyphen/cli/cmd/build"
 	"github.com/Hyphen/cli/cmd/code"
+	configcmd "github.com/Hyphen/cli/cmd/config"
 	"github.com/Hyphen/cli/cmd/deploy"
 	"github.com/Hyphen/cli/cmd/entrypoint"
 	"github.com/Hyphen/cli/cmd/env"
@@ -36,11 +37,17 @@ The Hyphen CLI is a command-line interface for managing your Hyphen projects, en
 	// Silence usage and errors because of the use of RunE (see https://cobra.dev/docs/how-to-guides/working-with-commands/#how-to-handle-errors-with-rune)
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		update.RunAutoUpdate(cmd)
+	},
 }
 
 func init() {
+	cobra.EnableTraverseRunHooks = true
+
 	rootCmd.AddCommand(version.VersionCmd)
 	rootCmd.AddCommand(update.UpdateCmd)
+	rootCmd.AddCommand(configcmd.ConfigCmd)
 	rootCmd.AddCommand(initialize.InitCmd)
 	rootCmd.AddCommand(auth.AuthCmd)
 	rootCmd.AddCommand(setorg.SetOrgCmd)

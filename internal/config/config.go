@@ -34,6 +34,7 @@ type Config struct {
 	HyphenAPIKey       *string        `json:"hyphen_api_key,omitempty"`
 	IsMonorepo         *bool          `json:"is_monorepo,omitempty"`
 	Project            *ConfigProject `json:"project,omitempty"`
+	AutoUpdateDisabled *bool          `json:"auto_update_disabled,omitempty"`
 	Database           interface{}    `json:"database,omitempty"`
 }
 
@@ -42,6 +43,13 @@ func (c *Config) IsMonorepoProject() bool {
 		return true
 	}
 	return false
+}
+
+func (c *Config) IsAutoUpdateEnabled() bool {
+	if c.AutoUpdateDisabled == nil {
+		return true
+	}
+	return !*c.AutoUpdateDisabled
 }
 
 type ConfigProject struct {
@@ -72,14 +80,24 @@ func GetGlobalDirectory() string {
 func UpsertGlobalConfig(mc Config) error {
 	globDir := GetGlobalDirectory()
 
-	mc.IsMonorepo = nil // this should always be nil in the global config
-	mc.Project = nil    // this should always be nil in the global config
-
 	if err := FS.MkdirAll(globDir, 0o755); err != nil {
 		return errors.Wrap(err, "Failed to create global directory")
 	}
 
 	globManifestFilePath := filepath.Join(globDir, ManifestConfigFile)
+
+	// Preserve selected global settings when callers provide partial config structs.
+	existingConfig, err := readAndUnmarshalConfigJSON[Config](globManifestFilePath)
+	if err == nil {
+		if mc.AutoUpdateDisabled == nil {
+			mc.AutoUpdateDisabled = existingConfig.AutoUpdateDisabled
+		}
+	} else if !os.IsNotExist(err) {
+		return errors.Wrap(err, "Failed to read existing global config")
+	}
+
+	mc.IsMonorepo = nil // this should always be nil in the global config
+	mc.Project = nil    // this should always be nil in the global config
 
 	jsonData, err := json.MarshalIndent(mc, "", "  ")
 	if err != nil {
@@ -310,6 +328,41 @@ func UpsertGlobalOrganizationID(organizationID string) error {
 	}
 
 	// Write the updated config to the global file
+	err = FS.WriteFile(globalConfigFile, jsonData, 0o644)
+	if err != nil {
+		return errors.Wrapf(err, "Error writing file: %s", globalConfigFile)
+	}
+
+	return nil
+}
+
+func UpsertGlobalAutoUpdateEnabled(enabled bool) error {
+	globalDir := GetGlobalDirectory()
+	globalConfigFile := filepath.Join(globalDir, ManifestConfigFile)
+
+	var mconfig Config
+
+	existingConfig, err := readAndUnmarshalConfigJSON[Config](globalConfigFile)
+	if err != nil && !os.IsNotExist(err) {
+		return errors.Wrap(err, "Error reading global config file")
+	}
+
+	if err == nil {
+		mconfig = existingConfig
+	}
+
+	autoUpdateDisabled := !enabled
+	mconfig.AutoUpdateDisabled = &autoUpdateDisabled
+
+	if err := FS.MkdirAll(globalDir, 0o755); err != nil {
+		return errors.Wrap(err, "Failed to create global directory")
+	}
+
+	jsonData, err := json.MarshalIndent(mconfig, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "Error encoding JSON")
+	}
+
 	err = FS.WriteFile(globalConfigFile, jsonData, 0o644)
 	if err != nil {
 		return errors.Wrapf(err, "Error writing file: %s", globalConfigFile)
