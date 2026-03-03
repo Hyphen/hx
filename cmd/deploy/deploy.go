@@ -21,8 +21,6 @@ import (
 
 var (
 	noBuild bool
-	preview string
-	prefix  string
 	printer *cprint.CPrinter
 )
 
@@ -111,13 +109,13 @@ Use 'hyphen deploy --help' for more information about available flags.
 
 		// Match preview if preview flag is provided
 		var previewId string
-		if preview != "" {
+		if flags.PreviewNameFlag != "" {
 			matchedPreviews := []models.DeploymentPreview{}
 			for _, p := range selectedDeployment.Previews {
-				if p.Name == preview {
+				if p.Name == flags.PreviewNameFlag {
 					// If prefix is provided, also match by hostPrefix
-					if prefix != "" {
-						if p.HostPrefix == prefix {
+					if flags.PreviewPrefixFlag != "" {
+						if p.HostPrefix == flags.PreviewPrefixFlag {
 							matchedPreviews = append(matchedPreviews, p)
 						}
 					} else {
@@ -127,13 +125,16 @@ Use 'hyphen deploy --help' for more information about available flags.
 			}
 
 			if len(matchedPreviews) == 0 {
-				newPreview, err := service.CreatePreview(orgId, selectedDeployment, preview, prefix)
+				if flags.PreviewPrefixFlag == "" {
+					return fmt.Errorf("no preview found with name '%s', please specify --prefix flag to create a new preview", flags.PreviewNameFlag)
+				}
+				newPreview, err := service.CreatePreview(orgId, selectedDeployment, flags.PreviewNameFlag, flags.PreviewPrefixFlag)
 				if err != nil {
 					return fmt.Errorf("failed to create preview: %w", err)
 				}
 				previewId = newPreview.ID
 			} else if len(matchedPreviews) > 1 {
-				return fmt.Errorf("multiple previews found with name '%s', please specify --prefix flag to disambiguate", preview)
+				return fmt.Errorf("multiple previews found with name '%s', please specify --prefix flag to disambiguate", flags.PreviewNameFlag)
 			} else {
 				previewId = matchedPreviews[0].ID
 			}
@@ -149,7 +150,7 @@ Use 'hyphen deploy --help' for more information about available flags.
 			firstApp := selectedDeployment.Apps[0]
 
 			service := build.NewService()
-			result, err := service.RunBuild(cmd, printer, firstApp.DeploymentSettings.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag, preview != "")
+			result, err := service.RunBuild(cmd, printer, firstApp.DeploymentSettings.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag, flags.PreviewNameFlag)
 			if err != nil {
 				return err
 			}
@@ -447,6 +448,6 @@ func extractStatusUpdates(data map[string]any, runId string, statusDisplay *tea.
 func init() {
 	DeployCmd.Flags().BoolVar(&noBuild, "no-build", false, "Skip the build step")
 	DeployCmd.Flags().StringVarP(&flags.DockerfileFlag, "dockerfile", "f", "", "Path to Dockerfile (e.g., ./Dockerfile or ./docker/Dockerfile.prod)")
-	DeployCmd.Flags().StringVar(&preview, "preview", "", "Preview name to deploy to")
-	DeployCmd.Flags().StringVar(&prefix, "prefix", "", "Host prefix for the preview deployment")
+	DeployCmd.Flags().StringVarP(&flags.PreviewNameFlag, "preview", "r", "", "Preview name to deploy to")
+	DeployCmd.Flags().StringVarP(&flags.PreviewPrefixFlag, "prefix", "x", "", "Host prefix for the preview deployment")
 }
