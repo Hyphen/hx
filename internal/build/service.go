@@ -43,7 +43,7 @@ func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commit
 		queryParams.Add("environmentId", environmentId)
 	}
 	if preview != "" {
-		queryParams.Add("preview", preview)
+		queryParams.Add("previewName", preview)
 	}
 	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/builds?%s", bs.baseUrl, organizationId, appId, queryParams.Encode())
 
