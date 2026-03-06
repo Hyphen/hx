@@ -149,21 +149,15 @@ func (ds *DeploymentService) SearchDeployments(organizationId, nameOrId string, 
 }
 
 func (ds *DeploymentService) CreatePreview(organizationId string, deployment models.Deployment, name string, hostPrefix string) (*models.DeploymentPreview, error) {
-	currentPreviews := deployment.Previews
-	url := fmt.Sprintf("%s/api/organizations/%s/deployments/%s", ds.baseUrl, organizationId, deployment.ID)
-
-	newPreview := models.DeploymentPreview{
-		Name:       name,
-		HostPrefix: hostPrefix,
-	}
-	allPreviews := append(currentPreviews, newPreview)
+	url := fmt.Sprintf("%s/api/organizations/%s/deployments/%s/previews/", ds.baseUrl, organizationId, deployment.ID)
 
 	requestPayload := map[string]interface{}{
-		"previews": allPreviews,
+		"name":       name,
+		"hostPrefix": hostPrefix,
 	}
 	requestBody, _ := json.Marshal(requestPayload)
 
-	req, err := http.NewRequest("PATCH", url, io.NopCloser(bytes.NewReader(requestBody)))
+	req, err := http.NewRequest("POST", url, io.NopCloser(bytes.NewReader(requestBody)))
 	if err != nil {
 		return nil, err
 	}
@@ -183,18 +177,11 @@ func (ds *DeploymentService) CreatePreview(organizationId string, deployment mod
 		return nil, errors.Wrap(err, "Failed to read response body")
 	}
 
-	var updatedDeployment models.Deployment
-	err = json.Unmarshal(body, &updatedDeployment)
+	var preview models.DeploymentPreview
+	err = json.Unmarshal(body, &preview)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to parse JSON response")
 	}
 
-	// Find the preview that matches the name and hostPrefix
-	for _, preview := range updatedDeployment.Previews {
-		if preview.Name == name && preview.HostPrefix == hostPrefix {
-			return &preview, nil
-		}
-	}
-
-	return nil, fmt.Errorf("preview with name '%s' and hostPrefix '%s' not found in updated deployment", name, hostPrefix)
+	return &preview, nil
 }
