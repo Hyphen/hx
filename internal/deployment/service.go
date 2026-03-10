@@ -37,13 +37,17 @@ func NewService() *DeploymentService {
 	}
 }
 
-func (ds *DeploymentService) CreateRun(organizationId, deploymentId string, appSources []AppSources) (*models.DeploymentRun, error) {
+func (ds *DeploymentService) CreateRun(organizationId, deploymentId string, appSources []AppSources, previewId string) (*models.DeploymentRun, error) {
 	url := fmt.Sprintf("%s/api/organizations/%s/deployments/%s/runs", ds.baseUrl, organizationId, deploymentId)
 	//app_67af84d8cf5902a8f372bbcc
 	//requestBody := []byte("{\"artifacts\":[{\"appId\":\"app_67af84d8cf5902a8f372bbcc\",\"image\":\"us-docker.pkg.dev/hyphenai/public/deploy-demo\"}]}")
-	requestBody, _ := json.Marshal(map[string]interface{}{
+	requestPayload := map[string]interface{}{
 		"artifacts": appSources,
-	})
+	}
+	if previewId != "" {
+		requestPayload["previewId"] = previewId
+	}
+	requestBody, _ := json.Marshal(requestPayload)
 
 	req, err := http.NewRequest("POST", url, io.NopCloser(bytes.NewReader(requestBody)))
 	if err != nil {
@@ -142,4 +146,42 @@ func (ds *DeploymentService) SearchDeployments(organizationId, nameOrId string, 
 	}
 
 	return response.Data, nil
+}
+
+func (ds *DeploymentService) CreatePreview(organizationId string, deployment models.Deployment, name string, hostPrefix string) (*models.DeploymentPreview, error) {
+	url := fmt.Sprintf("%s/api/organizations/%s/deployments/%s/previews/", ds.baseUrl, organizationId, deployment.ID)
+
+	requestPayload := map[string]interface{}{
+		"name":       name,
+		"hostPrefix": hostPrefix,
+	}
+	requestBody, _ := json.Marshal(requestPayload)
+
+	req, err := http.NewRequest("POST", url, io.NopCloser(bytes.NewReader(requestBody)))
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := ds.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, errors.HandleHTTPError(resp)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to read response body")
+	}
+
+	var preview models.DeploymentPreview
+	err = json.Unmarshal(body, &preview)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to parse JSON response")
+	}
+
+	return &preview, nil
 }
