@@ -28,7 +28,7 @@ func TestCreateBuild(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(`{"id":"theBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"theEnvId","name":"anEnv"},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifact":{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}}`)),
 		}, nil)
 
-		build, err := service.CreateBuild("anOrgId", "anAppId", "theEnvironmentId", "abc1234", "anImage", []int{8080})
+		build, err := service.CreateBuild("anOrgId", "anAppId", "theEnvironmentId", "abc1234", "anImage", []int{8080}, "")
 
 		assert.NoError(t, err)
 		assert.NotNil(t, build)
@@ -52,7 +52,7 @@ func TestCreateBuild(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifact":{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}}`)),
 		}, nil)
 
-		build, err := service.CreateBuild("anOrgId", "anAppId", "", "abc1234", "anImage", []int{8080})
+		build, err := service.CreateBuild("anOrgId", "anAppId", "", "abc1234", "anImage", []int{8080}, "")
 
 		assert.NoError(t, err)
 		assert.NotNil(t, build)
