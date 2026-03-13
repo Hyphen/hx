@@ -34,7 +34,7 @@ Use 'hyphen build --help' for more information about available flags.
 	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		service := build.NewService()
-		build, err := service.RunBuild(cmd, printer, "", flags.VerboseFlag, flags.DockerfileFlag, flags.PreviewNameFlag)
+		build, err := service.RunBuild(cmd, printer, flags.EnvironmentFlag, flags.VerboseFlag, flags.DockerfileFlag, flags.PreviewNameFlag)
 
 		if err != nil {
 			return err
@@ -49,5 +49,6 @@ Use 'hyphen build --help' for more information about available flags.
 
 func init() {
 	BuildCmd.Flags().StringVarP(&flags.DockerfileFlag, "dockerfile", "f", "", "Path to Dockerfile (e.g., ./Dockerfile or ./docker/Dockerfile.prod)")
+	BuildCmd.Flags().StringVarP(&flags.EnvironmentFlag, "env", "e", "", "Environment ID for the build")
 	BuildCmd.Flags().StringVarP(&flags.PreviewNameFlag, "preview", "r", "", "Preview name to associate with this build")
 }
