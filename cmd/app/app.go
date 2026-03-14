@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/Hyphen/cli/cmd/app/connect"
 	"github.com/Hyphen/cli/cmd/app/create"
 	"github.com/Hyphen/cli/cmd/app/get"
 	"github.com/Hyphen/cli/cmd/app/list"
@@ -24,4 +25,5 @@ func init() {
 	AppCmd.AddCommand(list.ListCmd)
 	AppCmd.AddCommand(create.CreateCmd)
 	AppCmd.AddCommand(get.GetCmd)
+	AppCmd.AddCommand(connect.ConnectCmd)
 }
