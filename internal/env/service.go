@@ -22,6 +22,7 @@ type EnvServicer interface {
 	ListEnvs(organizationId, appId string, size, page int) ([]models.Env, error)
 	ListEnvVersions(organizationId, appId, environmentId string, size, page int) ([]models.Env, error)
 	ListEnvironments(organizationId, projectId string, size, page int) ([]models.Environment, error)
+	GetDevelopmentEnvironment(organizationId, projectId string) (*models.Environment, error)
 }
 
 type EnvService struct {
@@ -227,8 +228,25 @@ func (es *EnvService) ListEnvVersions(organizationId, appId, environmentId strin
 	return envsData.Data, nil
 }
 
+func (es *EnvService) GetDevelopmentEnvironment(organizationId, projectId string) (*models.Environment, error) {
+	environments, err := es.ListEnvironments(organizationId, projectId, 50, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, env := range environments {
+		if env.Type == models.EnvironmentTypeDevelopment {
+			e := env
+			return &e, nil
+		}
+	}
+
+	return nil, nil
+}
+
 func (es *EnvService) ListEnvironments(organizationId, projectId string, size, page int) ([]models.Environment, error) {
-	baseURL := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments", es.baseHorizonUrl, organizationId, projectId)
+	// use horizon url instead
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments", es.baseApixUrl, organizationId, projectId)
 
 	query := url.Values{}
 	query.Set("pageSize", strconv.Itoa(size))

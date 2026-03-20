@@ -19,6 +19,7 @@ type ProjectServicer interface {
 	ListProjects() ([]models.Project, error)
 	GetProject(projectID string) (models.Project, error)
 	CreateProject(project models.Project) (models.Project, error)
+	GetEnvironmentDeployment(projectID, environmentID string) (models.Deployment, error)
 }
 
 type ProjectService struct {
@@ -63,7 +64,6 @@ func (ps *ProjectService) ListProjects() ([]models.Project, error) {
 	if err != nil {
 		return []models.Project{}, errors.Wrap(err, "Failed to read response body")
 	}
-
 
 	// unmarshal the body
 	var projectsResponse models.PaginatedResponse[models.Project]
@@ -145,6 +145,38 @@ func (ps *ProjectService) CreateProject(project models.Project) (models.Project,
 	}
 
 	return createdProject, nil
+}
+
+func (ps *ProjectService) GetEnvironmentDeployment(projectID, environmentID string) (models.Deployment, error) {
+	url := fmt.Sprintf("%s/%s/environments/%s/deployment", ps.baseUrl, projectID, environmentID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return models.Deployment{}, errors.Wrap(err, "Failed to create request")
+	}
+
+	resp, err := ps.httpClient.Do(req)
+	if err != nil {
+		return models.Deployment{}, errors.Wrap(err, "Request failed")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return models.Deployment{}, errors.HandleHTTPError(resp)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return models.Deployment{}, errors.Wrap(err, "Failed to read response body")
+	}
+
+	var deployment models.Deployment
+	err = json.Unmarshal(body, &deployment)
+	if err != nil {
+		return models.Deployment{}, errors.Wrap(err, "Failed to unmarshal response body")
+	}
+
+	return deployment, nil
 }
 
 func CheckProjectId(appId string) error {

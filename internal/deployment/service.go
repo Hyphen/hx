@@ -16,6 +16,20 @@ import (
 
 type IDeploymentService interface {
 	searchDeployments(organizationId, nameOrId string, pageSize, pageNum int) ([]models.Deployment, error)
+	CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description string) (*models.Deployment, error)
+}
+
+type createEnvironmentDeploymentRequest struct {
+	Name               string                 `json:"name"`
+	AlternateID        string                 `json:"alternateId"`
+	Description        string                 `json:"description"`
+	Project            models.ProjectReference            `json:"project"`
+	ProjectEnvironment models.ProjectEnvironmentReference `json:"projectEnvironment"`
+	Apps               []createDeploymentApp  `json:"apps"`
+}
+
+type createDeploymentApp struct {
+	App models.AppReference `json:"app"`
 }
 
 type DeploymentService struct {
@@ -184,4 +198,49 @@ func (ds *DeploymentService) CreatePreview(organizationId string, deployment mod
 	}
 
 	return &preview, nil
+}
+
+func (ds *DeploymentService) CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description string) (*models.Deployment, error) {
+	url := fmt.Sprintf("%s/api/organizations/%s/deployments/", ds.baseUrl, organizationId)
+
+	requestBody, err := json.Marshal(createEnvironmentDeploymentRequest{
+		Name:        name,
+		AlternateID: alternateId,
+		Description: description,
+		Project:     models.ProjectReference{ID: projectId},
+		ProjectEnvironment: models.ProjectEnvironmentReference{ID: projectEnvironmentId},
+		Apps: []createDeploymentApp{
+			{App: models.AppReference{ID: appId}},
+		},
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to marshal request body")
+	}
+
+	req, err := http.NewRequest("POST", url, io.NopCloser(bytes.NewReader(requestBody)))
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create a new HTTP request")
+	}
+
+	resp, err := ds.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		return nil, errors.HandleHTTPError(resp)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to read response body")
+	}
+
+	var deployment models.Deployment
+	if err := json.Unmarshal(body, &deployment); err != nil {
+		return nil, errors.Wrap(err, "Failed to parse JSON response")
+	}
+
+	return &deployment, nil
 }

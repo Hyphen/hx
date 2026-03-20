@@ -3,16 +3,19 @@ package deploy
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/Hyphen/cli/internal/build"
+	"github.com/Hyphen/cli/internal/config"
 	Deployment "github.com/Hyphen/cli/internal/deployment"
+	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/models"
+	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
-	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/Hyphen/cli/pkg/socketio"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -48,51 +51,65 @@ Use 'hyphen deploy --help' for more information about available flags.
 			return err
 		}
 
-		deploymentName := ""
-		if len(args) > 0 {
-			deploymentName = args[0]
-		}
-
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 
 		service := Deployment.NewService()
 
-		// TODO: I'm not sure that proceeding if we find just one is right
-		// I can see wanting to always prompt but for now let's just proceed
-		deployments, err := service.SearchDeployments(orgId, deploymentName, 50, 1)
+		var selectedDeployment models.Deployment
 
-		if err != nil {
-			return fmt.Errorf("failed to list apps: %w", err)
-		}
-
-		selectedDeployment := deployments[0]
-
-		if len(deployments) > 1 {
-			choices := make([]prompt.Choice, len(deployments))
-			for i, deployment := range deployments {
-				choices[i] = prompt.Choice{
-					Id:      deployment.ID,
-					Display: fmt.Sprintf("%s (%s)", deployment.Name, deployment.ID),
-				}
-			}
-
-			choice, err := prompt.PromptSelection(choices, "Select a deployment to run:")
-
+		if len(args) == 0 {
+			cfg, err := config.RestoreLocalConfig()
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to restore config: %w", err)
+			}
+			envService := env.NewService()
+			devEnv, err := envService.GetDevelopmentEnvironment(orgId, *cfg.ProjectId)
+			if err != nil {
+				return fmt.Errorf("failed to get development environment: %w", err)
+			}
+			if devEnv == nil {
+				return fmt.Errorf("no development environment found for this project")
 			}
 
-			if choice.Id == "" {
-				printer.YellowPrint(("no choice made, canceling deploy"))
-				return nil
+			projectService := projects.NewService(orgId)
+			deployment, err := projectService.GetEnvironmentDeployment(*cfg.ProjectId, devEnv.ID)
+			if err != nil {
+				return fmt.Errorf("failed to get deployment for environment: %w", err)
 			}
 
-			for _, deployment := range deployments {
-				if deployment.ID == choice.Id {
-					selectedDeployment = deployment
-					break
+			if deployment.ID == "" {
+				projectName := ""
+				if cfg.ProjectName != nil {
+					projectName = *cfg.ProjectName
 				}
+				appName := ""
+				if cfg.AppName != nil {
+					appName = *cfg.AppName
+				}
+				if cfg.AppId == nil {
+					return fmt.Errorf("app id not found in config")
+				}
+
+				projPart := deploymentNamePart(projectName, 12)
+				appPart := deploymentNamePart(appName, 12)
+				name := strings.TrimSpace(projPart + " " + appPart)
+				alternateId := buildDeploymentAlternateId(projPart, appPart)
+
+				newDeployment, err := service.CreateEnvironmentDeployment(orgId, *cfg.ProjectId, devEnv.ID, *cfg.AppId, name, alternateId, "")
+				if err != nil {
+					return fmt.Errorf("failed to create deployment: %w", err)
+				}
+				selectedDeployment = *newDeployment
 			}
+
+			selectedDeployment = deployment
+		} else {
+			deployments, err := service.SearchDeployments(orgId, args[0], 1, 1)
+			if err != nil {
+				return fmt.Errorf("failed to list apps: %w", err)
+			}
+
+			selectedDeployment = deployments[0]
 		}
 
 		if !selectedDeployment.IsReady {
@@ -443,6 +460,30 @@ func extractStatusUpdates(data map[string]any, runId string, statusDisplay *tea.
 			}
 		}
 	}
+}
+
+func deploymentNamePart(s string, maxLen int) string {
+	if len(s) > maxLen {
+		return s[:maxLen]
+	}
+	return s
+}
+
+func buildDeploymentAlternateId(projPart, appPart string) string {
+	raw := strings.ToLower(projPart + "-" + appPart)
+	var b strings.Builder
+	for _, r := range raw {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('-')
+		}
+	}
+	result := b.String()
+	for strings.Contains(result, "--") {
+		result = strings.ReplaceAll(result, "--", "-")
+	}
+	return strings.Trim(result, "-")
 }
 
 func init() {
