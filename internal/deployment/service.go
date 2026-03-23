@@ -17,6 +17,7 @@ import (
 type IDeploymentService interface {
 	searchDeployments(organizationId, nameOrId string, pageSize, pageNum int) ([]models.Deployment, error)
 	CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description string) (*models.Deployment, error)
+	GetDeployment(organizationId, deploymentId string) (*models.Deployment, error)
 }
 
 type createEnvironmentDeploymentRequest struct {
@@ -198,6 +199,37 @@ func (ds *DeploymentService) CreatePreview(organizationId string, deployment mod
 	}
 
 	return &preview, nil
+}
+
+func (ds *DeploymentService) GetDeployment(organizationId, deploymentId string) (*models.Deployment, error) {
+	url := fmt.Sprintf("%s/api/organizations/%s/deployments/%s", ds.baseUrl, organizationId, deploymentId)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := ds.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.HandleHTTPError(resp)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to read response body")
+	}
+
+	var deployment models.Deployment
+	if err := json.Unmarshal(body, &deployment); err != nil {
+		return nil, errors.Wrap(err, "Failed to parse JSON response")
+	}
+
+	return &deployment, nil
 }
 
 func (ds *DeploymentService) CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description string) (*models.Deployment, error) {

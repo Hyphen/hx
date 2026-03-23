@@ -15,6 +15,7 @@ import (
 	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/socketio"
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,16 +29,21 @@ var (
 )
 
 var DeployCmd = &cobra.Command{
-	Use:   "deploy <deployment>",
+	Use:   "deploy [deploymentId]",
 	Short: "Run a deployment",
 	Long: `
-The deploy command runs a deployment for a given deployment name.
+Run a deployment by ID, or omit it to deploy the development environment.
+
+If no deploymentId is provided, the CLI will use the current project config to
+find the development environment deployment. If it doesn't exist yet, it will
+be created automatically.
 
 Usage:
-	hyphen deploy <deployment> [flags]
+  hyphen deploy [deploymentId] [flags]
 
 Examples:
-hyphen deploy deploy-dev
+  hyphen deploy                  # deploys the dev environment (auto-detected)
+  hyphen deploy depl_abc123      # deploys a specific deployment by ID
 
 Use 'hyphen deploy --help' for more information about available flags.
 `,
@@ -73,15 +79,11 @@ Use 'hyphen deploy --help' for more information about available flags.
 
 			projectService := projects.NewService(orgId)
 			deployment, err := projectService.GetEnvironmentDeployment(*cfg.ProjectId, devEnv.ID)
-			if err != nil {
+			if err != nil && !errors.Is(err, errors.ErrNotFound) {
 				return fmt.Errorf("failed to get deployment for environment: %w", err)
 			}
 
-			if deployment.ID == "" {
-				projectName := ""
-				if cfg.ProjectName != nil {
-					projectName = *cfg.ProjectName
-				}
+			if err != nil || deployment.ID == "" {
 				appName := ""
 				if cfg.AppName != nil {
 					appName = *cfg.AppName
@@ -90,28 +92,25 @@ Use 'hyphen deploy --help' for more information about available flags.
 					return fmt.Errorf("app id not found in config")
 				}
 
-				projPart := deploymentNamePart(projectName, 12)
-				appPart := deploymentNamePart(appName, 12)
-				name := strings.TrimSpace(projPart + " " + appPart)
-				alternateId := buildDeploymentAlternateId(projPart, appPart)
+				name := deploymentNamePart(appName, 25)
+				alternateId := buildDeploymentAlternateId(name)
 
 				newDeployment, err := service.CreateEnvironmentDeployment(orgId, *cfg.ProjectId, devEnv.ID, *cfg.AppId, name, alternateId, "")
 				if err != nil {
 					return fmt.Errorf("failed to create deployment: %w", err)
 				}
 				selectedDeployment = *newDeployment
+			} else {
+				selectedDeployment = deployment
 			}
-
-			selectedDeployment = deployment
 		} else {
-			deployments, err := service.SearchDeployments(orgId, args[0], 1, 1)
+			deployment, err := service.GetDeployment(orgId, args[0])
 			if err != nil {
-				return fmt.Errorf("failed to list apps: %w", err)
+				return fmt.Errorf("failed to get deployment: %w", err)
 			}
 
-			selectedDeployment = deployments[0]
+			selectedDeployment = *deployment
 		}
-
 		if !selectedDeployment.IsReady {
 			printer.Print("❌ There are issues blocking this deployment from being run.")
 			for _, issue := range selectedDeployment.ReadinessIssues {
@@ -469,8 +468,8 @@ func deploymentNamePart(s string, maxLen int) string {
 	return s
 }
 
-func buildDeploymentAlternateId(projPart, appPart string) string {
-	raw := strings.ToLower(projPart + "-" + appPart)
+func buildDeploymentAlternateId(name string) string {
+	raw := strings.ToLower(name)
 	var b strings.Builder
 	for _, r := range raw {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {

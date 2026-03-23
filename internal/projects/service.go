@@ -161,6 +161,9 @@ func (ps *ProjectService) GetEnvironmentDeployment(projectID, environmentID stri
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return models.Deployment{}, errors.ErrNotFound
+	}
 	if resp.StatusCode != http.StatusOK {
 		return models.Deployment{}, errors.HandleHTTPError(resp)
 	}
