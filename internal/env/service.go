@@ -245,8 +245,7 @@ func (es *EnvService) GetDevelopmentEnvironment(organizationId, projectId string
 }
 
 func (es *EnvService) ListEnvironments(organizationId, projectId string, size, page int) ([]models.Environment, error) {
-	// use horizon url instead
-	baseURL := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments", es.baseApixUrl, organizationId, projectId)
+	baseURL := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments", es.baseHorizonUrl, organizationId, projectId)
 
 	query := url.Values{}
 	query.Set("pageSize", strconv.Itoa(size))
