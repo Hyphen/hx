@@ -68,13 +68,16 @@ Use 'hyphen deploy --help' for more information about available flags.
 			if err != nil {
 				return fmt.Errorf("failed to restore config: %w", err)
 			}
+			if cfg.ProjectId == nil {
+				return fmt.Errorf("project id not found in config")
+			}
 			envService := env.NewService()
 			devEnv, err := envService.GetDevelopmentEnvironment(orgId, *cfg.ProjectId)
+			if errors.Is(err, errors.ErrNotFound) {
+				return fmt.Errorf("no development environment found for this project")
+			}
 			if err != nil {
 				return fmt.Errorf("failed to get development environment: %w", err)
-			}
-			if devEnv == nil {
-				return fmt.Errorf("no development environment found for this project")
 			}
 
 			projectService := projects.NewService(orgId)
@@ -86,7 +89,10 @@ Use 'hyphen deploy --help' for more information about available flags.
 			if err != nil || deployment.ID == "" {
 				appName := ""
 				if cfg.AppName != nil {
-					appName = *cfg.AppName
+					appName = strings.TrimSpace(*cfg.AppName)
+				}
+				if appName == "" {
+					appName = "development"
 				}
 				if cfg.AppId == nil {
 					return fmt.Errorf("app id not found in config")
@@ -94,6 +100,9 @@ Use 'hyphen deploy --help' for more information about available flags.
 
 				name := deploymentNamePart(appName, 25)
 				alternateId := buildDeploymentAlternateId(name)
+				if strings.TrimSpace(alternateId) == "" {
+					return fmt.Errorf("invalid deployment alternate ID derived from app name")
+				}
 
 				newDeployment, err := service.CreateEnvironmentDeployment(orgId, *cfg.ProjectId, devEnv.ID, *cfg.AppId, name, alternateId, "")
 				if err != nil {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -277,6 +278,98 @@ func TestEnvService_ListEnvironments(t *testing.T) {
 	assert.Equal(t, expectedEnvs, envs)
 	assert.Len(t, envs, 2)
 
+	mockHTTPClient.AssertExpectations(t)
+}
+
+func TestEnvService_GetDevelopmentEnvironment_Found(t *testing.T) {
+	mockHTTPClient := new(httputil.MockHTTPClient)
+	service := &EnvService{
+		baseHorizonUrl: "https://api.example.com",
+		httpClient:     mockHTTPClient,
+	}
+
+	devType := models.EnvironmentTypeDevelopment
+	expectedEnv := models.Environment{ID: "env_dev", Name: "Development", Type: devType}
+	envsData := models.PaginatedResponse[models.Environment]{
+		Data:     []models.Environment{expectedEnv},
+		Total:    1,
+		PageNum:  1,
+		PageSize: 50,
+	}
+	responseBody, _ := json.Marshal(envsData)
+
+	mockHTTPClient.On("Do", mock.Anything).Return(&http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader(responseBody)),
+	}, nil)
+
+	env, err := service.GetDevelopmentEnvironment("org1", "proj1")
+	assert.NoError(t, err)
+	assert.NotNil(t, env)
+	assert.Equal(t, expectedEnv.ID, env.ID)
+	mockHTTPClient.AssertExpectations(t)
+}
+
+func TestEnvService_GetDevelopmentEnvironment_NotFound(t *testing.T) {
+	mockHTTPClient := new(httputil.MockHTTPClient)
+	service := &EnvService{
+		baseHorizonUrl: "https://api.example.com",
+		httpClient:     mockHTTPClient,
+	}
+
+	envsData := models.PaginatedResponse[models.Environment]{
+		Data:     []models.Environment{},
+		Total:    0,
+		PageNum:  1,
+		PageSize: 50,
+	}
+	responseBody, _ := json.Marshal(envsData)
+
+	mockHTTPClient.On("Do", mock.Anything).Return(&http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader(responseBody)),
+	}, nil)
+
+	env, err := service.GetDevelopmentEnvironment("org1", "proj1")
+	assert.Error(t, err)
+	assert.Nil(t, env)
+	mockHTTPClient.AssertExpectations(t)
+}
+
+func TestEnvService_GetDevelopmentEnvironment_MultiPage(t *testing.T) {
+	mockHTTPClient := new(httputil.MockHTTPClient)
+	service := &EnvService{
+		baseHorizonUrl: "https://api.example.com",
+		httpClient:     mockHTTPClient,
+	}
+
+	// First page: 50 non-development environments
+	firstPageEnvs := make([]models.Environment, 50)
+	for i := range firstPageEnvs {
+		firstPageEnvs[i] = models.Environment{ID: fmt.Sprintf("env_%d", i), Name: fmt.Sprintf("Env %d", i)}
+	}
+	firstPage := models.PaginatedResponse[models.Environment]{Data: firstPageEnvs, Total: 51, PageNum: 1, PageSize: 50}
+	firstPageBody, _ := json.Marshal(firstPage)
+
+	// Second page: the development environment
+	devType := models.EnvironmentTypeDevelopment
+	devEnv := models.Environment{ID: "env_dev", Name: "Development", Type: devType}
+	secondPage := models.PaginatedResponse[models.Environment]{Data: []models.Environment{devEnv}, Total: 51, PageNum: 2, PageSize: 50}
+	secondPageBody, _ := json.Marshal(secondPage)
+
+	mockHTTPClient.On("Do", mock.Anything).Return(&http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader(firstPageBody)),
+	}, nil).Once()
+	mockHTTPClient.On("Do", mock.Anything).Return(&http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader(secondPageBody)),
+	}, nil).Once()
+
+	env, err := service.GetDevelopmentEnvironment("org1", "proj1")
+	assert.NoError(t, err)
+	assert.NotNil(t, env)
+	assert.Equal(t, devEnv.ID, env.ID)
 	mockHTTPClient.AssertExpectations(t)
 }
 

@@ -15,7 +15,7 @@ import (
 )
 
 type IDeploymentService interface {
-	searchDeployments(organizationId, nameOrId string, pageSize, pageNum int) ([]models.Deployment, error)
+	SearchDeployments(organizationId, nameOrId string, pageSize, pageNum int) ([]models.Deployment, error)
 	CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description string) (*models.Deployment, error)
 	GetDeployment(organizationId, deploymentId string) (*models.Deployment, error)
 }

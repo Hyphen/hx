@@ -229,19 +229,32 @@ func (es *EnvService) ListEnvVersions(organizationId, appId, environmentId strin
 }
 
 func (es *EnvService) GetDevelopmentEnvironment(organizationId, projectId string) (*models.Environment, error) {
-	environments, err := es.ListEnvironments(organizationId, projectId, 50, 1)
-	if err != nil {
-		return nil, err
-	}
+	pageSize := 50
+	pageNum := 1
 
-	for _, env := range environments {
-		if env.Type == models.EnvironmentTypeDevelopment {
-			e := env
-			return &e, nil
+	for {
+		environments, err := es.ListEnvironments(organizationId, projectId, pageSize, pageNum)
+		if err != nil {
+			return nil, err
 		}
-	}
 
-	return nil, nil
+		if len(environments) == 0 {
+			return nil, errors.ErrNotFound
+		}
+
+		for _, env := range environments {
+			if env.Type == models.EnvironmentTypeDevelopment {
+				e := env
+				return &e, nil
+			}
+		}
+
+		if len(environments) < pageSize {
+			return nil, errors.ErrNotFound
+		}
+
+		pageNum++
+	}
 }
 
 func (es *EnvService) ListEnvironments(organizationId, projectId string, size, page int) ([]models.Environment, error) {
