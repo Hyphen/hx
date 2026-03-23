@@ -15,18 +15,18 @@ import (
 )
 
 type IDeploymentService interface {
-	SearchDeployments(organizationId, nameOrId string, pageSize, pageNum int) ([]models.Deployment, error)
+	SearchDeployments(organizationId, nameOrId string, pageSize, pageNum int, projectIds []string) ([]models.Deployment, error)
 	CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description string) (*models.Deployment, error)
 	GetDeployment(organizationId, deploymentId string) (*models.Deployment, error)
 }
 
 type createEnvironmentDeploymentRequest struct {
-	Name               string                 `json:"name"`
-	AlternateID        string                 `json:"alternateId"`
-	Description        string                 `json:"description"`
+	Name               string                             `json:"name"`
+	AlternateID        string                             `json:"alternateId"`
+	Description        string                             `json:"description"`
 	Project            models.ProjectReference            `json:"project"`
 	ProjectEnvironment models.ProjectEnvironmentReference `json:"projectEnvironment"`
-	Apps               []createDeploymentApp  `json:"apps"`
+	Apps               []createDeploymentApp              `json:"apps"`
 }
 
 type createDeploymentApp struct {
@@ -125,11 +125,14 @@ func (ds *DeploymentService) GetDeploymentRun(organizationId, deploymentId, runI
 	return &deploymentRun, nil
 }
 
-func (ds *DeploymentService) SearchDeployments(organizationId, nameOrId string, pageSize, pageNum int) ([]models.Deployment, error) {
+func (ds *DeploymentService) SearchDeployments(organizationId, nameOrId string, pageSize, pageNum int, projectIds []string) ([]models.Deployment, error) {
 	queryParams := url.Values{}
 	queryParams.Set("pageNum", fmt.Sprintf("%d", pageNum))
 	queryParams.Set("pageSize", fmt.Sprintf("%d", pageSize))
 	queryParams.Set("search", nameOrId)
+	for _, id := range projectIds {
+		queryParams.Add("projects", id)
+	}
 
 	url := fmt.Sprintf("%s/api/organizations/%s/deployments/?%s", ds.baseUrl, organizationId, queryParams.Encode())
 
@@ -236,10 +239,10 @@ func (ds *DeploymentService) CreateEnvironmentDeployment(organizationId, project
 	url := fmt.Sprintf("%s/api/organizations/%s/deployments/", ds.baseUrl, organizationId)
 
 	requestBody, err := json.Marshal(createEnvironmentDeploymentRequest{
-		Name:        name,
-		AlternateID: alternateId,
-		Description: description,
-		Project:     models.ProjectReference{ID: projectId},
+		Name:               name,
+		AlternateID:        alternateId,
+		Description:        description,
+		Project:            models.ProjectReference{ID: projectId},
 		ProjectEnvironment: models.ProjectEnvironmentReference{ID: projectEnvironmentId},
 		Apps: []createDeploymentApp{
 			{App: models.AppReference{ID: appId}},
