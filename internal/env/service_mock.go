@@ -48,6 +48,15 @@ func (m *MockEnvService) ListEnvironments(organizationId, projectId string, size
 	return args.Get(0).([]models.Environment), args.Error(1)
 }
 
+// GetDevelopmentEnvironment mocks the GetDevelopmentEnvironment method
+func (m *MockEnvService) GetDevelopmentEnvironment(organizationId, projectId string) (*models.Environment, error) {
+	args := m.Called(organizationId, projectId)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Environment), args.Error(1)
+}
+
 // NewMockEnvService creates a new instance of MockEnvService
 func NewMockEnvService() *MockEnvService {
 	return &MockEnvService{}

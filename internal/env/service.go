@@ -22,6 +22,7 @@ type EnvServicer interface {
 	ListEnvs(organizationId, appId string, size, page int) ([]models.Env, error)
 	ListEnvVersions(organizationId, appId, environmentId string, size, page int) ([]models.Env, error)
 	ListEnvironments(organizationId, projectId string, size, page int) ([]models.Environment, error)
+	GetDevelopmentEnvironment(organizationId, projectId string) (*models.Environment, error)
 }
 
 type EnvService struct {
@@ -225,6 +226,35 @@ func (es *EnvService) ListEnvVersions(organizationId, appId, environmentId strin
 	}
 
 	return envsData.Data, nil
+}
+
+func (es *EnvService) GetDevelopmentEnvironment(organizationId, projectId string) (*models.Environment, error) {
+	pageSize := 50
+	pageNum := 1
+
+	for {
+		environments, err := es.ListEnvironments(organizationId, projectId, pageSize, pageNum)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(environments) == 0 {
+			return nil, errors.ErrNotFound
+		}
+
+		for _, env := range environments {
+			if env.Type == models.EnvironmentTypeDevelopment {
+				e := env
+				return &e, nil
+			}
+		}
+
+		if len(environments) < pageSize {
+			return nil, errors.ErrNotFound
+		}
+
+		pageNum++
+	}
 }
 
 func (es *EnvService) ListEnvironments(organizationId, projectId string, size, page int) ([]models.Environment, error) {

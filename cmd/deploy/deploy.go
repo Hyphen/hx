@@ -6,13 +6,16 @@ import (
 	"sync"
 
 	"github.com/Hyphen/cli/internal/build"
+	"github.com/Hyphen/cli/internal/config"
 	Deployment "github.com/Hyphen/cli/internal/deployment"
+	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/models"
+	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
-	"github.com/Hyphen/cli/pkg/prompt"
 	"github.com/Hyphen/cli/pkg/socketio"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -20,21 +23,28 @@ import (
 )
 
 var (
-	noBuild bool
-	printer *cprint.CPrinter
+	noBuild     bool
+	envFlag     string
+	projectFlag string
+	printer     *cprint.CPrinter
 )
 
 var DeployCmd = &cobra.Command{
-	Use:   "deploy <deployment>",
+	Use:   "deploy [deploymentId]",
 	Short: "Run a deployment",
 	Long: `
-The deploy command runs a deployment for a given deployment name.
+Run a deployment by ID, or omit it to deploy the development environment.
+
+If no deploymentId is provided, the CLI will use the current project config to
+find the development environment deployment. If it doesn't exist yet, it will
+be created automatically.
 
 Usage:
-	hyphen deploy <deployment> [flags]
+  hyphen deploy [deploymentId] [flags]
 
 Examples:
-hyphen deploy deploy-dev
+  hyphen deploy                  # deploys the dev environment (auto-detected)
+  hyphen deploy depl_abc123      # deploys a specific deployment by ID
 
 Use 'hyphen deploy --help' for more information about available flags.
 `,
@@ -48,53 +58,74 @@ Use 'hyphen deploy --help' for more information about available flags.
 			return err
 		}
 
-		deploymentName := ""
-		if len(args) > 0 {
-			deploymentName = args[0]
-		}
-
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 
 		service := Deployment.NewService()
 
-		// TODO: I'm not sure that proceeding if we find just one is right
-		// I can see wanting to always prompt but for now let's just proceed
-		deployments, err := service.SearchDeployments(orgId, deploymentName, 50, 1)
+		var selectedDeployment models.Deployment
 
-		if err != nil {
-			return fmt.Errorf("failed to list apps: %w", err)
-		}
-
-		selectedDeployment := deployments[0]
-
-		if len(deployments) > 1 {
-			choices := make([]prompt.Choice, len(deployments))
-			for i, deployment := range deployments {
-				choices[i] = prompt.Choice{
-					Id:      deployment.ID,
-					Display: fmt.Sprintf("%s (%s)", deployment.Name, deployment.ID),
-				}
-			}
-
-			choice, err := prompt.PromptSelection(choices, "Select a deployment to run:")
-
+		if len(args) == 0 {
+			cfg, err := config.RestoreLocalConfig()
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to restore config: %w", err)
 			}
 
-			if choice.Id == "" {
-				printer.YellowPrint(("no choice made, canceling deploy"))
-				return nil
+			projectId := projectFlag
+			if cfg.ProjectId != nil {
+				projectId = *cfg.ProjectId
+			}
+			if projectId == "" {
+				return fmt.Errorf("project id not found in config")
 			}
 
-			for _, deployment := range deployments {
-				if deployment.ID == choice.Id {
-					selectedDeployment = deployment
-					break
+			var envId string
+			if envFlag != "" {
+				envId = envFlag
+			} else {
+				envService := env.NewService()
+				devEnv, devEnvErr := envService.GetDevelopmentEnvironment(orgId, projectId)
+				if errors.Is(devEnvErr, errors.ErrNotFound) {
+					return fmt.Errorf("no development environment found for this project")
 				}
+				if devEnvErr != nil {
+					return fmt.Errorf("failed to get development environment: %w", devEnvErr)
+				}
+				envId = devEnv.ID
 			}
-		}
 
+			projectService := projects.NewService(orgId)
+			deployment, deploymentErr := projectService.GetEnvironmentDeployment(projectId, envId)
+			if deploymentErr != nil && !errors.Is(deploymentErr, errors.ErrNotFound) {
+				return fmt.Errorf("failed to get deployment for environment: %w", deploymentErr)
+			}
+
+			if errors.Is(deploymentErr, errors.ErrNotFound) || deployment.ID == "" {
+				project, err := projectService.GetProject(projectId)
+				if err != nil {
+					return fmt.Errorf("failed to get project: %w", err)
+				}
+				if cfg.AppId == nil {
+					return fmt.Errorf("app id not found in config")
+				}
+
+				name := deploymentNamePart(project.AlternateID, 25)
+
+				newDeployment, err := service.CreateEnvironmentDeployment(orgId, projectId, envId, *cfg.AppId, name, name, "")
+				if err != nil {
+					return fmt.Errorf("failed to create deployment: %w", err)
+				}
+				selectedDeployment = *newDeployment
+			} else {
+				selectedDeployment = deployment
+			}
+		} else {
+			deployment, err := service.GetDeployment(orgId, args[0])
+			if err != nil {
+				return fmt.Errorf("failed to get deployment: %w", err)
+			}
+
+			selectedDeployment = *deployment
+		}
 		if !selectedDeployment.IsReady {
 			printer.Print("❌ There are issues blocking this deployment from being run.")
 			for _, issue := range selectedDeployment.ReadinessIssues {
@@ -445,9 +476,18 @@ func extractStatusUpdates(data map[string]any, runId string, statusDisplay *tea.
 	}
 }
 
+func deploymentNamePart(s string, maxLen int) string {
+	if len(s) > maxLen {
+		return s[:maxLen]
+	}
+	return s
+}
+
 func init() {
 	DeployCmd.Flags().BoolVar(&noBuild, "no-build", false, "Skip the build step")
 	DeployCmd.Flags().StringVarP(&flags.DockerfileFlag, "dockerfile", "f", "", "Path to Dockerfile (e.g., ./Dockerfile or ./docker/Dockerfile.prod)")
 	DeployCmd.Flags().StringVarP(&flags.PreviewNameFlag, "preview", "r", "", "Preview name to deploy to")
 	DeployCmd.Flags().StringVarP(&flags.PreviewPrefixFlag, "prefix", "x", "", "Host prefix for the preview deployment")
+	DeployCmd.Flags().StringVar(&envFlag, "env", "", "Environment to deploy (defaults to the environment flagged as the \"development\" type)")
+	DeployCmd.Flags().StringVar(&projectFlag, "project", "", "Project to deploy (defaults to project ID in hx config)")
 }

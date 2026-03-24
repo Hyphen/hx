@@ -72,3 +72,31 @@ func TestCreateProject(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "1", *createdProject.ID)
 }
+
+func TestGetEnvironmentDeployment_Success(t *testing.T) {
+	mockHTTPClient := new(MockHTTPClient)
+	ps := projects.NewTestService(organizationID, mockHTTPClient)
+	mockResponseBody := `{"id": "depl_123", "name": "My Deployment"}`
+	mockResponse := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(mockResponseBody)),
+	}
+	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
+
+	deployment, err := ps.GetEnvironmentDeployment("proj_1", "env_1")
+	assert.NoError(t, err)
+	assert.Equal(t, "depl_123", deployment.ID)
+}
+
+func TestGetEnvironmentDeployment_NotFound(t *testing.T) {
+	mockHTTPClient := new(MockHTTPClient)
+	ps := projects.NewTestService(organizationID, mockHTTPClient)
+	mockResponse := &http.Response{
+		StatusCode: http.StatusNotFound,
+		Body:       io.NopCloser(strings.NewReader(`{}`)),
+	}
+	mockHTTPClient.On("Do", mock.Anything).Return(mockResponse, nil)
+
+	_, err := ps.GetEnvironmentDeployment("proj_1", "env_1")
+	assert.Error(t, err)
+}

@@ -21,14 +21,16 @@ type ReadinessIssue struct {
 }
 
 type Deployment struct {
-	ID              string                `json:"id"`
-	Name            string                `json:"name"`
-	Description     string                `json:"description"`
-	Organization    OrganizationReference `json:"organization"`
-	Apps            []DeploymentApp       `json:"apps"`
-	IsReady         bool                  `json:"isReady"`
-	ReadinessIssues []ReadinessIssue      `json:"readinessIssues"`
-	Previews        []DeploymentPreview   `json:"previews"`
+	ID                 string                      `json:"id"`
+	Name               string                      `json:"name"`
+	Description        string                      `json:"description"`
+	Organization       OrganizationReference       `json:"organization"`
+	Apps               []DeploymentApp             `json:"apps"`
+	IsReady            bool                        `json:"isReady"`
+	ReadinessIssues    []ReadinessIssue            `json:"readinessIssues"`
+	Previews           []DeploymentPreview         `json:"previews"`
+	Project            ProjectReference            `json:"project"`
+	ProjectEnvironment ProjectEnvironmentReference `json:"projectEnvironment"`
 }
 
 type DeploymentRun struct {
