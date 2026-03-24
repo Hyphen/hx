@@ -3,7 +3,6 @@ package deploy
 import (
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/Hyphen/cli/internal/build"
@@ -66,81 +65,58 @@ Use 'hyphen deploy --help' for more information about available flags.
 		var selectedDeployment models.Deployment
 
 		if len(args) == 0 {
-			if envFlag != "" || projectFlag != "" {
-				projectId := projectFlag
-				cfg, cfgErr := config.RestoreLocalConfig()
-				if cfgErr == nil && cfg.ProjectId != nil {
-					projectId = *cfg.ProjectId
-				}
+			cfg, err := config.RestoreLocalConfig()
+			if err != nil {
+				return fmt.Errorf("failed to restore config: %w", err)
+			}
 
-				if envFlag == "" || projectId == "" {
-					return fmt.Errorf("--env and --project must be used together")
-				}
+			projectId := projectFlag
+			if cfg.ProjectId != nil {
+				projectId = *cfg.ProjectId
+			}
+			if projectId == "" {
+				return fmt.Errorf("project id not found in config")
+			}
 
-				deployments, err := service.SearchDeployments(orgId, "", 100, 1, []string{projectId})
-				if err != nil {
-					return fmt.Errorf("failed to search deployments: %w", err)
-				}
-
-				for _, d := range deployments {
-					if d.ProjectEnvironment.ID == envFlag || d.ProjectEnvironment.AlternateID == envFlag {
-						selectedDeployment = d
-						break
-					}
-				}
-
-				if selectedDeployment.ID == "" {
-					return fmt.Errorf("no deployment found for environment '%s' in project '%s'", envFlag, projectId)
-				}
+			var envId string
+			if envFlag != "" {
+				envId = envFlag
 			} else {
-				cfg, err := config.RestoreLocalConfig()
-				if err != nil {
-					return fmt.Errorf("failed to restore config: %w", err)
-				}
-				if cfg.ProjectId == nil {
-					return fmt.Errorf("project id not found in config")
-				}
 				envService := env.NewService()
-				devEnv, err := envService.GetDevelopmentEnvironment(orgId, *cfg.ProjectId)
-				if errors.Is(err, errors.ErrNotFound) {
+				devEnv, devEnvErr := envService.GetDevelopmentEnvironment(orgId, projectId)
+				if errors.Is(devEnvErr, errors.ErrNotFound) {
 					return fmt.Errorf("no development environment found for this project")
 				}
+				if devEnvErr != nil {
+					return fmt.Errorf("failed to get development environment: %w", devEnvErr)
+				}
+				envId = devEnv.ID
+			}
+
+			projectService := projects.NewService(orgId)
+			deployment, deploymentErr := projectService.GetEnvironmentDeployment(projectId, envId)
+			if deploymentErr != nil && !errors.Is(deploymentErr, errors.ErrNotFound) {
+				return fmt.Errorf("failed to get deployment for environment: %w", deploymentErr)
+			}
+
+			if errors.Is(deploymentErr, errors.ErrNotFound) || deployment.ID == "" {
+				project, err := projectService.GetProject(projectId)
 				if err != nil {
-					return fmt.Errorf("failed to get development environment: %w", err)
+					return fmt.Errorf("failed to get project: %w", err)
+				}
+				if cfg.AppId == nil {
+					return fmt.Errorf("app id not found in config")
 				}
 
-				projectService := projects.NewService(orgId)
-				deployment, err := projectService.GetEnvironmentDeployment(*cfg.ProjectId, devEnv.ID)
-				if err != nil && !errors.Is(err, errors.ErrNotFound) {
-					return fmt.Errorf("failed to get deployment for environment: %w", err)
+				name := deploymentNamePart(project.AlternateID, 25)
+
+				newDeployment, err := service.CreateEnvironmentDeployment(orgId, projectId, envId, *cfg.AppId, name, name, "")
+				if err != nil {
+					return fmt.Errorf("failed to create deployment: %w", err)
 				}
-
-				if err != nil || deployment.ID == "" {
-					appName := ""
-					if cfg.AppName != nil {
-						appName = strings.TrimSpace(*cfg.AppName)
-					}
-					if appName == "" {
-						appName = "development"
-					}
-					if cfg.AppId == nil {
-						return fmt.Errorf("app id not found in config")
-					}
-
-					name := deploymentNamePart(appName, 25)
-					alternateId := buildDeploymentAlternateId(name)
-					if strings.TrimSpace(alternateId) == "" {
-						return fmt.Errorf("invalid deployment alternate ID derived from app name")
-					}
-
-					newDeployment, err := service.CreateEnvironmentDeployment(orgId, *cfg.ProjectId, devEnv.ID, *cfg.AppId, name, alternateId, "")
-					if err != nil {
-						return fmt.Errorf("failed to create deployment: %w", err)
-					}
-					selectedDeployment = *newDeployment
-				} else {
-					selectedDeployment = deployment
-				}
+				selectedDeployment = *newDeployment
+			} else {
+				selectedDeployment = deployment
 			}
 		} else {
 			deployment, err := service.GetDeployment(orgId, args[0])
@@ -507,28 +483,11 @@ func deploymentNamePart(s string, maxLen int) string {
 	return s
 }
 
-func buildDeploymentAlternateId(name string) string {
-	raw := strings.ToLower(name)
-	var b strings.Builder
-	for _, r := range raw {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
-			b.WriteRune(r)
-		} else {
-			b.WriteRune('-')
-		}
-	}
-	result := b.String()
-	for strings.Contains(result, "--") {
-		result = strings.ReplaceAll(result, "--", "-")
-	}
-	return strings.Trim(result, "-")
-}
-
 func init() {
 	DeployCmd.Flags().BoolVar(&noBuild, "no-build", false, "Skip the build step")
 	DeployCmd.Flags().StringVarP(&flags.DockerfileFlag, "dockerfile", "f", "", "Path to Dockerfile (e.g., ./Dockerfile or ./docker/Dockerfile.prod)")
 	DeployCmd.Flags().StringVarP(&flags.PreviewNameFlag, "preview", "r", "", "Preview name to deploy to")
 	DeployCmd.Flags().StringVarP(&flags.PreviewPrefixFlag, "prefix", "x", "", "Host prefix for the preview deployment")
-	DeployCmd.Flags().StringVar(&envFlag, "env", "", "Environment to deploy")
-	DeployCmd.Flags().StringVar(&projectFlag, "project", "", "Project to deploy (overridden by project ID in hx config)")
+	DeployCmd.Flags().StringVar(&envFlag, "env", "", "Environment to deploy (defaults to the environment flagged as the \"development\" type)")
+	DeployCmd.Flags().StringVar(&projectFlag, "project", "", "Project to deploy (defaults to project ID in hx config)")
 }
