@@ -19,9 +19,13 @@ type HyphenClient struct {
 }
 
 func NewHyphenHTTPClient() *HyphenClient {
+	return NewHyphenHTTPClientWithTimeout(time.Second * 30)
+}
+
+func NewHyphenHTTPClientWithTimeout(timeout time.Duration) *HyphenClient {
 	return &HyphenClient{
 		client: &http.Client{
-			Timeout: time.Second * 30,
+			Timeout: timeout,
 		},
 		oauthService: oauth.DefaultOAuthService(),
 	}
@@ -51,7 +55,7 @@ func (hc *HyphenClient) Do(req *http.Request) (*http.Response, error) {
 
 	resp, err := hc.client.Do(req)
 	if err != nil {
-		return nil, errors.Wrap(err, "Request failed")
+		return nil, errors.Wrapf(err, "Request failed: %s %s: %v", req.Method, req.URL.String(), err)
 	}
 
 	return resp, nil

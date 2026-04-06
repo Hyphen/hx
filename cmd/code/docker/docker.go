@@ -3,6 +3,7 @@ package docker
 import (
 	"github.com/Hyphen/cli/internal/code"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
 
@@ -15,6 +16,7 @@ var DockerCmd = &cobra.Command{
 	Short: "Generate a Dockerfile for the given application",
 	Long:  `Generate a Dockerfile for the given application.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		coder := code.NewService()
 		err := coder.GenerateDocker(printer, cmd)
 		if err != nil {

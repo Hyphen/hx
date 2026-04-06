@@ -100,6 +100,7 @@ func Is(err, target error) bool {
 func HandleHTTPError(resp *http.Response) *Error {
 	body, _ := io.ReadAll(resp.Body)
 	errorMessage := body
+	requestContext := buildRequestContext(resp)
 
 	// attempt to decode the response body as key/value JSON to see if we have a message field to use
 	var responseBody map[string]string
@@ -111,20 +112,28 @@ func HandleHTTPError(resp *http.Response) *Error {
 
 	switch resp.StatusCode {
 	case http.StatusBadRequest:
-		return Wrapf(ErrBadRequest, "bad request: %s", errorMessage)
+		return Wrapf(ErrBadRequest, "bad request%s: %s", requestContext, errorMessage)
 	case http.StatusUnauthorized:
-		return Wrap(ErrUnauthorized, "unauthorized: please authenticate with `hx auth` and try again")
+		return Wrapf(ErrUnauthorized, "unauthorized%s: please authenticate with `hx auth` and try again", requestContext)
 	case http.StatusForbidden:
-		return Wrap(ErrForbidden, "forbidden: you don't have permission to perform this action")
+		return Wrapf(ErrForbidden, "forbidden%s: you don't have permission to perform this action", requestContext)
 	case http.StatusNotFound:
-		return Wrapf(ErrNotFound, "not found: %s", errorMessage)
+		return Wrapf(ErrNotFound, "not found%s: %s", requestContext, errorMessage)
 	case http.StatusConflict:
-		return Wrapf(ErrConflict, "conflict: %s", errorMessage)
+		return Wrapf(ErrConflict, "conflict%s: %s", requestContext, errorMessage)
 	case http.StatusTooManyRequests:
-		return Wrap(ErrTooManyRequests, "rate limit exceeded: please try again later")
+		return Wrapf(ErrTooManyRequests, "rate limit exceeded%s: please try again later", requestContext)
 	case http.StatusInternalServerError:
-		return Wrap(ErrInternalServerError, "internal server error: please try again later")
+		return Wrapf(ErrInternalServerError, "internal server error%s: please try again later", requestContext)
 	default:
-		return Wrapf(ErrUnexpected, "unexpected error (status code %d): %s", resp.StatusCode, errorMessage)
+		return Wrapf(ErrUnexpected, "unexpected error%s (status code %d): %s", requestContext, resp.StatusCode, errorMessage)
 	}
+}
+
+func buildRequestContext(resp *http.Response) string {
+	if resp == nil || resp.Request == nil || resp.Request.URL == nil {
+		return ""
+	}
+
+	return fmt.Sprintf(" for %s %s", resp.Request.Method, resp.Request.URL.String())
 }

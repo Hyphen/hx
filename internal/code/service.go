@@ -1,24 +1,37 @@
 package code
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"sync"
+	"strings"
 
 	"github.com/Hyphen/cli/internal/config"
-	"github.com/Hyphen/cli/internal/run"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/gitutil"
 	"github.com/Hyphen/cli/pkg/prompt"
-	"github.com/Hyphen/cli/pkg/socketio"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
-type CodeService struct {
+const maxDockerfileSessionTurns = 24
+
+type CodeService struct{}
+
+type dockerGenCallbacks struct {
+	onVerbose func(msg string)
+	onStatus  func(status string)
+	onSuccess func(summary string)
+	onError   func(err error)
+}
+
+type filesystemToolRunner interface {
+	ExecuteToolCalls(toolCalls []DockerfileToolCall, onVerbose func(string)) []DockerfileToolResult
+}
+
+type verboseDockerfileSessionClient interface {
+	SetVerboseCallback(func(string))
 }
 
 func NewService() *CodeService {
@@ -26,257 +39,269 @@ func NewService() *CodeService {
 }
 
 func (cs *CodeService) GenerateDocker(printer *cprint.CPrinter, cmd *cobra.Command) error {
+	printer = ensurePrinter(printer)
 
 	hasChanges, _ := gitutil.CheckForChangesNotOnRemote()
 	if hasChanges {
-		isOk := prompt.PromptYesNo(cmd, "You currently have changes that are not on the remote. Would you like to generate the dockerfile without these changes?", false)
+		isOk := prompt.PromptYesNo(
+			cmd,
+			"You currently have changes that are not on the remote. Would you like to generate the dockerfile without these changes?",
+			false,
+		)
 		if !isOk.Confirmed {
 			return fmt.Errorf("stopped")
 		}
 	}
 
-	config, err := config.RestoreConfig()
+	cfg, err := config.RestoreConfig()
 	if err != nil {
 		return err
 	}
 
-	orgId, err := flags.GetOrganizationID()
+	orgID, err := flags.GetOrganizationID()
 	if err != nil {
 		return err
 	}
 
-	if config.IsMonorepoProject() {
+	if cfg.IsMonorepoProject() {
 		return fmt.Errorf("docker generation for monorepos is not supported yet")
 	}
 
-	service := run.NewService()
-
-	targetBranch := "main"
-	targetBranch, _ = gitutil.GetCurrentBranch()
-	hyphenRun, err := service.CreateDockerFileRun(orgId, *config.AppId, targetBranch)
+	appID, err := configuredAppID(cfg)
 	if err != nil {
 		return err
 	}
 
-	if shouldUseTUI() {
-		return cs.generateDockerWithTUI(orgId, hyphenRun)
+	workspaceRoot, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to determine workspace root: %w", err)
 	}
-	return cs.generateDockerWithoutTUI(printer, orgId, hyphenRun)
+
+	if shouldUseTUI() {
+		return cs.generateDockerWithTUI(orgID, appID, workspaceRoot)
+	}
+
+	return cs.generateDockerWithoutTUI(printer, orgID, appID, workspaceRoot)
 }
 
 func shouldUseTUI() bool {
 	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
-// dockerGenCallbacks provides callbacks for the docker generation event handler
-type dockerGenCallbacks struct {
-	onVerbose func(msg string)
-	onStatus  func(status run.RunStatus)
-	onSuccess func(changes []run.DiffResult)
-	onError   func(err error)
-}
-
-func (cs *CodeService) streamDockerGenEvents(orgId string, hyphenRun *run.Run, callbacks dockerGenCallbacks) error {
-	ioService := socketio.NewService()
-
-	if flags.VerboseFlag && callbacks.onVerbose != nil {
-		ioService.SetVerboseCallback(callbacks.onVerbose)
+func (cs *CodeService) runDockerfileSession(
+	sessionClient DockerfileSessionClient,
+	toolRunner filesystemToolRunner,
+	orgID, appID string,
+	callbacks dockerGenCallbacks,
+) error {
+	if verboseClient, ok := sessionClient.(verboseDockerfileSessionClient); ok {
+		verboseClient.SetVerboseCallback(callbacks.onVerbose)
 	}
 
-	if err := ioService.Connect(orgId); err != nil {
-		return fmt.Errorf("failed to connect to Socket.io: %w", err)
-	}
-	defer ioService.Disconnect()
-
-	done := make(chan struct{})
-	var doneOnce sync.Once
-	var resultErr error
-
-	closeWithError := func(err error) {
-		resultErr = err
-		if callbacks.onError != nil {
-			callbacks.onError(err)
-		}
-		doneOnce.Do(func() { close(done) })
+	if callbacks.onStatus != nil {
+		callbacks.onStatus("Starting Dockerfile generation")
 	}
 
-	closeWithSuccess := func(changes []run.DiffResult) {
-		if callbacks.onVerbose != nil && flags.VerboseFlag {
-			callbacks.onVerbose(fmt.Sprintf("Applying %d changes", len(changes)))
-		}
-		gitutil.ApplyDiffs(changes)
-		if callbacks.onSuccess != nil {
-			callbacks.onSuccess(changes)
-		}
-		doneOnce.Do(func() { close(done) })
+	createResponse, err := sessionClient.StartSession(orgID, appID)
+	if err != nil {
+		return failDockerGen(err, callbacks)
 	}
 
-	ioService.On("Event:Run", func(args ...any) {
-		if len(args) == 0 {
-			return
-		}
+	if createResponse.Session.ID == "" {
+		return failDockerGen(fmt.Errorf("dockerfile session did not return a session id"), callbacks)
+	}
 
-		payload, ok := args[0].(map[string]any)
-		if !ok {
-			return
-		}
-
-		runId, _ := payload["runId"].(string)
-		if runId != hyphenRun.ID {
-			return
-		}
-
-		action, _ := payload["action"].(string)
-
-		// Handle two possible event formats:
-		// 1. Legacy format: payload["run"] contains a Run object with status and data
-		// 2. New format: payload["data"] contains status and changes directly
-		if runDataRaw, ok := payload["run"].(map[string]any); ok {
-			runJSON, err := json.Marshal(runDataRaw)
-			if err != nil {
-				return
+	turn := createResponse.Output
+	for turnIndex := 0; turnIndex < maxDockerfileSessionTurns; turnIndex++ {
+		switch turn.Status {
+		case DockerfileSessionStatusRequiresToolResults:
+			if len(turn.Message.ToolCalls) == 0 {
+				return failDockerGen(fmt.Errorf("dockerfile session requested tool results without any tool calls"), callbacks)
 			}
 
-			var runObj run.Run
-			if err := json.Unmarshal(runJSON, &runObj); err != nil {
-				return
+			if callbacks.onVerbose != nil {
+				assistantMessage := strings.TrimSpace(turn.Message.ContentOrEmpty())
+				if assistantMessage != "" {
+					callbacks.onVerbose(fmt.Sprintf("Assistant: %s", assistantMessage))
+				}
 			}
 
 			if callbacks.onStatus != nil {
-				callbacks.onStatus(runObj.Status)
+				callbacks.onStatus(describeToolCalls(turn.Message.ToolCalls))
 			}
 
-			if action == "update" && runObj.Status == "succeeded" {
-				var codeChanges run.CodeChangeRunData
-				if err := json.Unmarshal(runObj.Data, &codeChanges); err != nil {
-					closeWithError(fmt.Errorf("error unmarshaling CodeChangeRunData: %w", err))
-					return
-				}
-				closeWithSuccess(codeChanges.Changes)
-				return
+			results := toolRunner.ExecuteToolCalls(turn.Message.ToolCalls, callbacks.onVerbose)
+			nextTurn, continueErr := sessionClient.ContinueSession(orgID, appID, createResponse.Session.ID, results)
+			if continueErr != nil {
+				return failDockerGen(continueErr, callbacks)
 			}
-
-			if runObj.Status == "failed" {
-				closeWithError(fmt.Errorf("dockerfile generation failed"))
-				return
+			turn = *nextTurn
+		case DockerfileSessionStatusClosed:
+			if callbacks.onSuccess != nil {
+				callbacks.onSuccess(strings.TrimSpace(turn.Message.ContentOrEmpty()))
 			}
-
-			if runObj.Status == "canceled" {
-				closeWithError(fmt.Errorf("dockerfile generation was canceled"))
-				return
-			}
-		} else if dataRaw, ok := payload["data"].(map[string]any); ok {
-			status, _ := dataRaw["status"].(string)
-
-			if flags.VerboseFlag && callbacks.onVerbose != nil {
-				callbacks.onVerbose(fmt.Sprintf("Event: action=%s, status=%s", action, status))
-			}
-
-			// Update status for any status change
-			if status != "" && callbacks.onStatus != nil {
-				callbacks.onStatus(run.RunStatus(status))
-			}
-
-			if status == "failed" {
-				closeWithError(fmt.Errorf("dockerfile generation failed"))
-				return
-			}
-
-			if status == "canceled" {
-				closeWithError(fmt.Errorf("dockerfile generation was canceled"))
-				return
-			}
-
-			if action == "update" && status == "succeeded" {
-				innerData, ok := dataRaw["data"].(map[string]any)
-				if !ok {
-					if flags.VerboseFlag && callbacks.onVerbose != nil {
-						callbacks.onVerbose("No inner 'data' field, waiting...")
-					}
-					return
-				}
-
-				changesRaw, ok := innerData["changes"].([]any)
-				if !ok || len(changesRaw) == 0 {
-					if flags.VerboseFlag && callbacks.onVerbose != nil {
-						callbacks.onVerbose("No changes in inner data, waiting...")
-					}
-					return
-				}
-
-				changesJSON, err := json.Marshal(changesRaw)
-				if err != nil {
-					closeWithError(fmt.Errorf("error marshaling changes: %w", err))
-					return
-				}
-
-				var changes []run.DiffResult
-				if err := json.Unmarshal(changesJSON, &changes); err != nil {
-					closeWithError(fmt.Errorf("error unmarshaling changes: %w", err))
-					return
-				}
-
-				closeWithSuccess(changes)
-			}
+			return nil
+		case DockerfileSessionStatusFailed:
+			return failDockerGen(
+				fmt.Errorf("dockerfile generation failed: %s", sessionMessage(turn.Message.ContentOrEmpty(), "no details provided")),
+				callbacks,
+			)
+		case DockerfileSessionStatusReady:
+			return failDockerGen(
+				fmt.Errorf(
+					"dockerfile generation stopped before the session closed: %s",
+					sessionMessage(turn.Message.ContentOrEmpty(), "no details provided"),
+				),
+				callbacks,
+			)
+		default:
+			return failDockerGen(fmt.Errorf("unexpected dockerfile session status: %s", turn.Status), callbacks)
 		}
-	})
-
-	<-done
-	return resultErr
-}
-
-func (cs *CodeService) generateDockerWithTUI(orgId string, hyphenRun *run.Run) error {
-	modelThing := GenerateDockerRunModel{
-		Run:         hyphenRun,
-		VerboseMode: flags.VerboseFlag,
 	}
 
-	statusDisplay := tea.NewProgram(modelThing)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-
-		err := cs.streamDockerGenEvents(orgId, hyphenRun, dockerGenCallbacks{
-			onVerbose: func(msg string) {
-				statusDisplay.Send(VerboseMessage{Content: msg})
-			},
-			onStatus: func(status run.RunStatus) {
-				statusDisplay.Send(RunData{Run: run.Run{Status: status}})
-			},
-			onSuccess: func(changes []run.DiffResult) {
-				// TUI model handles quit when it receives the succeeded status
-			},
-			onError: func(err error) {
-				statusDisplay.Send(ErrorMessage{Error: err})
-			},
-		})
-
-		if err != nil {
-			statusDisplay.Send(ErrorMessage{Error: err})
-		}
-	}()
-
-	statusDisplay.Run()
-	wg.Wait()
-	return nil
+	return failDockerGen(
+		fmt.Errorf("dockerfile generation exceeded %d session turns", maxDockerfileSessionTurns),
+		callbacks,
+	)
 }
 
-func (cs *CodeService) generateDockerWithoutTUI(printer *cprint.CPrinter, orgId string, hyphenRun *run.Run) error {
+func (cs *CodeService) generateDockerWithTUI(orgID, appID, workspaceRoot string) error {
+	toolRunner, err := NewFilesystemToolExecutor(workspaceRoot)
+	if err != nil {
+		return err
+	}
+
+	statusDisplay := tea.NewProgram(GenerateDockerSessionModel{
+		Status:      "Starting Dockerfile generation",
+		VerboseMode: flags.VerboseFlag,
+	})
+
+	runErrCh := make(chan error, 1)
+	go func() {
+		runErrCh <- cs.runDockerfileSession(
+			NewDockerfileSessionService(),
+			toolRunner,
+			orgID,
+			appID,
+			dockerGenCallbacks{
+				onVerbose: func(msg string) {
+					statusDisplay.Send(VerboseMessage{Content: msg})
+				},
+				onStatus: func(status string) {
+					statusDisplay.Send(StatusMessage{Content: status})
+				},
+				onSuccess: func(summary string) {
+					statusDisplay.Send(SuccessMessage{Summary: summary})
+				},
+				onError: func(err error) {
+					statusDisplay.Send(ErrorMessage{Error: err})
+				},
+			},
+		)
+	}()
+
+	_, tuiErr := statusDisplay.Run()
+	runErr := <-runErrCh
+	if tuiErr != nil {
+		return tuiErr
+	}
+	return runErr
+}
+
+func (cs *CodeService) generateDockerWithoutTUI(printer *cprint.CPrinter, orgID, appID, workspaceRoot string) error {
+	toolRunner, err := NewFilesystemToolExecutor(workspaceRoot)
+	if err != nil {
+		return err
+	}
+
 	printer.Print("Generating Dockerfile (this may take a few seconds)...")
 
-	return cs.streamDockerGenEvents(orgId, hyphenRun, dockerGenCallbacks{
-		onVerbose: func(msg string) {
-			printer.Print(fmt.Sprintf("  [verbose] %s", msg))
+	return cs.runDockerfileSession(
+		NewDockerfileSessionService(),
+		toolRunner,
+		orgID,
+		appID,
+		dockerGenCallbacks{
+			onVerbose: func(msg string) {
+				printer.Print(fmt.Sprintf("  [verbose] %s", msg))
+			},
+			onStatus: func(status string) {
+				printer.Print(status)
+			},
+			onSuccess: func(summary string) {
+				printer.Success("Dockerfile generated! You may choose to check it in if you like.")
+				if summary != "" {
+					printer.Print(summary)
+				}
+			},
+			onError: nil,
 		},
-		onStatus: func(status run.RunStatus) {
-			printer.Print(fmt.Sprintf("Status: %s", status))
-		},
-		onSuccess: func(changes []run.DiffResult) {
-			printer.Success("Dockerfile generated! You may choose to check it in if you like.")
-		},
-		onError: nil, // errors returned directly
-	})
+	)
+}
+
+func failDockerGen(err error, callbacks dockerGenCallbacks) error {
+	if callbacks.onError != nil {
+		callbacks.onError(err)
+	}
+	return err
+}
+
+func describeToolCalls(toolCalls []DockerfileToolCall) string {
+	if len(toolCalls) == 0 {
+		return "Waiting for Dockerfile generation"
+	}
+
+	hasWrite := false
+	hasRead := false
+	hasSearch := false
+	hasList := false
+
+	for _, toolCall := range toolCalls {
+		switch toolCall.Function.Name {
+		case "write_file":
+			hasWrite = true
+		case "read_file":
+			hasRead = true
+		case "search":
+			hasSearch = true
+		case "list_files":
+			hasList = true
+		}
+	}
+
+	switch {
+	case hasWrite:
+		return "Writing Dockerfile"
+	case hasRead:
+		return "Reading repository files"
+	case hasSearch:
+		return "Searching repository files"
+	case hasList:
+		return "Inspecting repository structure"
+	default:
+		return "Running filesystem tools"
+	}
+}
+
+func sessionMessage(content, fallback string) string {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return fallback
+	}
+	return trimmed
+}
+
+func ensurePrinter(printer *cprint.CPrinter) *cprint.CPrinter {
+	if printer != nil {
+		return printer
+	}
+	return cprint.NewCPrinter(flags.VerboseFlag)
+}
+
+func configuredAppID(cfg config.Config) (string, error) {
+	if cfg.AppId == nil || strings.TrimSpace(*cfg.AppId) == "" {
+		return "", fmt.Errorf("No app ID provided and no default found in manifest")
+	}
+
+	return *cfg.AppId, nil
 }
