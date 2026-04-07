@@ -12,14 +12,15 @@
     "program": "${workspaceFolder}",
     "cwd": "/Users/osbornm/Development/Hyphen-Tilde/location",
     "env": {
-      "HYPHEN_DEV": "false",
-      "HYPHEN_Local": "true"
+      "HYPHEN_DEV": "true",
+      //"HYPHEN_Local": "true"
     },
     "args": [
      //"deploy", "Location-Staging", //"--no-build" //"--verbose" //, "--no-build"
      //"env", "pull", "--force"
-     //"auth"
-     "code", "docker", "--verbose"
+     "auth"
+     //"code", "docker", "--verbose"
+     //"code", "docker"
      //"build"
      //"set-org"
     ],

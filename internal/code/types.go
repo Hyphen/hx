@@ -12,7 +12,8 @@ type StatusMessage struct {
 }
 
 type SuccessMessage struct {
-	Summary string
+	Summary      string
+	FilesWritten bool
 }
 
 type ErrorMessage struct {
@@ -26,6 +27,7 @@ type VerboseMessage struct {
 type GenerateDockerSessionModel struct {
 	Status          string
 	Summary         string
+	FilesWritten    bool
 	VerboseMode     bool
 	VerboseMessages []string
 	Error           error
@@ -64,6 +66,7 @@ func (m GenerateDockerSessionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SuccessMessage:
 		m.Done = true
 		m.Summary = msg.Summary
+		m.FilesWritten = msg.FilesWritten
 		return m, tea.Quit
 	case ErrorMessage:
 		m.Error = msg.Error
@@ -87,7 +90,11 @@ func (m GenerateDockerSessionModel) View() string {
 	case m.Error != nil:
 		result += "❌ Dockerfile generation failed!\n"
 	case m.Done:
-		result += "✅ Dockerfile generated! You may choose to check it in if you like.\n"
+		if m.FilesWritten {
+			result += "✅ Dockerfile and .dockerignore generated! You may choose to check them in if you like.\n"
+		} else {
+			result += "✅ Existing Dockerfile and .dockerignore already look good. No files were generated or changed.\n"
+		}
 	default:
 		result += fmt.Sprintf("%s %s\n", spinIcon.View(), m.Status)
 	}

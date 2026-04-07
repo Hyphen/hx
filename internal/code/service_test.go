@@ -1,9 +1,14 @@
 package code
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/Hyphen/cli/internal/config"
+	"github.com/Hyphen/cli/pkg/flags"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -53,7 +58,7 @@ func TestRunDockerfileSession_ExecutesToolCallsUntilClosed(t *testing.T) {
 	}
 
 	var statuses []string
-	var successSummary string
+	var successResult dockerGenSuccess
 
 	err := service.runDockerfileSession(
 		sessionClient,
@@ -64,15 +69,15 @@ func TestRunDockerfileSession_ExecutesToolCallsUntilClosed(t *testing.T) {
 			onStatus: func(status string) {
 				statuses = append(statuses, status)
 			},
-			onSuccess: func(summary string) {
-				successSummary = summary
+			onSuccess: func(result dockerGenSuccess) {
+				successResult = result
 			},
 		},
 	)
 
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"Starting Dockerfile generation", "Inspecting repository structure"}, statuses)
-	assert.Equal(t, "Dockerfile written.", successSummary)
+	assert.Equal(t, dockerGenSuccess{Summary: "Dockerfile written.", FilesWritten: true}, successResult)
 	assert.Len(t, toolRunner.calls, 1)
 	assert.Equal(t, "list_files", toolRunner.calls[0][0].Function.Name)
 	assert.Len(t, sessionClient.continueCalls, 1)
@@ -80,7 +85,7 @@ func TestRunDockerfileSession_ExecutesToolCallsUntilClosed(t *testing.T) {
 	assert.Equal(t, "call-1", sessionClient.continueCalls[0].results[0].ToolCallID)
 }
 
-func TestRunDockerfileSession_FailsIfSessionDoesNotClose(t *testing.T) {
+func TestRunDockerfileSession_TreatsReadyWithSummaryAsSuccess(t *testing.T) {
 	service := NewService()
 	sessionClient := &fakeDockerfileSessionClient{
 		startResponse: &DockerfileSessionCreateResponse{
@@ -91,8 +96,43 @@ func TestRunDockerfileSession_FailsIfSessionDoesNotClose(t *testing.T) {
 				SessionID: "session-1",
 				Status:    DockerfileSessionStatusReady,
 				Message: DockerfileAssistantMessage{
-					Content: stringPtr("I need more input."),
+					Content: stringPtr("The existing Dockerfile and .dockerignore are already production-ready. No changes were necessary."),
 				},
+			},
+		},
+	}
+
+	var successResult dockerGenSuccess
+	err := service.runDockerfileSession(
+		sessionClient,
+		&fakeFilesystemToolRunner{},
+		"org-1",
+		"app-1",
+		dockerGenCallbacks{
+			onSuccess: func(result dockerGenSuccess) {
+				successResult = result
+			},
+		},
+	)
+
+	assert.NoError(t, err)
+	assert.Equal(t, dockerGenSuccess{
+		Summary:      "The existing Dockerfile and .dockerignore are already production-ready. No changes were necessary.",
+		FilesWritten: false,
+	}, successResult)
+}
+
+func TestRunDockerfileSession_FailsIfReadyResponseHasNoSummary(t *testing.T) {
+	service := NewService()
+	sessionClient := &fakeDockerfileSessionClient{
+		startResponse: &DockerfileSessionCreateResponse{
+			Session: DockerfileSession{
+				ID: "session-1",
+			},
+			Output: DockerfileTurnResponse{
+				SessionID: "session-1",
+				Status:    DockerfileSessionStatusReady,
+				Message:   DockerfileAssistantMessage{},
 			},
 		},
 	}
@@ -133,6 +173,51 @@ func TestConfiguredAppIDReturnsValueWhenPresent(t *testing.T) {
 	value, err := configuredAppID(config.Config{AppId: &appID})
 	assert.NoError(t, err)
 	assert.Equal(t, appID, value)
+}
+
+func TestGenerateDockerIgnoresLocalChangesNotOnRemote(t *testing.T) {
+	tempDir := t.TempDir()
+	homeDir := filepath.Join(tempDir, "home")
+
+	assert.NoError(t, os.MkdirAll(homeDir, 0o755))
+	t.Setenv("HOME", homeDir)
+
+	previousDir, err := os.Getwd()
+	assert.NoError(t, err)
+	assert.NoError(t, os.Chdir(tempDir))
+	t.Cleanup(func() {
+		_ = os.Chdir(previousDir)
+	})
+
+	gitInit := exec.Command("git", "init")
+	gitInit.Dir = tempDir
+	output, err := gitInit.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, string(output))
+	}
+
+	assert.NoError(t, os.WriteFile(filepath.Join(tempDir, "README.md"), []byte("local-only change\n"), 0o644))
+
+	isMonorepo := true
+	appID := "app_123"
+	assert.NoError(t, config.InitializeConfig(config.Config{
+		AppId:      &appID,
+		IsMonorepo: &isMonorepo,
+	}, config.ManifestConfigFile))
+
+	originalOrgFlag := flags.OrganizationFlag
+	flags.OrganizationFlag = "org_123"
+	t.Cleanup(func() {
+		flags.OrganizationFlag = originalOrgFlag
+	})
+
+	cmd := &cobra.Command{Use: "docker"}
+	cmd.Flags().Bool("yes", false, "")
+	cmd.Flags().Bool("no", true, "")
+
+	err = NewService().GenerateDocker(nil, cmd)
+
+	assert.EqualError(t, err, "docker generation for monorepos is not supported yet")
 }
 
 type fakeDockerfileSessionClient struct {

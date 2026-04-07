@@ -8,8 +8,6 @@ import (
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
-	"github.com/Hyphen/cli/pkg/gitutil"
-	"github.com/Hyphen/cli/pkg/prompt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -19,10 +17,15 @@ const maxDockerfileSessionTurns = 24
 
 type CodeService struct{}
 
+type dockerGenSuccess struct {
+	Summary      string
+	FilesWritten bool
+}
+
 type dockerGenCallbacks struct {
 	onVerbose func(msg string)
 	onStatus  func(status string)
-	onSuccess func(summary string)
+	onSuccess func(result dockerGenSuccess)
 	onError   func(err error)
 }
 
@@ -40,18 +43,6 @@ func NewService() *CodeService {
 
 func (cs *CodeService) GenerateDocker(printer *cprint.CPrinter, cmd *cobra.Command) error {
 	printer = ensurePrinter(printer)
-
-	hasChanges, _ := gitutil.CheckForChangesNotOnRemote()
-	if hasChanges {
-		isOk := prompt.PromptYesNo(
-			cmd,
-			"You currently have changes that are not on the remote. Would you like to generate the dockerfile without these changes?",
-			false,
-		)
-		if !isOk.Confirmed {
-			return fmt.Errorf("stopped")
-		}
-	}
 
 	cfg, err := config.RestoreConfig()
 	if err != nil {
@@ -138,7 +129,10 @@ func (cs *CodeService) runDockerfileSession(
 			turn = *nextTurn
 		case DockerfileSessionStatusClosed:
 			if callbacks.onSuccess != nil {
-				callbacks.onSuccess(strings.TrimSpace(turn.Message.ContentOrEmpty()))
+				callbacks.onSuccess(dockerGenSuccess{
+					Summary:      strings.TrimSpace(turn.Message.ContentOrEmpty()),
+					FilesWritten: true,
+				})
 			}
 			return nil
 		case DockerfileSessionStatusFailed:
@@ -147,10 +141,20 @@ func (cs *CodeService) runDockerfileSession(
 				callbacks,
 			)
 		case DockerfileSessionStatusReady:
+			readySummary := strings.TrimSpace(turn.Message.ContentOrEmpty())
+			if readySummary != "" {
+				if callbacks.onSuccess != nil {
+					callbacks.onSuccess(dockerGenSuccess{
+						Summary:      readySummary,
+						FilesWritten: false,
+					})
+				}
+				return nil
+			}
 			return failDockerGen(
 				fmt.Errorf(
 					"dockerfile generation stopped before the session closed: %s",
-					sessionMessage(turn.Message.ContentOrEmpty(), "no details provided"),
+					sessionMessage(readySummary, "no details provided"),
 				),
 				callbacks,
 			)
@@ -190,8 +194,11 @@ func (cs *CodeService) generateDockerWithTUI(orgID, appID, workspaceRoot string)
 				onStatus: func(status string) {
 					statusDisplay.Send(StatusMessage{Content: status})
 				},
-				onSuccess: func(summary string) {
-					statusDisplay.Send(SuccessMessage{Summary: summary})
+				onSuccess: func(result dockerGenSuccess) {
+					statusDisplay.Send(SuccessMessage{
+						Summary:      result.Summary,
+						FilesWritten: result.FilesWritten,
+					})
 				},
 				onError: func(err error) {
 					statusDisplay.Send(ErrorMessage{Error: err})
@@ -228,10 +235,14 @@ func (cs *CodeService) generateDockerWithoutTUI(printer *cprint.CPrinter, orgID,
 			onStatus: func(status string) {
 				printer.Print(status)
 			},
-			onSuccess: func(summary string) {
-				printer.Success("Dockerfile generated! You may choose to check it in if you like.")
-				if summary != "" {
-					printer.Print(summary)
+			onSuccess: func(result dockerGenSuccess) {
+				if result.FilesWritten {
+					printer.Success("Dockerfile and .dockerignore generated! You may choose to check them in if you like.")
+				} else {
+					printer.Success("Existing Dockerfile and .dockerignore already look good. No files were generated or changed.")
+				}
+				if result.Summary != "" {
+					printer.Print(result.Summary)
 				}
 			},
 			onError: nil,
