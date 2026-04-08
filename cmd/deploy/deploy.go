@@ -3,6 +3,7 @@ package deploy
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/Hyphen/cli/internal/build"
@@ -26,6 +27,7 @@ var (
 	noBuild     bool
 	envFlag     string
 	projectFlag string
+	appsFlag    string
 	printer     *cprint.CPrinter
 )
 
@@ -173,23 +175,69 @@ Use 'hyphen deploy --help' for more information about available flags.
 
 		appSources := []Deployment.AppSources{}
 
-		if noBuild {
-			// check for build ID
-		} else {
-			// TODO: right now we are only supporting building one app at a time
-			// we'll need to come back and fix this SOON
-			firstApp := selectedDeployment.Apps[0]
+		if appsFlag != "" {
+			cfg, _ := config.RestoreLocalConfig()
 
-			service := build.NewService()
-			result, err := service.RunBuild(cmd, printer, firstApp.DeploymentSettings.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag, flags.PreviewNameFlag)
+			parsedApps, err := parseAppsFlag(appsFlag)
 			if err != nil {
 				return err
 			}
-			appSources = append(appSources, Deployment.AppSources{
-				AppId:    result.App.ID,
-				Artifact: result.Artifact,
-			},
-			)
+
+			for _, pa := range parsedApps {
+				deployApp, err := resolveDeploymentApp(pa.ID, selectedDeployment)
+				if err != nil {
+					return err
+				}
+
+				if pa.BuildSpec == "" && matchesHxApp(pa.ID, cfg) {
+					buildSvc := build.NewService()
+					result, err := buildSvc.RunBuild(cmd, printer, selectedDeployment.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag, flags.PreviewNameFlag)
+					if err != nil {
+						return err
+					}
+					appSources = append(appSources, Deployment.AppSources{
+						AppId:    result.App.ID,
+						Artifact: &result.Artifact,
+					})
+				} else {
+					src := Deployment.AppSources{AppId: deployApp.App.ID}
+					switch pa.BuildSpec {
+					case "", "latest":
+						src.Build = "latest"
+					case "lastDeployed":
+						src.Build = "lastDeployed"
+					default:
+						src.BuildId = pa.BuildSpec
+					}
+					appSources = append(appSources, src)
+				}
+			}
+		} else if noBuild {
+			for _, app := range selectedDeployment.Apps {
+				appSources = append(appSources, Deployment.AppSources{
+					AppId: app.App.ID,
+					Build: "latest",
+				})
+			}
+		} else {
+			buildSvc := build.NewService()
+			result, err := buildSvc.RunBuild(cmd, printer, selectedDeployment.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag, flags.PreviewNameFlag)
+			if err != nil {
+				return err
+			}
+			for _, app := range selectedDeployment.Apps {
+				if app.App.ID == result.App.ID {
+					appSources = append(appSources, Deployment.AppSources{
+						AppId:    result.App.ID,
+						Artifact: &result.Artifact,
+					})
+				} else {
+					appSources = append(appSources, Deployment.AppSources{
+						AppId: app.App.ID,
+						Build: "latest",
+					})
+				}
+			}
 		}
 
 		printer.Print(fmt.Sprintf("Running %s", selectedDeployment.Name))
@@ -483,11 +531,57 @@ func deploymentNamePart(s string, maxLen int) string {
 	return s
 }
 
+type parsedApp struct {
+	ID        string
+	BuildSpec string
+}
+
+func parseAppsFlag(appsFlag string) ([]parsedApp, error) {
+	entries := strings.Split(appsFlag, ",")
+	result := make([]parsedApp, 0, len(entries))
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		parts := strings.SplitN(entry, ":", 2)
+		pa := parsedApp{ID: parts[0]}
+		if len(parts) == 2 {
+			pa.BuildSpec = parts[1]
+		}
+		result = append(result, pa)
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("--apps flag is empty")
+	}
+	return result, nil
+}
+
+func resolveDeploymentApp(identifier string, deployment models.Deployment) (*models.DeploymentApp, error) {
+	for i, app := range deployment.Apps {
+		if app.App.ID == identifier || app.App.AlternateID == identifier {
+			return &deployment.Apps[i], nil
+		}
+	}
+	return nil, fmt.Errorf("app %q not found in deployment", identifier)
+}
+
+func matchesHxApp(identifier string, cfg config.Config) bool {
+	if cfg.AppId != nil && *cfg.AppId == identifier {
+		return true
+	}
+	if cfg.AppAlternateId != nil && *cfg.AppAlternateId == identifier {
+		return true
+	}
+	return false
+}
+
 func init() {
-	DeployCmd.Flags().BoolVar(&noBuild, "no-build", false, "Skip the build step")
+	DeployCmd.Flags().BoolVar(&noBuild, "no-build", false, "Skip the build step and use the latest build for all apps")
 	DeployCmd.Flags().StringVarP(&flags.DockerfileFlag, "dockerfile", "f", "", "Path to Dockerfile (e.g., ./Dockerfile or ./docker/Dockerfile.prod)")
 	DeployCmd.Flags().StringVarP(&flags.PreviewNameFlag, "preview", "r", "", "Preview name to deploy to")
 	DeployCmd.Flags().StringVarP(&flags.PreviewPrefixFlag, "prefix", "x", "", "Host prefix for the preview deployment")
 	DeployCmd.Flags().StringVar(&envFlag, "env", "", "Environment to deploy (defaults to the environment flagged as the \"development\" type)")
 	DeployCmd.Flags().StringVar(&projectFlag, "project", "", "Project to deploy (defaults to project ID in hx config)")
+	DeployCmd.Flags().StringVar(&appsFlag, "apps", "", "Comma-separated list of apps to deploy, each optionally specifying a build (e.g. app1,app2:abld_xxxx,app3:latest)")
 }
