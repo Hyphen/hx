@@ -189,6 +189,14 @@ Use 'hyphen deploy --help' for more information about available flags.
 					return err
 				}
 
+				if noBuild {
+					appSources = append(appSources, Deployment.AppSources{
+						AppId: deployApp.App.ID,
+						Build: "latest",
+					})
+					continue
+				}
+
 				if pa.BuildSpec == "" && matchesHxApp(pa.ID, cfg) {
 					buildSvc := build.NewService()
 					result, err := buildSvc.RunBuild(cmd, printer, selectedDeployment.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag, flags.PreviewNameFlag)
@@ -196,8 +204,8 @@ Use 'hyphen deploy --help' for more information about available flags.
 						return err
 					}
 					appSources = append(appSources, Deployment.AppSources{
-						AppId:    result.App.ID,
-						Artifact: &result.Artifact,
+						AppId:   result.App.ID,
+						BuildId: result.Id,
 					})
 				} else {
 					src := Deployment.AppSources{AppId: deployApp.App.ID}
@@ -228,8 +236,8 @@ Use 'hyphen deploy --help' for more information about available flags.
 			for _, app := range selectedDeployment.Apps {
 				if app.App.ID == result.App.ID {
 					appSources = append(appSources, Deployment.AppSources{
-						AppId:    result.App.ID,
-						Artifact: &result.Artifact,
+						AppId:   result.App.ID,
+						BuildId: result.Id,
 					})
 				} else {
 					appSources = append(appSources, Deployment.AppSources{
