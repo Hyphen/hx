@@ -1,6 +1,7 @@
 package code
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -80,6 +81,7 @@ func shouldUseTUI() bool {
 }
 
 func (cs *CodeService) runDockerfileSession(
+	ctx context.Context,
 	sessionClient DockerfileSessionClient,
 	toolRunner filesystemToolRunner,
 	orgID, appID string,
@@ -93,9 +95,19 @@ func (cs *CodeService) runDockerfileSession(
 		callbacks.onStatus("Starting Dockerfile generation")
 	}
 
-	createResponse, err := sessionClient.StartSession(orgID, appID)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	createResponse, err := sessionClient.StartSession(ctx, orgID, appID)
 	if err != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		return failDockerGen(err, callbacks)
+	}
+	if createResponse == nil {
+		return failDockerGen(fmt.Errorf("dockerfile session did not return a response"), callbacks)
 	}
 
 	if createResponse.Session.ID == "" {
@@ -104,6 +116,10 @@ func (cs *CodeService) runDockerfileSession(
 
 	turn := createResponse.Output
 	for turnIndex := 0; turnIndex < maxDockerfileSessionTurns; turnIndex++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
 		switch turn.Status {
 		case DockerfileSessionStatusRequiresToolResults:
 			if len(turn.Message.ToolCalls) == 0 {
@@ -122,9 +138,25 @@ func (cs *CodeService) runDockerfileSession(
 			}
 
 			results := toolRunner.ExecuteToolCalls(turn.Message.ToolCalls, callbacks.onVerbose)
-			nextTurn, continueErr := sessionClient.ContinueSession(orgID, appID, createResponse.Session.ID, results)
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+
+			nextTurn, continueErr := sessionClient.ContinueSession(
+				ctx,
+				orgID,
+				appID,
+				createResponse.Session.ID,
+				results,
+			)
 			if continueErr != nil {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				return failDockerGen(continueErr, callbacks)
+			}
+			if nextTurn == nil {
+				return failDockerGen(fmt.Errorf("dockerfile session did not return a turn response"), callbacks)
 			}
 			turn = *nextTurn
 		case DockerfileSessionStatusClosed:
@@ -175,6 +207,9 @@ func (cs *CodeService) generateDockerWithTUI(orgID, appID, workspaceRoot string)
 		return err
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	statusDisplay := tea.NewProgram(GenerateDockerSessionModel{
 		Status:      "Starting Dockerfile generation",
 		VerboseMode: flags.VerboseFlag,
@@ -183,6 +218,7 @@ func (cs *CodeService) generateDockerWithTUI(orgID, appID, workspaceRoot string)
 	runErrCh := make(chan error, 1)
 	go func() {
 		runErrCh <- cs.runDockerfileSession(
+			ctx,
 			NewDockerfileSessionService(),
 			toolRunner,
 			orgID,
@@ -207,12 +243,22 @@ func (cs *CodeService) generateDockerWithTUI(orgID, appID, workspaceRoot string)
 		)
 	}()
 
-	_, tuiErr := statusDisplay.Run()
-	runErr := <-runErrCh
+	finalModel, tuiErr := statusDisplay.Run()
 	if tuiErr != nil {
+		cancel()
 		return tuiErr
 	}
-	return runErr
+
+	if dockerGenerationWasInterrupted(finalModel) {
+		cancel()
+		select {
+		case <-runErrCh:
+		default:
+		}
+		return nil
+	}
+
+	return <-runErrCh
 }
 
 func (cs *CodeService) generateDockerWithoutTUI(printer *cprint.CPrinter, orgID, appID, workspaceRoot string) error {
@@ -224,6 +270,7 @@ func (cs *CodeService) generateDockerWithoutTUI(printer *cprint.CPrinter, orgID,
 	printer.Print("Generating Dockerfile (this may take a few seconds)...")
 
 	return cs.runDockerfileSession(
+		context.Background(),
 		NewDockerfileSessionService(),
 		toolRunner,
 		orgID,
@@ -307,6 +354,17 @@ func ensurePrinter(printer *cprint.CPrinter) *cprint.CPrinter {
 		return printer
 	}
 	return cprint.NewCPrinter(flags.VerboseFlag)
+}
+
+func dockerGenerationWasInterrupted(model tea.Model) bool {
+	switch typed := model.(type) {
+	case GenerateDockerSessionModel:
+		return !typed.Done && typed.Error == nil
+	case *GenerateDockerSessionModel:
+		return !typed.Done && typed.Error == nil
+	default:
+		return false
+	}
 }
 
 func configuredAppID(cfg config.Config) (string, error) {

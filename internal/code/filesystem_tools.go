@@ -179,7 +179,7 @@ func (w *FilesystemToolExecutor) listFiles(rawArguments string) (listFilesResult
 		return listFilesResult{}, err
 	}
 
-	info, err := os.Stat(startPath)
+	info, err := w.fs.Stat(startPath)
 	if err != nil {
 		return listFilesResult{}, fmt.Errorf("failed to inspect path: %w", err)
 	}
@@ -312,13 +312,13 @@ func (w *FilesystemToolExecutor) writeFile(rawArguments string) (writeFileResult
 		return writeFileResult{}, fmt.Errorf("path must point to a file")
 	}
 
-	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+	if err := w.fs.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 		return writeFileResult{}, fmt.Errorf("failed to create parent directories: %w", err)
 	}
 
 	appended := args.Append != nil && *args.Append
 	if appended {
-		file, err := os.OpenFile(fullPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		file, err := w.fs.OpenFile(fullPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 		if err != nil {
 			return writeFileResult{}, fmt.Errorf("failed to open file for append: %w", err)
 		}
@@ -383,7 +383,7 @@ func (w *FilesystemToolExecutor) search(rawArguments string) (searchResult, erro
 		Pattern: args.Pattern,
 	}
 
-	info, err := os.Stat(startPath)
+	info, err := w.fs.Stat(startPath)
 	if err != nil {
 		return searchResult{}, fmt.Errorf("failed to inspect search path: %w", err)
 	}

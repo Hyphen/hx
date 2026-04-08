@@ -1,8 +1,8 @@
 package code
 
 import (
+	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -61,6 +61,7 @@ func TestRunDockerfileSession_ExecutesToolCallsUntilClosed(t *testing.T) {
 	var successResult dockerGenSuccess
 
 	err := service.runDockerfileSession(
+		context.Background(),
 		sessionClient,
 		toolRunner,
 		"org-1",
@@ -104,6 +105,7 @@ func TestRunDockerfileSession_TreatsReadyWithSummaryAsSuccess(t *testing.T) {
 
 	var successResult dockerGenSuccess
 	err := service.runDockerfileSession(
+		context.Background(),
 		sessionClient,
 		&fakeFilesystemToolRunner{},
 		"org-1",
@@ -139,6 +141,7 @@ func TestRunDockerfileSession_FailsIfReadyResponseHasNoSummary(t *testing.T) {
 
 	var callbackErr error
 	err := service.runDockerfileSession(
+		context.Background(),
 		sessionClient,
 		&fakeFilesystemToolRunner{},
 		"org-1",
@@ -175,7 +178,70 @@ func TestConfiguredAppIDReturnsValueWhenPresent(t *testing.T) {
 	assert.Equal(t, appID, value)
 }
 
-func TestGenerateDockerIgnoresLocalChangesNotOnRemote(t *testing.T) {
+func TestRunDockerfileSession_FailsIfStartSessionReturnsNilResponse(t *testing.T) {
+	service := NewService()
+	err := service.runDockerfileSession(
+		context.Background(),
+		&fakeDockerfileSessionClient{},
+		&fakeFilesystemToolRunner{},
+		"org-1",
+		"app-1",
+		dockerGenCallbacks{},
+	)
+
+	assert.EqualError(t, err, "dockerfile session did not return a response")
+}
+
+func TestRunDockerfileSession_StopsWhenContextIsCanceled(t *testing.T) {
+	service := NewService()
+	sessionClient := &fakeDockerfileSessionClient{
+		startResponse: &DockerfileSessionCreateResponse{
+			Session: DockerfileSession{
+				ID: "session-1",
+			},
+			Output: DockerfileTurnResponse{
+				SessionID: "session-1",
+				Status:    DockerfileSessionStatusRequiresToolResults,
+				Message: DockerfileAssistantMessage{
+					ToolCalls: []DockerfileToolCall{
+						{
+							ID:   "call-1",
+							Type: "function",
+							Function: DockerfileToolFunction{
+								Name:      "list_files",
+								Arguments: `{"path":"."}`,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	toolRunner := &fakeFilesystemToolRunner{
+		onExecute: cancel,
+		results: []DockerfileToolResult{
+			{
+				ToolCallID: "call-1",
+			},
+		},
+	}
+
+	err := service.runDockerfileSession(
+		ctx,
+		sessionClient,
+		toolRunner,
+		"org-1",
+		"app-1",
+		dockerGenCallbacks{},
+	)
+
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Empty(t, sessionClient.continueCalls)
+}
+
+func TestGenerateDocker_ReturnsErrorForMonorepos(t *testing.T) {
 	tempDir := t.TempDir()
 	homeDir := filepath.Join(tempDir, "home")
 
@@ -188,13 +254,6 @@ func TestGenerateDockerIgnoresLocalChangesNotOnRemote(t *testing.T) {
 	t.Cleanup(func() {
 		_ = os.Chdir(previousDir)
 	})
-
-	gitInit := exec.Command("git", "init")
-	gitInit.Dir = tempDir
-	output, err := gitInit.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git init failed: %v\n%s", err, string(output))
-	}
 
 	assert.NoError(t, os.WriteFile(filepath.Join(tempDir, "README.md"), []byte("local-only change\n"), 0o644))
 
@@ -233,11 +292,15 @@ type fakeContinueCall struct {
 	results   []DockerfileToolResult
 }
 
-func (f *fakeDockerfileSessionClient) StartSession(_, _ string) (*DockerfileSessionCreateResponse, error) {
+func (f *fakeDockerfileSessionClient) StartSession(
+	_ context.Context,
+	_, _ string,
+) (*DockerfileSessionCreateResponse, error) {
 	return f.startResponse, f.startErr
 }
 
 func (f *fakeDockerfileSessionClient) ContinueSession(
+	_ context.Context,
 	_, _, sessionID string,
 	results []DockerfileToolResult,
 ) (*DockerfileTurnResponse, error) {
@@ -258,8 +321,9 @@ func (f *fakeDockerfileSessionClient) ContinueSession(
 }
 
 type fakeFilesystemToolRunner struct {
-	results []DockerfileToolResult
-	calls   [][]DockerfileToolCall
+	results   []DockerfileToolResult
+	calls     [][]DockerfileToolCall
+	onExecute func()
 }
 
 func (f *fakeFilesystemToolRunner) ExecuteToolCalls(
@@ -267,6 +331,9 @@ func (f *fakeFilesystemToolRunner) ExecuteToolCalls(
 	_ func(string),
 ) []DockerfileToolResult {
 	f.calls = append(f.calls, toolCalls)
+	if f.onExecute != nil {
+		f.onExecute()
+	}
 	return f.results
 }
 

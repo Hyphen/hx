@@ -2,6 +2,7 @@ package code
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,8 +28,8 @@ const (
 )
 
 type DockerfileSessionClient interface {
-	StartSession(organizationID, appID string) (*DockerfileSessionCreateResponse, error)
-	ContinueSession(organizationID, appID, sessionID string, results []DockerfileToolResult) (*DockerfileTurnResponse, error)
+	StartSession(ctx context.Context, organizationID, appID string) (*DockerfileSessionCreateResponse, error)
+	ContinueSession(ctx context.Context, organizationID, appID, sessionID string, results []DockerfileToolResult) (*DockerfileTurnResponse, error)
 }
 
 type DockerfileSessionService struct {
@@ -93,12 +94,13 @@ func (s *DockerfileSessionService) SetVerboseCallback(cb func(string)) {
 }
 
 func (s *DockerfileSessionService) StartSession(
+	ctx context.Context,
 	organizationID, appID string,
 ) (*DockerfileSessionCreateResponse, error) {
 	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/dockerfile", s.baseURL, organizationID, appID)
 	s.logf("Starting Dockerfile session: POST %s", url)
 	response := &DockerfileSessionCreateResponse{}
-	if err := s.postJSON(url, map[string]any{}, http.StatusCreated, response); err != nil {
+	if err := s.postJSON(ctx, url, map[string]any{}, http.StatusCreated, response); err != nil {
 		return nil, err
 	}
 	s.logf(
@@ -112,6 +114,7 @@ func (s *DockerfileSessionService) StartSession(
 }
 
 func (s *DockerfileSessionService) ContinueSession(
+	ctx context.Context,
 	organizationID, appID, sessionID string,
 	results []DockerfileToolResult,
 ) (*DockerfileTurnResponse, error) {
@@ -127,6 +130,7 @@ func (s *DockerfileSessionService) ContinueSession(
 	}
 	response := &DockerfileTurnResponse{}
 	if err := s.postJSON(
+		ctx,
 		url,
 		dockerfileContinueRequest{
 			SessionID: sessionID,
@@ -147,13 +151,23 @@ func (s *DockerfileSessionService) ContinueSession(
 	return response, nil
 }
 
-func (s *DockerfileSessionService) postJSON(url string, body any, expectedStatusCode int, destination any) error {
+func (s *DockerfileSessionService) postJSON(
+	ctx context.Context,
+	url string,
+	body any,
+	expectedStatusCode int,
+	destination any,
+) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	requestBody, err := json.Marshal(body)
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal request body")
 	}
 
-	req, err := http.NewRequest(http.MethodPost, url, io.NopCloser(bytes.NewReader(requestBody)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, io.NopCloser(bytes.NewReader(requestBody)))
 	if err != nil {
 		return err
 	}

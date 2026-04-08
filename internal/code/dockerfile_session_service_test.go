@@ -1,6 +1,7 @@
 package code
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -48,7 +49,7 @@ func TestDockerfileSessionService_StartSession(t *testing.T) {
 		}`)),
 	}, nil)
 
-	response, err := service.StartSession("org-1", "app-1")
+	response, err := service.StartSession(context.Background(), "org-1", "app-1")
 
 	assert.NoError(t, err)
 	assert.Equal(t, http.MethodPost, capturedMethod)
@@ -87,6 +88,7 @@ func TestDockerfileSessionService_ContinueSession(t *testing.T) {
 	}, nil)
 
 	response, err := service.ContinueSession(
+		context.Background(),
 		"org-1",
 		"app-1",
 		"session-1",
@@ -145,7 +147,7 @@ func TestDockerfileSessionService_LogsVerboseMessages(t *testing.T) {
 		}`)),
 	}, nil)
 
-	_, err := service.StartSession("org-1", "app-1")
+	_, err := service.StartSession(context.Background(), "org-1", "app-1")
 
 	assert.NoError(t, err)
 	assert.Contains(t, logs[0], "Starting Dockerfile session: POST https://api.example.com/api/organizations/org-1/apps/app-1/dockerfile")

@@ -10,7 +10,8 @@
     "mode": "debug",
     "host": "127.0.0.1",
     "program": "${workspaceFolder}",
-    "cwd": "/Users/osbornm/Development/Hyphen-Tilde/location",
+    // "cwd": "/Users/osbornm/Development/Hyphen-Tilde/location",
+    "cwd": "${workspaceFolder}",
     "env": {
       "HYPHEN_DEV": "true",
       //"HYPHEN_Local": "true"
