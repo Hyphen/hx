@@ -488,14 +488,64 @@ func (w *FilesystemToolExecutor) resolvePath(rawPath string, allowEmpty bool) (s
 		return "", "", fmt.Errorf("path must stay within the workspace root")
 	}
 
+	resolvedRoot, err := filepath.EvalSymlinks(w.root)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to resolve workspace root: %w", err)
+	}
+
+	resolvedCandidatePath, err := resolvePathWithExistingAncestor(candidatePath)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to resolve path: %w", err)
+	}
+
+	resolvedRelativePath, err := filepath.Rel(resolvedRoot, resolvedCandidatePath)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to resolve path: %w", err)
+	}
+	if resolvedRelativePath == ".." || strings.HasPrefix(resolvedRelativePath, ".."+string(os.PathSeparator)) {
+		return "", "", fmt.Errorf("path must stay within the workspace root")
+	}
+
 	displayPath := filepath.ToSlash(relativePath)
 	if displayPath == "" {
 		displayPath = "."
 	}
 
-	return candidatePath, displayPath, nil
+	return resolvedCandidatePath, displayPath, nil
 }
 
+func resolvePathWithExistingAncestor(path string) (string, error) {
+	cleanPath := filepath.Clean(path)
+	suffix := make([]string, 0)
+	current := cleanPath
+
+	for {
+		_, err := os.Lstat(current)
+		if err == nil {
+			resolvedCurrent, err := filepath.EvalSymlinks(current)
+			if err != nil {
+				return "", err
+			}
+
+			resolvedPath := resolvedCurrent
+			for i := len(suffix) - 1; i >= 0; i-- {
+				resolvedPath = filepath.Join(resolvedPath, suffix[i])
+			}
+			return filepath.Clean(resolvedPath), nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", err
+		}
+
+		suffix = append(suffix, filepath.Base(current))
+		current = parent
+	}
+}
 func pathDepth(relativePath string) int {
 	if relativePath == "." || relativePath == "" {
 		return 0
