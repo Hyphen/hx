@@ -176,7 +176,10 @@ Use 'hyphen deploy --help' for more information about available flags.
 		appSources := []Deployment.AppSources{}
 
 		if appsFlag != "" {
-			cfg, _ := config.RestoreLocalConfig()
+			cfg, cfgErr := config.RestoreLocalConfig()
+			if cfgErr != nil && !os.IsNotExist(cfgErr) {
+				return fmt.Errorf("failed to restore config: %w", cfgErr)
+			}
 
 			parsedApps, err := parseAppsFlag(appsFlag)
 			if err != nil {
@@ -553,9 +556,13 @@ func parseAppsFlag(appsFlag string) ([]parsedApp, error) {
 			continue
 		}
 		parts := strings.SplitN(entry, ":", 2)
-		pa := parsedApp{ID: parts[0]}
+		appID := strings.TrimSpace(parts[0])
+		if appID == "" {
+			return nil, fmt.Errorf("invalid app entry %q: app ID is empty", entry)
+		}
+		pa := parsedApp{ID: appID}
 		if len(parts) == 2 {
-			pa.BuildSpec = parts[1]
+			pa.BuildSpec = strings.TrimSpace(parts[1])
 		}
 		result = append(result, pa)
 	}
@@ -591,5 +598,5 @@ func init() {
 	DeployCmd.Flags().StringVarP(&flags.PreviewPrefixFlag, "prefix", "x", "", "Host prefix for the preview deployment")
 	DeployCmd.Flags().StringVar(&envFlag, "env", "", "Environment to deploy (defaults to the environment flagged as the \"development\" type)")
 	DeployCmd.Flags().StringVar(&projectFlag, "project", "", "Project to deploy (defaults to project ID in hx config)")
-	DeployCmd.Flags().StringVar(&appsFlag, "apps", "", "Comma-separated list of apps to deploy, each optionally specifying a build (e.g. app1,app2:abld_xxxx,app3:latest)")
+	DeployCmd.Flags().StringVar(&appsFlag, "apps", "", "Comma-separated list of apps to deploy, each optionally specifying a build (e.g. app1,app2:abld_xxxx,app3:latest,app4:lastDeployed)")
 }

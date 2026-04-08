@@ -42,7 +42,7 @@ type AppSources struct {
 	AppId    string           `json:"appId"`
 	Artifact *models.Artifact `json:"artifact,omitempty"`
 	BuildId  string           `json:"buildId,omitempty"`
-	Build    string           `json:"build,omitempty"` // "latest" | "lastDeploy"
+	Build    string           `json:"build,omitempty"` // "latest" | "lastDeployed"
 }
 
 func NewService() *DeploymentService {
