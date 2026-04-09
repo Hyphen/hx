@@ -10,8 +10,10 @@ type MockFileSystem struct {
 	ReadFileFunc  func(filename string) ([]byte, error)
 	WriteFileFunc func(filename string, data []byte, perm os.FileMode) error
 	CreateFunc    func(name string) (*os.File, error)
+	OpenFileFunc  func(name string, flag int, perm os.FileMode) (*os.File, error)
 	StatFunc      func(name string) (os.FileInfo, error)
 	MkdirAllFunc  func(path string, perm os.FileMode) error
+	RemoveFunc    func(path string) error
 }
 
 func (m *MockFileSystem) ReadFile(filename string) ([]byte, error) {
@@ -26,12 +28,20 @@ func (m *MockFileSystem) Create(name string) (*os.File, error) {
 	return m.CreateFunc(name)
 }
 
+func (m *MockFileSystem) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
+	return m.OpenFileFunc(name, flag, perm)
+}
+
 func (m *MockFileSystem) Stat(name string) (os.FileInfo, error) {
 	return m.StatFunc(name)
 }
 
 func (m *MockFileSystem) MkdirAll(path string, perm os.FileMode) error {
 	return m.MkdirAllFunc(path, perm)
+}
+
+func (m *MockFileSystem) Remove(path string) error {
+	return m.RemoveFunc(path)
 }
 
 // MockFileInfo is a mock implementation of os.FileInfo
