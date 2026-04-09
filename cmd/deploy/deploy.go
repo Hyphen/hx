@@ -218,6 +218,9 @@ Use 'hyphen deploy --help' for more information about available flags.
 					case "lastDeployed":
 						src.Build = "lastDeployed"
 					default:
+						if !strings.HasPrefix(pa.BuildSpec, "abld_") {
+							return fmt.Errorf("unknown build type %q: expected \"latest\", \"lastDeployed\", or a build ID starting with \"abld_\"", pa.BuildSpec)
+						}
 						src.BuildId = pa.BuildSpec
 					}
 					appSources = append(appSources, src)
