@@ -9,8 +9,9 @@
     "request": "launch",
     "mode": "debug",
     "host": "127.0.0.1",
-    "program": "${workspaceRoot}",
-    //"cwd": "D:\\hyphen-tilde\\location",
+    "program": "${workspaceFolder}",
+    // "cwd": "/Users/osbornm/Development/Hyphen-Tilde/location",
+    "cwd": "${workspaceFolder}",
     "env": {
       "HYPHEN_DEV": "true",
       //"HYPHEN_Local": "true"
@@ -18,9 +19,11 @@
     "args": [
      //"deploy", "Location-Staging", //"--no-build" //"--verbose" //, "--no-build"
      //"env", "pull", "--force"
+     "auth"
+     //"code", "docker", "--verbose"
      //"code", "docker"
      //"build"
-     "set-org"
+     //"set-org"
     ],
     "showLog": true,
     "console": "integratedTerminal"

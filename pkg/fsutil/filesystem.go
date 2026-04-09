@@ -9,6 +9,7 @@ type FileSystem interface {
 	ReadFile(filename string) ([]byte, error)
 	WriteFile(filename string, data []byte, perm os.FileMode) error
 	Create(name string) (*os.File, error)
+	OpenFile(name string, flag int, perm os.FileMode) (*os.File, error)
 	Stat(name string) (os.FileInfo, error)
 	MkdirAll(path string, perm os.FileMode) error
 	Remove(path string) error
@@ -27,6 +28,10 @@ func (rfs *RealFileSystem) WriteFile(filename string, data []byte, perm os.FileM
 
 func (rfs *RealFileSystem) Create(name string) (*os.File, error) {
 	return os.Create(name)
+}
+
+func (rfs *RealFileSystem) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
+	return os.OpenFile(name, flag, perm)
 }
 
 func (rfs *RealFileSystem) Stat(name string) (os.FileInfo, error) {
