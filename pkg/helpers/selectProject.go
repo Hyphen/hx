@@ -5,6 +5,8 @@ import (
 
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/projects"
+	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/Hyphen/cli/pkg/prompt"
 )
 
@@ -17,6 +19,15 @@ func SelectProject(organizationID, promptMessage string) (models.Project, error)
 	projects, err := projectService.ListProjects()
 	if err != nil {
 		return models.Project{}, err
+	}
+	if len(projects) == 0 {
+		return models.Project{}, fmt.Errorf("no projects found")
+	}
+	if len(projects) == 1 {
+		project := projects[0]
+		printer := cprint.NewCPrinter(flags.VerboseFlag)
+		printer.Print(fmt.Sprintf("You only have access to one project, automatically choosing %s", project.Name))
+		return project, nil
 	}
 	choices := make([]prompt.Choice, len(projects))
 	for i, project := range projects {
