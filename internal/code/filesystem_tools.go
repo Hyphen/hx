@@ -200,6 +200,13 @@ func (w *FilesystemToolExecutor) listFiles(rawArguments string) (listFilesResult
 			return nil
 		}
 
+		if entry.Type()&fs.ModeSymlink != 0 {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
 		relativeToStart, err := filepath.Rel(startPath, path)
 		if err != nil {
 			return err
@@ -311,6 +318,9 @@ func (w *FilesystemToolExecutor) writeFile(rawArguments string) (writeFileResult
 	if displayPath == "." {
 		return writeFileResult{}, fmt.Errorf("path must point to a file")
 	}
+	if err := validateWritePath(displayPath); err != nil {
+		return writeFileResult{}, err
+	}
 
 	if err := w.fs.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 		return writeFileResult{}, fmt.Errorf("failed to create parent directories: %w", err)
@@ -401,6 +411,13 @@ func (w *FilesystemToolExecutor) search(rawArguments string) (searchResult, erro
 		}
 
 		if path == startPath {
+			return nil
+		}
+
+		if entry.Type()&fs.ModeSymlink != 0 {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
@@ -511,7 +528,7 @@ func (w *FilesystemToolExecutor) resolvePath(rawPath string, allowEmpty bool) (s
 		displayPath = "."
 	}
 
-	return resolvedCandidatePath, displayPath, nil
+	return candidatePath, displayPath, nil
 }
 
 func resolvePathWithExistingAncestor(path string) (string, error) {
@@ -560,6 +577,33 @@ func shouldSkipDir(name string) bool {
 	default:
 		return false
 	}
+}
+
+func validateWritePath(displayPath string) error {
+	if isProtectedWritePath(displayPath) {
+		return fmt.Errorf("writing to protected path %q is not allowed", displayPath)
+	}
+
+	return nil
+}
+
+func isProtectedWritePath(displayPath string) bool {
+	cleanPath := filepath.ToSlash(filepath.Clean(filepath.FromSlash(displayPath)))
+	segments := strings.Split(cleanPath, "/")
+
+	for index, segment := range segments {
+		if segment == ".git" || segment == ".ssh" || segment == ".aws" {
+			return true
+		}
+		if strings.HasPrefix(segment, ".env") {
+			return true
+		}
+		if segment == ".github" && index+1 < len(segments) && segments[index+1] == "workflows" {
+			return true
+		}
+	}
+
+	return false
 }
 
 func splitLines(content string) []string {

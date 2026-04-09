@@ -101,6 +101,100 @@ func TestFilesystemToolExecutor_BlocksPathTraversal(t *testing.T) {
 	assert.ErrorContains(t, err, "path must stay within the workspace root")
 }
 
+func TestFilesystemToolExecutor_BlocksSymlinkEscapes(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	outsideRoot := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(outsideRoot, "secret.txt"), []byte("top-secret"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(outsideRoot, "linked-dir"), 0o755))
+
+	symlinkOrSkip(t, filepath.Join(outsideRoot, "secret.txt"), filepath.Join(workspaceRoot, "secret-link.txt"))
+	symlinkOrSkip(t, filepath.Join(outsideRoot, "linked-dir"), filepath.Join(workspaceRoot, "linked-dir"))
+
+	executor, err := NewFilesystemToolExecutor(workspaceRoot)
+	require.NoError(t, err)
+
+	_, err = executor.executeToolCall(DockerfileToolCall{
+		Type: "function",
+		Function: DockerfileToolFunction{
+			Name:      "read_file",
+			Arguments: `{"path":"secret-link.txt"}`,
+		},
+	})
+	assert.ErrorContains(t, err, "path must stay within the workspace root")
+
+	_, err = executor.executeToolCall(DockerfileToolCall{
+		Type: "function",
+		Function: DockerfileToolFunction{
+			Name:      "write_file",
+			Arguments: `{"path":"linked-dir/Dockerfile","content":"FROM scratch"}`,
+		},
+	})
+	assert.ErrorContains(t, err, "path must stay within the workspace root")
+}
+
+func TestFilesystemToolExecutor_SkipsSymlinksDuringWalks(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	outsideRoot := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceRoot, "package.json"), []byte("{\"name\":\"demo\"}\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(outsideRoot, "credentials.txt"), []byte("super-secret-token"), 0o644))
+	symlinkOrSkip(t, filepath.Join(outsideRoot, "credentials.txt"), filepath.Join(workspaceRoot, "credentials-link.txt"))
+
+	executor, err := NewFilesystemToolExecutor(workspaceRoot)
+	require.NoError(t, err)
+
+	listResultAny, err := executor.executeToolCall(DockerfileToolCall{
+		Type: "function",
+		Function: DockerfileToolFunction{
+			Name:      "list_files",
+			Arguments: `{"path":".","max_depth":2}`,
+		},
+	})
+	require.NoError(t, err)
+	listResult := listResultAny.(listFilesResult)
+	assert.NotContains(t, listResult.Entries, workspaceFileEntry{Path: "credentials-link.txt", Type: "file"})
+
+	searchResultAny, err := executor.executeToolCall(DockerfileToolCall{
+		Type: "function",
+		Function: DockerfileToolFunction{
+			Name:      "search",
+			Arguments: `{"path":".","pattern":"super-secret-token"}`,
+		},
+	})
+	require.NoError(t, err)
+	searchResult := searchResultAny.(searchResult)
+	assert.Empty(t, searchResult.Matches)
+}
+
+func TestFilesystemToolExecutor_BlocksWritesToProtectedPaths(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	executor, err := NewFilesystemToolExecutor(workspaceRoot)
+	require.NoError(t, err)
+
+	testCases := []string{
+		".git/config",
+		".env",
+		".env.production",
+		".github/workflows/release.yml",
+		".ssh/config",
+		".aws/credentials",
+	}
+
+	for _, path := range testCases {
+		t.Run(path, func(t *testing.T) {
+			_, err := executor.executeToolCall(DockerfileToolCall{
+				Type: "function",
+				Function: DockerfileToolFunction{
+					Name:      "write_file",
+					Arguments: `{"path":"` + path + `","content":"test"}`,
+				},
+			})
+			assert.ErrorContains(t, err, "writing to protected path")
+		})
+	}
+}
+
 func TestFilesystemToolExecutor_LogsToolArgumentsAndResultSummary(t *testing.T) {
 	workspaceRoot := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(workspaceRoot, "package.json"), []byte("{\"name\":\"demo\"}\n"), 0o644))
@@ -129,4 +223,12 @@ func TestFilesystemToolExecutor_LogsToolArgumentsAndResultSummary(t *testing.T) 
 	require.Len(t, logs, 2)
 	assert.Contains(t, logs[0], "Executing call-1:list_files(path=. max_depth=1")
 	assert.Contains(t, logs[1], "Tool result call-1:list_files output=path=. entry_count=")
+}
+
+func symlinkOrSkip(t *testing.T, target, link string) {
+	t.Helper()
+
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks are not supported in this environment: %v", err)
+	}
 }
