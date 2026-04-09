@@ -140,7 +140,7 @@ func login(cmd *cobra.Command) error {
 
 		projectService := projects.NewService(organizationID)
 		projects, _ := projectService.ListProjects()
-		if projects != nil || len(projects) > 0 {
+		if projects != nil && len(projects) > 0 {
 			proj := projects[0]
 			mc.ProjectId = proj.ID
 			mc.ProjectName = &proj.Name
