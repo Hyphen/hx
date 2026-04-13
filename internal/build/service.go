@@ -35,7 +35,7 @@ func NewService() *BuildService {
 	}
 }
 
-func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commitSha, dockerUri string, ports []int, preview string) (*models.Build, error) {
+func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commitSha, commitShaHref, tag, tagHref, dockerUri string, ports []int, preview string) (*models.Build, error) {
 
 	///api/organizations/{organizationId}/apps/{appId}/builds/
 	queryParams := url.Values{}
@@ -48,8 +48,11 @@ func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commit
 	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/builds?%s", bs.baseUrl, organizationId, appId, queryParams.Encode())
 
 	build := models.NewBuild{
-		Tags:      []string{},
-		CommitSha: commitSha,
+		Tags:          []string{},
+		CommitSha:     commitSha,
+		CommitShaHref: commitShaHref,
+		Tag:           tag,
+		TagHref:       tagHref,
 		Artifact: models.Artifact{
 			Type:  "Docker",
 			Ports: ports,
@@ -183,11 +186,25 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 	}
 
 	// registerUrl := "deploydevelopmentregistry.azurecr.io"
-	commitSha, err := gitutil.GetLastCommitHash()
+	fullCommitSha, err := gitutil.GetLastCommitHash()
 	if err != nil {
-		commitSha = "00000000000000000000000000000000"
+		fullCommitSha = "00000000000000000000000000000000"
 	}
-	commitSha = commitSha[:7]
+	commitSha := fullCommitSha[:7]
+
+	var commitShaHref, tag, tagHref string
+	remoteUrl, err := gitutil.GetRemoteUrl()
+	if err == nil && remoteUrl != "" {
+		baseUrl, err := gitutil.ParseRepoBaseUrl(remoteUrl)
+		if err == nil {
+			commitShaHref = baseUrl + "/commit/" + fullCommitSha
+		}
+	}
+	tag, _ = gitutil.GetCurrentTag()
+	if tag != "" && commitShaHref != "" {
+		baseUrl := strings.TrimSuffix(commitShaHref, "/commit/"+fullCommitSha)
+		tagHref = baseUrl + "/releases/tag/" + tag
+	}
 
 	// Run build on the docker file
 	printer.Print(fmt.Sprintf("Building %s", *config.AppAlternateId))
@@ -235,7 +252,7 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 	}
 
 	// Tell Hyphen about the build
-	build, err := bs.CreateBuild(config.OrganizationId, *config.AppId, environmentId, commitSha, containerUrl, ports, preview)
+	build, err := bs.CreateBuild(config.OrganizationId, *config.AppId, environmentId, commitSha, commitShaHref, tag, tagHref, containerUrl, ports, preview)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create build: %w", err)

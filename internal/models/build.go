@@ -20,7 +20,10 @@ type Build struct {
 }
 
 type NewBuild struct {
-	Tags      []string `json:"tags"`
-	CommitSha string   `json:"commitSha"`
-	Artifact  Artifact `json:"artifact"`
+	Tags          []string `json:"tags"`
+	CommitSha     string   `json:"commitSha"`
+	CommitShaHref string   `json:"commitShaHref,omitempty"`
+	Tag           string   `json:"tag,omitempty"`
+	TagHref       string   `json:"tagHref,omitempty"`
+	Artifact      Artifact `json:"artifact"`
 }

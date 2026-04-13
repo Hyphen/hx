@@ -244,6 +244,72 @@ func CheckForChangesNotOnRemote() (bool, error) {
 	return len(strings.TrimSpace(string(logOutput))) > 0, nil
 }
 
+func GetRemoteUrl() (string, error) {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return "", nil
+	}
+
+	gitDir, found := findGitRoot(currentDir)
+	if !found {
+		return "", nil
+	}
+
+	cmd := exec.Command("git", "remote", "get-url", "origin")
+	cmd.Dir = gitDir
+	output, err := cmd.Output()
+	if err != nil {
+		return "", nil
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+func GetCurrentTag() (string, error) {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return "", nil
+	}
+
+	gitDir, found := findGitRoot(currentDir)
+	if !found {
+		return "", nil
+	}
+
+	cmd := exec.Command("git", "describe", "--tags", "--exact-match", "HEAD")
+	cmd.Dir = gitDir
+	output, err := cmd.Output()
+	if err != nil {
+		return "", nil
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+func ParseRepoBaseUrl(remoteUrl string) (string, error) {
+	remoteUrl = strings.TrimSpace(remoteUrl)
+
+	// SSH format: git@github.com:owner/repo.git
+	if strings.HasPrefix(remoteUrl, "git@") {
+		remoteUrl = strings.TrimPrefix(remoteUrl, "git@")
+		parts := strings.SplitN(remoteUrl, ":", 2)
+		if len(parts) != 2 {
+			return "", fmt.Errorf("unrecognized git remote URL format: %s", remoteUrl)
+		}
+		host := parts[0]
+		path := strings.TrimSuffix(parts[1], ".git")
+		return "https://" + host + "/" + path, nil
+	}
+
+	// HTTPS format: https://github.com/owner/repo.git
+	if strings.HasPrefix(remoteUrl, "https://") || strings.HasPrefix(remoteUrl, "http://") {
+		result := strings.TrimSuffix(remoteUrl, ".git")
+		return result, nil
+	}
+
+	return "", fmt.Errorf("unrecognized git remote URL format: %s", remoteUrl)
+}
+
 func ApplyDiffs(diffs []run.DiffResult) {
 	fs := fsutil.NewFileSystem()
 	// Get the current working directory
