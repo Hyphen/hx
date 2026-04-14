@@ -217,9 +217,11 @@ Use 'hyphen deploy --help' for more information about available flags.
 						src.Build = "latest"
 					case "lastDeployed":
 						src.Build = "lastDeployed"
+					case "latestPreview":
+						src.Build = "latestPreview"
 					default:
 						if !strings.HasPrefix(pa.BuildSpec, "abld_") {
-							return fmt.Errorf("unknown build type %q: expected \"latest\", \"lastDeployed\", or a build ID starting with \"abld_\"", pa.BuildSpec)
+							return fmt.Errorf("unknown build type %q: expected \"latest\", \"lastDeployed\", \"latestPreview\", or a build ID starting with \"abld_\"", pa.BuildSpec)
 						}
 						src.BuildId = pa.BuildSpec
 					}
@@ -601,5 +603,5 @@ func init() {
 	DeployCmd.Flags().StringVarP(&flags.PreviewPrefixFlag, "prefix", "x", "", "Host prefix for the preview deployment")
 	DeployCmd.Flags().StringVar(&envFlag, "env", "", "Environment to deploy (defaults to the environment flagged as the \"development\" type)")
 	DeployCmd.Flags().StringVar(&projectFlag, "project", "", "Project to deploy (defaults to project ID in hx config)")
-	DeployCmd.Flags().StringVar(&appsFlag, "apps", "", "Comma-separated list of apps to deploy, each optionally specifying a build (e.g. app1,app2:abld_xxxx,app3:latest,app4:lastDeployed)")
+	DeployCmd.Flags().StringVar(&appsFlag, "apps", "", "Comma-separated list of apps to deploy, each optionally specifying a build (e.g. app1,app2:abld_xxxx,app3:latest,app4:lastDeployed,app5:latestPreview)")
 }
