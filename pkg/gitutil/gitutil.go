@@ -247,7 +247,7 @@ func CheckForChangesNotOnRemote() (bool, error) {
 func GetRemoteUrl() (string, error) {
 	currentDir, err := os.Getwd()
 	if err != nil {
-		return "", nil
+		return "", fmt.Errorf("unable to get current directory: %w", err)
 	}
 
 	gitDir, found := findGitRoot(currentDir)
@@ -259,6 +259,7 @@ func GetRemoteUrl() (string, error) {
 	cmd.Dir = gitDir
 	output, err := cmd.Output()
 	if err != nil {
+		// No origin remote configured is non-fatal
 		return "", nil
 	}
 
@@ -268,19 +269,25 @@ func GetRemoteUrl() (string, error) {
 func GetCurrentTag() (string, error) {
 	currentDir, err := os.Getwd()
 	if err != nil {
-		return "", nil
+		return "", fmt.Errorf("unable to get current directory: %w", err)
 	}
 
 	gitDir, found := findGitRoot(currentDir)
 	if !found {
-		return "", nil
+		return "", fmt.Errorf("git repository not found from %q", currentDir)
 	}
 
 	cmd := exec.Command("git", "describe", "--tags", "--exact-match", "HEAD")
 	cmd.Dir = gitDir
 	output, err := cmd.Output()
 	if err != nil {
-		return "", nil
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr := strings.ToLower(strings.TrimSpace(string(exitErr.Stderr)))
+			if strings.Contains(stderr, "no tag exactly matches") || strings.Contains(stderr, "cannot describe anything") {
+				return "", nil
+			}
+		}
+		return "", err
 	}
 
 	return strings.TrimSpace(string(output)), nil

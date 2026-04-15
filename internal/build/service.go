@@ -35,31 +35,44 @@ func NewService() *BuildService {
 	}
 }
 
-func (bs *BuildService) CreateBuild(organizationId, appId, environmentId, commitSha, commitShaHref, tag, tagHref, dockerUri string, ports []int, preview string) (*models.Build, error) {
+type CreateBuildOptions struct {
+	OrganizationId string
+	AppId          string
+	EnvironmentId  string
+	CommitSha      string
+	CommitShaHref  string
+	Tag            string
+	TagHref        string
+	DockerUri      string
+	Ports          []int
+	Preview        string
+}
+
+func (bs *BuildService) CreateBuild(opts CreateBuildOptions) (*models.Build, error) {
 
 	///api/organizations/{organizationId}/apps/{appId}/builds/
 	queryParams := url.Values{}
-	if environmentId != "" {
-		queryParams.Add("environmentId", environmentId)
+	if opts.EnvironmentId != "" {
+		queryParams.Add("environmentId", opts.EnvironmentId)
 	}
-	if preview != "" {
-		queryParams.Add("previewName", preview)
+	if opts.Preview != "" {
+		queryParams.Add("previewName", opts.Preview)
 	}
-	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/builds?%s", bs.baseUrl, organizationId, appId, queryParams.Encode())
+	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/builds?%s", bs.baseUrl, opts.OrganizationId, opts.AppId, queryParams.Encode())
 
 	build := models.NewBuild{
 		Tags:          []string{},
-		CommitSha:     commitSha,
-		CommitShaHref: commitShaHref,
-		Tag:           tag,
-		TagHref:       tagHref,
+		CommitSha:     opts.CommitSha,
+		CommitShaHref: opts.CommitShaHref,
+		Tag:           opts.Tag,
+		TagHref:       opts.TagHref,
 		Artifact: models.Artifact{
 			Type:  "Docker",
-			Ports: ports,
+			Ports: opts.Ports,
 			Image: struct {
 				URI string `json:"uri"`
 			}{
-				URI: dockerUri,
+				URI: opts.DockerUri,
 			},
 		},
 	}
@@ -192,18 +205,17 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 	}
 	commitSha := fullCommitSha[:7]
 
-	var commitShaHref, tag, tagHref string
+	var repoBaseUrl, commitShaHref, tag, tagHref string
 	remoteUrl, err := gitutil.GetRemoteUrl()
 	if err == nil && remoteUrl != "" {
-		baseUrl, err := gitutil.ParseRepoBaseUrl(remoteUrl)
+		repoBaseUrl, err = gitutil.ParseRepoBaseUrl(remoteUrl)
 		if err == nil {
-			commitShaHref = baseUrl + "/commit/" + fullCommitSha
+			commitShaHref = repoBaseUrl + "/commit/" + fullCommitSha
 		}
 	}
 	tag, _ = gitutil.GetCurrentTag()
-	if tag != "" && commitShaHref != "" {
-		baseUrl := strings.TrimSuffix(commitShaHref, "/commit/"+fullCommitSha)
-		tagHref = baseUrl + "/releases/tag/" + tag
+	if tag != "" && repoBaseUrl != "" {
+		tagHref = repoBaseUrl + "/releases/tag/" + tag
 	}
 
 	// Run build on the docker file
@@ -252,7 +264,18 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 	}
 
 	// Tell Hyphen about the build
-	build, err := bs.CreateBuild(config.OrganizationId, *config.AppId, environmentId, commitSha, commitShaHref, tag, tagHref, containerUrl, ports, preview)
+	build, err := bs.CreateBuild(CreateBuildOptions{
+		OrganizationId: config.OrganizationId,
+		AppId:          *config.AppId,
+		EnvironmentId:  environmentId,
+		CommitSha:      commitSha,
+		CommitShaHref:  commitShaHref,
+		Tag:            tag,
+		TagHref:        tagHref,
+		DockerUri:      containerUrl,
+		Ports:          ports,
+		Preview:        preview,
+	})
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create build: %w", err)

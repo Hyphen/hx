@@ -29,7 +29,14 @@ func TestCreateBuild(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(`{"id":"theBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"theEnvId","name":"anEnv"},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifact":{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}}`)),
 		}, nil)
 
-		build, err := service.CreateBuild("anOrgId", "anAppId", "theEnvironmentId", "abc1234", "", "", "", "anImage", []int{8080}, "")
+		build, err := service.CreateBuild(CreateBuildOptions{
+			OrganizationId: "anOrgId",
+			AppId:          "anAppId",
+			EnvironmentId:  "theEnvironmentId",
+			CommitSha:      "abc1234",
+			DockerUri:      "anImage",
+			Ports:          []int{8080},
+		})
 
 		assert.NoError(t, err)
 		assert.NotNil(t, build)
@@ -53,7 +60,13 @@ func TestCreateBuild(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifact":{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}}`)),
 		}, nil)
 
-		build, err := service.CreateBuild("anOrgId", "anAppId", "", "abc1234", "", "", "", "anImage", []int{8080}, "")
+		build, err := service.CreateBuild(CreateBuildOptions{
+			OrganizationId: "anOrgId",
+			AppId:          "anAppId",
+			CommitSha:      "abc1234",
+			DockerUri:      "anImage",
+			Ports:          []int{8080},
+		})
 
 		assert.NoError(t, err)
 		assert.NotNil(t, build)
@@ -79,13 +92,16 @@ func TestCreateBuild(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","commitShaHref":"https://github.com/owner/repo/commit/abc1234","tag":"v1.0.0","tagHref":"https://github.com/owner/repo/releases/tag/v1.0.0","artifact":{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}}`)),
 		}, nil)
 
-		build, err := service.CreateBuild(
-			"anOrgId", "anAppId", "", "abc1234",
-			"https://github.com/owner/repo/commit/abc1234",
-			"v1.0.0",
-			"https://github.com/owner/repo/releases/tag/v1.0.0",
-			"anImage", []int{8080}, "",
-		)
+		build, err := service.CreateBuild(CreateBuildOptions{
+			OrganizationId: "anOrgId",
+			AppId:          "anAppId",
+			CommitSha:      "abc1234",
+			CommitShaHref:  "https://github.com/owner/repo/commit/abc1234",
+			Tag:            "v1.0.0",
+			TagHref:        "https://github.com/owner/repo/releases/tag/v1.0.0",
+			DockerUri:      "anImage",
+			Ports:          []int{8080},
+		})
 
 		assert.NoError(t, err)
 		assert.NotNil(t, build)
@@ -113,7 +129,13 @@ func TestCreateBuild(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifact":{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}}`)),
 		}, nil)
 
-		build, err := service.CreateBuild("anOrgId", "anAppId", "", "abc1234", "", "", "", "anImage", []int{8080}, "")
+		build, err := service.CreateBuild(CreateBuildOptions{
+			OrganizationId: "anOrgId",
+			AppId:          "anAppId",
+			CommitSha:      "abc1234",
+			DockerUri:      "anImage",
+			Ports:          []int{8080},
+		})
 
 		assert.NoError(t, err)
 		assert.NotNil(t, build)
