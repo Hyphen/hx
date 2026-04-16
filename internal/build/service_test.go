@@ -146,7 +146,7 @@ func TestCreateBuild(t *testing.T) {
 		mockHTTPClient.AssertExpectations(t)
 	})
 
-	t.Run("sends_correct_provider_specific_commitShaHref_and_tagHref_for_each_provider", func(t *testing.T) {
+	t.Run("passes_through_commitShaHref_and_tagHref_values_unchanged_in_request_body_for_each_provider", func(t *testing.T) {
 		tests := []struct {
 			provider      string
 			commitShaHref string

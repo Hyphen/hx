@@ -248,7 +248,7 @@ func CheckForChangesNotOnRemote() (bool, error) {
 func GetRemoteUrl() (string, error) {
 	currentDir, err := os.Getwd()
 	if err != nil {
-		return "", fmt.Errorf("unable to get current directory: %w", err)
+		return "", errors.Wrap(err, "unable to get current directory")
 	}
 
 	gitDir, found := findGitRoot(currentDir)
@@ -306,12 +306,13 @@ func DetectProvider(remoteUrl string) string {
 	}
 }
 
-// ParseRepoBaseUrl converts a git remote URL (SSH or HTTPS) into a browsable HTTPS base URL.
+// ParseRepoBaseUrl converts a git remote URL (SSH or HTTP/HTTPS) into a browsable base URL.
+// SSH remotes are converted to HTTPS; HTTP/HTTPS remotes preserve their original scheme.
 // Supports GitHub, GitLab, Azure DevOps, and Bitbucket.
 func ParseRepoBaseUrl(remoteUrl string) (string, error) {
 	remoteUrl = strings.TrimSpace(remoteUrl)
 
-	// SSH format: git@host:path
+	// SCP-like SSH format: git@host:path
 	if strings.HasPrefix(remoteUrl, "git@") {
 		withoutPrefix := strings.TrimPrefix(remoteUrl, "git@")
 		parts := strings.SplitN(withoutPrefix, ":", 2)
@@ -320,9 +321,18 @@ func ParseRepoBaseUrl(remoteUrl string) (string, error) {
 		}
 		host := parts[0]
 		path := strings.TrimSuffix(parts[1], ".git")
+		lowerHost := strings.ToLower(host)
 
-		// Azure DevOps SSH: git@ssh.dev.azure.com:v3/org/project/repo
-		if strings.Contains(strings.ToLower(host), "ssh.dev.azure.com") {
+		// Azure DevOps SSH (modern): git@ssh.dev.azure.com:v3/org/project/repo
+		if strings.Contains(lowerHost, "ssh.dev.azure.com") {
+			pathParts := strings.SplitN(path, "/", 4)
+			if len(pathParts) == 4 {
+				return fmt.Sprintf("https://dev.azure.com/%s/%s/_git/%s", pathParts[1], pathParts[2], pathParts[3]), nil
+			}
+		}
+
+		// Azure DevOps SSH (legacy VSTS): git@vs-ssh.visualstudio.com:v3/org/project/repo
+		if strings.Contains(lowerHost, "vs-ssh.visualstudio.com") {
 			pathParts := strings.SplitN(path, "/", 4)
 			if len(pathParts) == 4 {
 				return fmt.Sprintf("https://dev.azure.com/%s/%s/_git/%s", pathParts[1], pathParts[2], pathParts[3]), nil
@@ -332,6 +342,27 @@ func ParseRepoBaseUrl(remoteUrl string) (string, error) {
 		return "https://" + host + "/" + path, nil
 	}
 
+	// ssh:// URL format: ssh://git@host/path or ssh://host/path
+	if strings.HasPrefix(remoteUrl, "ssh://") {
+		parsed, err := url.Parse(remoteUrl)
+		if err != nil {
+			return "", fmt.Errorf("unrecognized git remote URL format: %s", remoteUrl)
+		}
+		host := parsed.Host // preserves any explicit port and excludes user info
+		path := strings.TrimSuffix(parsed.Path, ".git")
+		lowerHost := strings.ToLower(host)
+
+		// Azure DevOps SSH (modern): ssh://ssh.dev.azure.com/v3/org/project/repo
+		if strings.Contains(lowerHost, "ssh.dev.azure.com") {
+			pathParts := strings.SplitN(strings.TrimPrefix(path, "/"), "/", 4)
+			if len(pathParts) == 4 {
+				return fmt.Sprintf("https://dev.azure.com/%s/%s/_git/%s", pathParts[1], pathParts[2], pathParts[3]), nil
+			}
+		}
+
+		return "https://" + host + path, nil
+	}
+
 	// HTTPS/HTTP format
 	if strings.HasPrefix(remoteUrl, "https://") || strings.HasPrefix(remoteUrl, "http://") {
 		parsed, err := url.Parse(remoteUrl)
@@ -339,7 +370,7 @@ func ParseRepoBaseUrl(remoteUrl string) (string, error) {
 			return "", fmt.Errorf("unrecognized git remote URL format: %s", remoteUrl)
 		}
 		scheme := parsed.Scheme
-		host := parsed.Hostname() // strips any user@ prefix
+		host := parsed.Host // preserves any explicit port and excludes user info
 		path := strings.TrimSuffix(parsed.Path, ".git")
 		return scheme + "://" + host + path, nil
 	}
