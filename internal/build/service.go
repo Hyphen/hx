@@ -206,16 +206,35 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 	commitSha := fullCommitSha[:7]
 
 	var repoBaseUrl, commitShaHref, tag, tagHref string
-	remoteUrl, err := gitutil.GetRemoteUrl()
-	if err == nil && remoteUrl != "" {
-		repoBaseUrl, err = gitutil.ParseRepoBaseUrl(remoteUrl)
-		if err == nil {
-			commitShaHref = repoBaseUrl + "/commit/" + fullCommitSha
+	remoteUrl, _ := gitutil.GetRemoteUrl()
+	provider := gitutil.DetectProvider(remoteUrl)
+	if remoteUrl != "" {
+		repoBaseUrl, _ = gitutil.ParseRepoBaseUrl(remoteUrl)
+		if repoBaseUrl != "" {
+			switch provider {
+			case "github":
+				commitShaHref = repoBaseUrl + "/commit/" + fullCommitSha
+			case "gitlab":
+				commitShaHref = repoBaseUrl + "/-/commit/" + fullCommitSha
+			case "azuredevops":
+				commitShaHref = repoBaseUrl + "/commit/" + fullCommitSha
+			case "bitbucket":
+				commitShaHref = repoBaseUrl + "/commits/" + fullCommitSha
+			}
 		}
 	}
 	tag, _ = gitutil.GetCurrentTag()
 	if tag != "" && repoBaseUrl != "" {
-		tagHref = repoBaseUrl + "/releases/tag/" + tag
+		switch provider {
+		case "github":
+			tagHref = repoBaseUrl + "/releases/tag/" + tag
+		case "gitlab":
+			tagHref = repoBaseUrl + "/-/tags/" + tag
+		case "azuredevops":
+			tagHref = repoBaseUrl + "?version=GT" + tag
+		case "bitbucket":
+			tagHref = repoBaseUrl + "/src/" + tag
+		}
 	}
 
 	// Run build on the docker file
