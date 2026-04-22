@@ -110,8 +110,12 @@ func Build(dockerFilePathOrDir, name, tag string, verbose bool) (string, string,
 
 	cmd := exec.Command("docker", args...)
 
+	// Docker's build output is progress, not structured data. Sending it to
+	// stderr keeps our stdout clean for structured output modes (e.g.
+	// `hx build --output json`) while still letting the user see progress
+	// in a terminal (terminals render stderr).
 	if verbose {
-		cmd.Stdout = os.Stdout
+		cmd.Stdout = os.Stderr
 		cmd.Stderr = os.Stderr
 	}
 
