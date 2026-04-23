@@ -21,10 +21,14 @@ func captureStdout(t *testing.T, f func()) string {
 	if err != nil {
 		t.Fatalf("failed to create pipe: %v", err)
 	}
+	// Restore os.Stdout immediately after f() so the rest of the subtest
+	// (assertions, t.Logf, etc.) writes to the real stdout. t.Cleanup is a
+	// safety net in case f panics before we get here.
 	os.Stdout = w
 	t.Cleanup(func() { os.Stdout = originalStdout })
 
 	f()
+	os.Stdout = originalStdout
 	w.Close()
 
 	out, readErr := io.ReadAll(r)
