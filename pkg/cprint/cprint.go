@@ -41,9 +41,10 @@ type CPrinter struct {
 	messages []Message
 }
 
-// Message is a user-facing line recorded by the printer. In human mode it
-// streams to stdout as it happens. In json mode it is buffered and emitted
-// as part of the final JSON object produced by Emit.
+// Message is a user-facing line recorded by the printer in all output modes.
+// In human mode it is also streamed to stdout as it happens. In json mode
+// the recorded messages are emitted as part of the final JSON object
+// produced by Emit.
 type Message struct {
 	Level string `json:"level"`
 	Text  string `json:"text"`
@@ -191,7 +192,7 @@ func (p *CPrinter) Error(cmd *cobra.Command, err error) {
 	if p.IsJSON() {
 		return
 	}
-	Error(cmd, err, true)
+	Error(cmd, err, p.verbose)
 }
 
 func (p *CPrinter) Info(message string) {
