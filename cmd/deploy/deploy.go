@@ -66,7 +66,13 @@ Use 'hyphen deploy --help' for more information about available flags.
 				if result == nil {
 					result = map[string]any{}
 				}
-				result["status"] = "failed"
+				// Preserve a real terminal status (e.g. "canceled") if
+				// runDeployBody set one before failing; otherwise mark
+				// the run as failed so JSON consumers see a consistent
+				// non-empty status.
+				if _, ok := result["status"]; !ok {
+					result["status"] = "failed"
+				}
 				result["reason"] = runErr.Error()
 				if emitErr := printer.Emit(result); emitErr != nil {
 					fmt.Fprintf(os.Stderr, "failed to emit JSON output: %v\n", emitErr)
@@ -77,25 +83,18 @@ Use 'hyphen deploy --help' for more information about available flags.
 				// payload's "reason" field.
 				cmd.SilenceErrors = true
 				cmd.SilenceUsage = true
+			} else {
+				// Human mode already streamed the failure context to
+				// stdout, so silence cobra's redundant "Error: ..."
+				// line — but still return the error to drive a
+				// non-zero exit code.
+				cmd.SilenceErrors = true
+				cmd.SilenceUsage = true
 			}
 			return runErr
 		}
 
-		if err := printer.Emit(result); err != nil {
-			return err
-		}
-
-		// A non-succeeded deployment is a failure regardless of output
-		// format: CI and scripts should see a non-zero exit. In human
-		// mode the streaming output already showed the final status,
-		// so silence cobra's redundant "Error: ..." line.
-		if result["status"] != "succeeded" {
-			cmd.SilenceErrors = true
-			cmd.SilenceUsage = true
-			return fmt.Errorf("deployment ended with status %q", result["status"])
-		}
-
-		return nil
+		return printer.Emit(result)
 	},
 }
 
@@ -326,13 +325,25 @@ func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 	result["deploymentUrl"] = appUrl
 
 	var finalStatus string
+	var streamErr error
 	if shouldUseTUI() {
-		finalStatus = runWithTUI(orgId, selectedDeployment.ID, run, appUrl, service)
+		finalStatus, streamErr = runWithTUI(orgId, selectedDeployment.ID, run, appUrl, service)
 	} else {
-		finalStatus = runWithoutTUI(orgId, selectedDeployment.ID, run, appUrl, service)
+		finalStatus, streamErr = runWithoutTUI(orgId, selectedDeployment.ID, run, appUrl, service)
 	}
 
-	result["status"] = finalStatus
+	if finalStatus != "" {
+		result["status"] = finalStatus
+	}
+
+	if streamErr != nil {
+		return result, fmt.Errorf("failed to monitor deployment: %w", streamErr)
+	}
+
+	if finalStatus != "succeeded" {
+		return result, fmt.Errorf("deployment ended with status %q", finalStatus)
+	}
+
 	return result, nil
 }
 
@@ -433,7 +444,7 @@ func streamDeployEvents(orgId string, runID string, callbacks deployCallbacks) e
 	return nil
 }
 
-func runWithTUI(orgId, deploymentId string, run *models.DeploymentRun, appUrl string, service *Deployment.DeploymentService) string {
+func runWithTUI(orgId, deploymentId string, run *models.DeploymentRun, appUrl string, service *Deployment.DeploymentService) (string, error) {
 	statusModel := Deployment.StatusModel{
 		OrganizationId: orgId,
 		DeploymentId:   deploymentId,
@@ -447,6 +458,7 @@ func runWithTUI(orgId, deploymentId string, run *models.DeploymentRun, appUrl st
 	statusDisplay := tea.NewProgram(statusModel)
 
 	var finalStatus string
+	var streamErr error
 	var wg sync.WaitGroup
 	wg.Add(1)
 
@@ -478,16 +490,18 @@ func runWithTUI(orgId, deploymentId string, run *models.DeploymentRun, appUrl st
 		})
 
 		if err != nil {
+			streamErr = err
 			statusDisplay.Send(Deployment.ErrorMessage{Error: err})
+			statusDisplay.Quit()
 		}
 	}()
 
 	statusDisplay.Run()
 	wg.Wait()
-	return finalStatus
+	return finalStatus, streamErr
 }
 
-func runWithoutTUI(orgId string, deploymentId string, run *models.DeploymentRun, appUrl string, service *Deployment.DeploymentService) string {
+func runWithoutTUI(orgId string, deploymentId string, run *models.DeploymentRun, appUrl string, service *Deployment.DeploymentService) (string, error) {
 	printer.Print(fmt.Sprintf("Deployment URL: %s", appUrl))
 	printer.Print("Monitoring deployment progress...")
 
@@ -518,8 +532,9 @@ func runWithoutTUI(orgId string, deploymentId string, run *models.DeploymentRun,
 
 	if err != nil {
 		printer.Print(fmt.Sprintf("Error: %v", err))
+		return finalStatus, err
 	}
-	return finalStatus
+	return finalStatus, nil
 }
 
 func printPipelineUpdates(pipelineData map[string]any) {
