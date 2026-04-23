@@ -41,10 +41,11 @@ type CPrinter struct {
 	messages []Message
 }
 
-// Message is a user-facing line recorded by the printer in all output modes.
-// In human mode it is also streamed to stdout as it happens. In json mode
-// the recorded messages are emitted as part of the final JSON object
-// produced by Emit.
+// Message is a user-facing line buffered by the printer in JSON output
+// mode and emitted as part of the final JSON object produced by Emit.
+// In human mode messages are streamed to stdout as they happen and are
+// not buffered, so long-running commands (e.g. hx deploy monitoring a
+// pipeline) don't accumulate them in memory.
 type Message struct {
 	Level string `json:"level"`
 	Text  string `json:"text"`
@@ -185,101 +186,103 @@ func PrintDetail(label, value string) {
 	fmt.Printf("   %s %s\n", white(label+":"), cyan(value))
 }
 
-// CPrinter methods — each records the message and, in human mode only,
-// streams it to stdout.
+// CPrinter methods — in human mode each streams the message to stdout;
+// in JSON mode each records the message into the buffer for Emit to
+// include in the final payload. Messages are not recorded in human mode
+// so long-running commands don't accumulate them in memory.
 func (p *CPrinter) Error(cmd *cobra.Command, err error) {
-	p.record(LevelError, err.Error())
 	if p.IsJSON() {
+		p.record(LevelError, err.Error())
 		return
 	}
 	Error(cmd, err, p.verbose)
 }
 
 func (p *CPrinter) Info(message string) {
-	p.record(LevelInfo, message)
 	if p.IsJSON() {
+		p.record(LevelInfo, message)
 		return
 	}
 	Info(message)
 }
 
 func (p *CPrinter) YellowPrint(message string) {
-	p.record(LevelInfo, message)
 	if p.IsJSON() {
+		p.record(LevelInfo, message)
 		return
 	}
 	YellowPrint(message)
 }
 
 func (p *CPrinter) GreenPrint(message string) {
-	p.record(LevelInfo, message)
 	if p.IsJSON() {
+		p.record(LevelInfo, message)
 		return
 	}
 	GreenPrint(message)
 }
 
 func (p *CPrinter) Print(message string) {
-	p.record(LevelInfo, message)
 	if p.IsJSON() {
+		p.record(LevelInfo, message)
 		return
 	}
 	Print(message)
 }
 
 func (p *CPrinter) PrintNorm(message string) {
-	p.record(LevelInfo, message)
 	if p.IsJSON() {
+		p.record(LevelInfo, message)
 		return
 	}
 	PrintNorm(message)
 }
 
 func (p *CPrinter) Success(message string) {
-	p.record(LevelSuccess, message)
 	if p.IsJSON() {
+		p.record(LevelSuccess, message)
 		return
 	}
 	Success(message)
 }
 
 func (p *CPrinter) Warning(message string) {
-	p.record(LevelWarning, message)
 	if p.IsJSON() {
+		p.record(LevelWarning, message)
 		return
 	}
 	Warning(message)
 }
 
 func (p *CPrinter) OrganizationInfo(orgID string) {
-	p.record(LevelInfo, "Organization ID: "+orgID)
 	if p.IsJSON() {
+		p.record(LevelInfo, "Organization ID: "+orgID)
 		return
 	}
 	OrganizationInfo(orgID, p.verbose)
 }
 
 func (p *CPrinter) Prompt(message string) {
-	// Prompts are interactive and don't make sense in json mode; record
-	// them as info so consumers can see they happened.
-	p.record(LevelInfo, message)
 	if p.IsJSON() {
+		// Prompts are interactive and don't make sense in json mode;
+		// record them as info so consumers can see they happened.
+		p.record(LevelInfo, message)
 		return
 	}
 	Prompt(message, p.verbose)
 }
 
 func (p *CPrinter) PrintHeader(message string) {
-	p.record(LevelInfo, message)
 	if p.IsJSON() {
+		p.record(LevelInfo, message)
 		return
 	}
 	PrintHeader(message)
 }
 
 func (p *CPrinter) PrintDetail(label, value string) {
-	p.record(LevelInfo, label+": "+value)
 	if p.IsJSON() {
+		p.record(LevelInfo, label+": "+value)
 		return
 	}
 	PrintDetail(label, value)
@@ -290,8 +293,8 @@ func (p *CPrinter) PrintVerbose(message string) {
 	if !p.verbose {
 		return
 	}
-	p.record(LevelVerbose, message)
 	if p.IsJSON() {
+		p.record(LevelVerbose, message)
 		return
 	}
 	Print(message)

@@ -65,13 +65,12 @@ func TestCPrinterHumanMode(t *testing.T) {
 			assert.Contains(t, output, "the message", "expected %s to stream the message", m.name)
 		})
 
-		t.Run(m.name+"_records_the_message", func(t *testing.T) {
+		t.Run(m.name+"_does_not_buffer_in_human_mode", func(t *testing.T) {
 			printer := NewCPrinter(false)
 
 			captureStdout(t, func() { m.call(printer) })
 
-			assert.Len(t, printer.Messages(), 1, "expected %s to record exactly one message", m.name)
-			assert.Contains(t, printer.Messages()[0].Text, "the message")
+			assert.Empty(t, printer.Messages(), "expected %s to skip recording in human mode", m.name)
 		})
 	}
 }
