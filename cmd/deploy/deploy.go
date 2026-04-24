@@ -24,11 +24,12 @@ import (
 )
 
 var (
-	noBuild     bool
-	envFlag     string
-	projectFlag string
-	appsFlag    string
-	printer     *cprint.CPrinter
+	noBuild          bool
+	envFlag          string
+	projectFlag      string
+	appsFlag         string
+	outputFormatFlag string
+	printer          *cprint.CPrinter
 )
 
 var DeployCmd = &cobra.Command{
@@ -55,227 +56,301 @@ Use 'hyphen deploy --help' for more information about available flags.
 		return user.ErrorIfNotAuthenticated()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		orgId, err := flags.GetOrganizationID()
-		if err != nil {
-			return err
-		}
-
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
+		printer.SetFormat(outputFormatFlag)
 
-		service := Deployment.NewService()
+		result, runErr := runDeployBody(cmd, args)
 
-		var selectedDeployment models.Deployment
-
-		if len(args) == 0 {
-			cfg, err := config.RestoreLocalConfig()
-			if err != nil {
-				return fmt.Errorf("failed to restore config: %w", err)
-			}
-
-			projectId := projectFlag
-			if cfg.ProjectId != nil {
-				projectId = *cfg.ProjectId
-			}
-			if projectId == "" {
-				return fmt.Errorf("project id not found in config")
-			}
-
-			var envId string
-			if envFlag != "" {
-				envId = envFlag
+		if runErr != nil {
+			if printer.IsJSON() {
+				if result == nil {
+					result = map[string]any{}
+				}
+				// Preserve a real terminal status (e.g. "canceled") if
+				// runDeployBody set one before failing; otherwise mark
+				// the run as failed so JSON consumers see a consistent
+				// non-empty status.
+				if _, ok := result["status"]; !ok {
+					result["status"] = "failed"
+				}
+				result["reason"] = runErr.Error()
+				if emitErr := printer.Emit(result); emitErr != nil {
+					fmt.Fprintf(os.Stderr, "failed to emit JSON output: %v\n", emitErr)
+				}
+				// Silence cobra's error/usage output so it doesn't
+				// pollute stdout after we've emitted the JSON
+				// payload — the error is already surfaced in the
+				// payload's "reason" field.
+				cmd.SilenceErrors = true
+				cmd.SilenceUsage = true
 			} else {
-				envService := env.NewService()
-				devEnv, devEnvErr := envService.GetDevelopmentEnvironment(orgId, projectId)
-				if errors.Is(devEnvErr, errors.ErrNotFound) {
-					return fmt.Errorf("no development environment found for this project")
-				}
-				if devEnvErr != nil {
-					return fmt.Errorf("failed to get development environment: %w", devEnvErr)
-				}
-				envId = devEnv.ID
+				// Human mode already streamed the failure context to
+				// stdout, so silence cobra's redundant "Error: ..."
+				// line — but still return the error to drive a
+				// non-zero exit code.
+				cmd.SilenceErrors = true
+				cmd.SilenceUsage = true
 			}
+			return runErr
+		}
 
-			projectService := projects.NewService(orgId)
-			deployment, deploymentErr := projectService.GetEnvironmentDeployment(projectId, envId)
-			if deploymentErr != nil && !errors.Is(deploymentErr, errors.ErrNotFound) {
-				return fmt.Errorf("failed to get deployment for environment: %w", deploymentErr)
-			}
+		return printer.Emit(result)
+	},
+}
 
-			if errors.Is(deploymentErr, errors.ErrNotFound) || deployment.ID == "" {
-				project, err := projectService.GetProject(projectId)
-				if err != nil {
-					return fmt.Errorf("failed to get project: %w", err)
-				}
-				if cfg.AppId == nil {
-					return fmt.Errorf("app id not found in config")
-				}
+// runDeployBody performs the deployment and returns a result map suitable
+// for emitting as the --output=json payload. The result is accumulated as
+// the command progresses so that an early error still returns everything
+// known so far (deploymentId, runId, deploymentUrl as available); the outer
+// RunE wrapper tags it with status=failed and reason on error.
+func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
+	result := map[string]any{}
 
-				name := deploymentNamePart(project.AlternateID, 25)
+	orgId, err := flags.GetOrganizationID()
+	if err != nil {
+		return result, err
+	}
 
-				newDeployment, err := service.CreateEnvironmentDeployment(orgId, projectId, envId, *cfg.AppId, name, name, "")
-				if err != nil {
-					return fmt.Errorf("failed to create deployment: %w", err)
-				}
-				selectedDeployment = *newDeployment
-			} else {
-				selectedDeployment = deployment
-			}
+	service := Deployment.NewService()
+
+	var selectedDeployment models.Deployment
+
+	if len(args) == 0 {
+		cfg, err := config.RestoreLocalConfig()
+		if err != nil {
+			return result, fmt.Errorf("failed to restore config: %w", err)
+		}
+
+		projectId := projectFlag
+		if cfg.ProjectId != nil {
+			projectId = *cfg.ProjectId
+		}
+		if projectId == "" {
+			return result, fmt.Errorf("project id not found in config")
+		}
+
+		var envId string
+		if envFlag != "" {
+			envId = envFlag
 		} else {
-			deployment, err := service.GetDeployment(orgId, args[0])
+			envService := env.NewService()
+			devEnv, devEnvErr := envService.GetDevelopmentEnvironment(orgId, projectId)
+			if errors.Is(devEnvErr, errors.ErrNotFound) {
+				return result, fmt.Errorf("no development environment found for this project")
+			}
+			if devEnvErr != nil {
+				return result, fmt.Errorf("failed to get development environment: %w", devEnvErr)
+			}
+			envId = devEnv.ID
+		}
+
+		projectService := projects.NewService(orgId)
+		deployment, deploymentErr := projectService.GetEnvironmentDeployment(projectId, envId)
+		if deploymentErr != nil && !errors.Is(deploymentErr, errors.ErrNotFound) {
+			return result, fmt.Errorf("failed to get deployment for environment: %w", deploymentErr)
+		}
+
+		if errors.Is(deploymentErr, errors.ErrNotFound) || deployment.ID == "" {
+			project, err := projectService.GetProject(projectId)
 			if err != nil {
-				return fmt.Errorf("failed to get deployment: %w", err)
+				return result, fmt.Errorf("failed to get project: %w", err)
+			}
+			if cfg.AppId == nil {
+				return result, fmt.Errorf("app id not found in config")
 			}
 
-			selectedDeployment = *deployment
-		}
-		if !selectedDeployment.IsReady {
-			printer.Print("❌ There are issues blocking this deployment from being run.")
-			for _, issue := range selectedDeployment.ReadinessIssues {
-				if issue.Cloud != "" {
-					printer.Print(fmt.Sprintf("  • %s (%s)", issue.Error, issue.Cloud))
-				} else {
-					printer.Print(fmt.Sprintf("  • %s", issue.Error))
-				}
+			name := deploymentNamePart(project.AlternateID, 25)
+
+			newDeployment, err := service.CreateEnvironmentDeployment(orgId, projectId, envId, *cfg.AppId, name, name, "")
+			if err != nil {
+				return result, fmt.Errorf("failed to create deployment: %w", err)
 			}
-			return nil
+			selectedDeployment = *newDeployment
+		} else {
+			selectedDeployment = deployment
+		}
+	} else {
+		deployment, err := service.GetDeployment(orgId, args[0])
+		if err != nil {
+			return result, fmt.Errorf("failed to get deployment: %w", err)
 		}
 
-		// Match preview if preview flag is provided
-		var previewId string
-		if flags.PreviewNameFlag != "" {
-			matchedPreviews := []models.DeploymentPreview{}
-			for _, p := range selectedDeployment.Previews {
-				if p.Name == flags.PreviewNameFlag {
-					// If prefix is provided, also match by hostPrefix
-					if flags.PreviewPrefixFlag != "" {
-						if p.HostPrefix == flags.PreviewPrefixFlag {
-							matchedPreviews = append(matchedPreviews, p)
-						}
-					} else {
+		selectedDeployment = *deployment
+	}
+
+	result["deploymentId"] = selectedDeployment.ID
+
+	if !selectedDeployment.IsReady {
+		printer.Print("❌ There are issues blocking this deployment from being run.")
+		issues := []string{}
+		for _, issue := range selectedDeployment.ReadinessIssues {
+			var line string
+			if issue.Cloud != "" {
+				line = fmt.Sprintf("%s (%s)", issue.Error, issue.Cloud)
+			} else {
+				line = issue.Error
+			}
+			printer.Print("  • " + line)
+			issues = append(issues, line)
+		}
+		return result, fmt.Errorf("deployment not ready: %s", strings.Join(issues, "; "))
+	}
+
+	// Match preview if preview flag is provided
+	var previewId string
+	if flags.PreviewNameFlag != "" {
+		matchedPreviews := []models.DeploymentPreview{}
+		for _, p := range selectedDeployment.Previews {
+			// If prefix is provided, also match by hostPrefix
+			if p.Name == flags.PreviewNameFlag {
+				if flags.PreviewPrefixFlag != "" {
+					if p.HostPrefix == flags.PreviewPrefixFlag {
 						matchedPreviews = append(matchedPreviews, p)
 					}
+				} else {
+					matchedPreviews = append(matchedPreviews, p)
 				}
-			}
-
-			if len(matchedPreviews) == 0 {
-				if flags.PreviewPrefixFlag == "" {
-					return fmt.Errorf("no preview found with name '%s', please specify --prefix flag to create a new preview", flags.PreviewNameFlag)
-				}
-				newPreview, err := service.CreatePreview(orgId, selectedDeployment, flags.PreviewNameFlag, flags.PreviewPrefixFlag)
-				if err != nil {
-					return fmt.Errorf("failed to create preview: %w", err)
-				}
-				previewId = newPreview.ID
-			} else if len(matchedPreviews) > 1 {
-				return fmt.Errorf("multiple previews found with name '%s', please specify --prefix flag to disambiguate", flags.PreviewNameFlag)
-			} else {
-				previewId = matchedPreviews[0].ID
 			}
 		}
 
-		appSources := []Deployment.AppSources{}
-
-		if appsFlag != "" {
-			cfg, cfgErr := config.RestoreLocalConfig()
-			if cfgErr != nil && !os.IsNotExist(cfgErr) {
-				return fmt.Errorf("failed to restore config: %w", cfgErr)
+		if len(matchedPreviews) == 0 {
+			if flags.PreviewPrefixFlag == "" {
+				return result, fmt.Errorf("no preview found with name '%s', please specify --prefix flag to create a new preview", flags.PreviewNameFlag)
 			}
-
-			parsedApps, err := parseAppsFlag(appsFlag)
+			newPreview, err := service.CreatePreview(orgId, selectedDeployment, flags.PreviewNameFlag, flags.PreviewPrefixFlag)
 			if err != nil {
-				return err
+				return result, fmt.Errorf("failed to create preview: %w", err)
+			}
+			previewId = newPreview.ID
+		} else if len(matchedPreviews) > 1 {
+			return result, fmt.Errorf("multiple previews found with name '%s', please specify --prefix flag to disambiguate", flags.PreviewNameFlag)
+		} else {
+			previewId = matchedPreviews[0].ID
+		}
+	}
+
+	appSources := []Deployment.AppSources{}
+
+	if appsFlag != "" {
+		cfg, cfgErr := config.RestoreLocalConfig()
+		if cfgErr != nil && !os.IsNotExist(cfgErr) {
+			return result, fmt.Errorf("failed to restore config: %w", cfgErr)
+		}
+
+		parsedApps, err := parseAppsFlag(appsFlag)
+		if err != nil {
+			return result, err
+		}
+
+		for _, pa := range parsedApps {
+			deployApp, err := resolveDeploymentApp(pa.ID, selectedDeployment)
+			if err != nil {
+				return result, err
 			}
 
-			for _, pa := range parsedApps {
-				deployApp, err := resolveDeploymentApp(pa.ID, selectedDeployment)
+			if noBuild {
+				appSources = append(appSources, Deployment.AppSources{
+					AppId: deployApp.App.ID,
+					Build: "latest",
+				})
+				continue
+			}
+
+			if pa.BuildSpec == "" && matchesHxApp(pa.ID, cfg) {
+				buildSvc := build.NewService()
+				buildResult, err := buildSvc.RunBuild(cmd, printer, selectedDeployment.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag, flags.PreviewNameFlag)
 				if err != nil {
-					return err
+					return result, err
 				}
-
-				if noBuild {
-					appSources = append(appSources, Deployment.AppSources{
-						AppId: deployApp.App.ID,
-						Build: "latest",
-					})
-					continue
-				}
-
-				if pa.BuildSpec == "" && matchesHxApp(pa.ID, cfg) {
-					buildSvc := build.NewService()
-					result, err := buildSvc.RunBuild(cmd, printer, selectedDeployment.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag, flags.PreviewNameFlag)
-					if err != nil {
-						return err
+				appSources = append(appSources, Deployment.AppSources{
+					AppId:   buildResult.App.ID,
+					BuildId: buildResult.Id,
+				})
+			} else {
+				src := Deployment.AppSources{AppId: deployApp.App.ID}
+				switch pa.BuildSpec {
+				case "", "latest":
+					src.Build = "latest"
+				case "lastDeployed":
+					src.Build = "lastDeployed"
+				case "latestPreview":
+					src.Build = "latestPreview"
+				default:
+					if !strings.HasPrefix(pa.BuildSpec, "abld_") {
+						return result, fmt.Errorf("unknown build type %q: expected \"latest\", \"lastDeployed\", \"latestPreview\", or a build ID starting with \"abld_\"", pa.BuildSpec)
 					}
-					appSources = append(appSources, Deployment.AppSources{
-						AppId:   result.App.ID,
-						BuildId: result.Id,
-					})
-				} else {
-					src := Deployment.AppSources{AppId: deployApp.App.ID}
-					switch pa.BuildSpec {
-					case "", "latest":
-						src.Build = "latest"
-					case "lastDeployed":
-						src.Build = "lastDeployed"
-					case "latestPreview":
-						src.Build = "latestPreview"
-					default:
-						if !strings.HasPrefix(pa.BuildSpec, "abld_") {
-							return fmt.Errorf("unknown build type %q: expected \"latest\", \"lastDeployed\", \"latestPreview\", or a build ID starting with \"abld_\"", pa.BuildSpec)
-						}
-						src.BuildId = pa.BuildSpec
-					}
-					appSources = append(appSources, src)
+					src.BuildId = pa.BuildSpec
 				}
+				appSources = append(appSources, src)
 			}
-		} else if noBuild {
-			for _, app := range selectedDeployment.Apps {
+		}
+	} else if noBuild {
+		for _, app := range selectedDeployment.Apps {
+			appSources = append(appSources, Deployment.AppSources{
+				AppId: app.App.ID,
+				Build: "latest",
+			})
+		}
+	} else {
+		buildSvc := build.NewService()
+		buildResult, err := buildSvc.RunBuild(cmd, printer, selectedDeployment.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag, flags.PreviewNameFlag)
+		if err != nil {
+			return result, err
+		}
+		for _, app := range selectedDeployment.Apps {
+			if app.App.ID == buildResult.App.ID {
+				appSources = append(appSources, Deployment.AppSources{
+					AppId:   buildResult.App.ID,
+					BuildId: buildResult.Id,
+				})
+			} else {
 				appSources = append(appSources, Deployment.AppSources{
 					AppId: app.App.ID,
 					Build: "latest",
 				})
 			}
-		} else {
-			buildSvc := build.NewService()
-			result, err := buildSvc.RunBuild(cmd, printer, selectedDeployment.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag, flags.PreviewNameFlag)
-			if err != nil {
-				return err
-			}
-			for _, app := range selectedDeployment.Apps {
-				if app.App.ID == result.App.ID {
-					appSources = append(appSources, Deployment.AppSources{
-						AppId:   result.App.ID,
-						BuildId: result.Id,
-					})
-				} else {
-					appSources = append(appSources, Deployment.AppSources{
-						AppId: app.App.ID,
-						Build: "latest",
-					})
-				}
-			}
 		}
+	}
 
-		printer.Print(fmt.Sprintf("Running %s", selectedDeployment.Name))
+	printer.Print(fmt.Sprintf("Running %s", selectedDeployment.Name))
 
-		run, err := service.CreateRun(orgId, selectedDeployment.ID, appSources, previewId)
-		if err != nil {
-			return fmt.Errorf("failed to create run: %w", err)
-		}
+	run, err := service.CreateRun(orgId, selectedDeployment.ID, appSources, previewId)
+	if err != nil {
+		return result, fmt.Errorf("failed to create run: %w", err)
+	}
 
-		appUrl := fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID)
+	appUrl := fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID)
 
-		if shouldUseTUI() {
-			runWithTUI(orgId, selectedDeployment.ID, run, appUrl, service)
-		} else {
-			runWithoutTUI(orgId, selectedDeployment.ID, run, appUrl, service)
-		}
+	result["runId"] = run.ID
+	result["deploymentUrl"] = appUrl
 
-		return nil
-	},
+	var finalStatus string
+	var streamErr error
+	if shouldUseTUI() {
+		finalStatus, streamErr = runWithTUI(orgId, selectedDeployment.ID, run, appUrl, service)
+	} else {
+		finalStatus, streamErr = runWithoutTUI(orgId, selectedDeployment.ID, run, appUrl, service)
+	}
+
+	if finalStatus != "" {
+		result["status"] = finalStatus
+	}
+
+	if streamErr != nil {
+		return result, fmt.Errorf("failed to monitor deployment: %w", streamErr)
+	}
+
+	if finalStatus != "succeeded" {
+		return result, fmt.Errorf("deployment ended with status %q", finalStatus)
+	}
+
+	return result, nil
 }
 
 func shouldUseTUI() bool {
+	if outputFormatFlag == cprint.FormatJSON {
+		return false
+	}
 	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
@@ -369,7 +444,7 @@ func streamDeployEvents(orgId string, runID string, callbacks deployCallbacks) e
 	return nil
 }
 
-func runWithTUI(orgId, deploymentId string, run *models.DeploymentRun, appUrl string, service *Deployment.DeploymentService) {
+func runWithTUI(orgId, deploymentId string, run *models.DeploymentRun, appUrl string, service *Deployment.DeploymentService) (string, error) {
 	statusModel := Deployment.StatusModel{
 		OrganizationId: orgId,
 		DeploymentId:   deploymentId,
@@ -382,6 +457,8 @@ func runWithTUI(orgId, deploymentId string, run *models.DeploymentRun, appUrl st
 
 	statusDisplay := tea.NewProgram(statusModel)
 
+	var finalStatus string
+	var streamErr error
 	var wg sync.WaitGroup
 	wg.Add(1)
 
@@ -404,6 +481,7 @@ func runWithTUI(orgId, deploymentId string, run *models.DeploymentRun, appUrl st
 				extractStatusUpdates(pipelineData, runId, statusDisplay)
 			},
 			onComplete: func(status string) {
+				finalStatus = status
 				statusDisplay.Quit()
 			},
 			onError: func(err error) {
@@ -412,18 +490,22 @@ func runWithTUI(orgId, deploymentId string, run *models.DeploymentRun, appUrl st
 		})
 
 		if err != nil {
+			streamErr = err
 			statusDisplay.Send(Deployment.ErrorMessage{Error: err})
+			statusDisplay.Quit()
 		}
 	}()
 
 	statusDisplay.Run()
 	wg.Wait()
+	return finalStatus, streamErr
 }
 
-func runWithoutTUI(orgId string, deploymentId string, run *models.DeploymentRun, appUrl string, service *Deployment.DeploymentService) {
+func runWithoutTUI(orgId string, deploymentId string, run *models.DeploymentRun, appUrl string, service *Deployment.DeploymentService) (string, error) {
 	printer.Print(fmt.Sprintf("Deployment URL: %s", appUrl))
 	printer.Print("Monitoring deployment progress...")
 
+	var finalStatus string
 	err := streamDeployEvents(orgId, run.ID, deployCallbacks{
 		onVerbose: func(msg string) {
 			printer.Print(fmt.Sprintf("  [verbose] %s", msg))
@@ -435,6 +517,7 @@ func runWithoutTUI(orgId string, deploymentId string, run *models.DeploymentRun,
 			printPipelineUpdates(pipelineData)
 		},
 		onComplete: func(status string) {
+			finalStatus = status
 			switch status {
 			case "succeeded":
 				printer.Success("Deployment completed successfully")
@@ -449,7 +532,9 @@ func runWithoutTUI(orgId string, deploymentId string, run *models.DeploymentRun,
 
 	if err != nil {
 		printer.Print(fmt.Sprintf("Error: %v", err))
+		return finalStatus, err
 	}
+	return finalStatus, nil
 }
 
 func printPipelineUpdates(pipelineData map[string]any) {
@@ -604,4 +689,5 @@ func init() {
 	DeployCmd.Flags().StringVar(&envFlag, "env", "", "Environment to deploy (defaults to the environment flagged as the \"development\" type)")
 	DeployCmd.Flags().StringVar(&projectFlag, "project", "", "Project to deploy (defaults to project ID in hx config)")
 	DeployCmd.Flags().StringVar(&appsFlag, "apps", "", "Comma-separated list of apps to deploy, each optionally specifying a build (e.g. app1,app2:abld_xxxx,app3:latest,app4:lastDeployed,app5:latestPreview)")
+	DeployCmd.Flags().StringVar(&outputFormatFlag, "output", "", "Output format. Set to \"json\" to emit a JSON object with deploymentId, runId, deploymentUrl, status, and a messages array on completion instead of streaming human-readable progress.")
 }
