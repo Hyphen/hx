@@ -21,6 +21,7 @@ type Service struct {
 	mu              sync.Mutex
 	connected       bool
 	connectedCh     chan struct{}
+	connectedOnce   sync.Once
 	verboseCallback func(string)
 }
 
@@ -99,13 +100,13 @@ func (s *Service) Connect(orgId string) error {
 		s.connected = true
 		s.mu.Unlock()
 
-		// If this is a reconnect, the connected channel will already have been closed, and trying to close it again will panic
 		if wasConnected {
 			s.logVerbose("Reconnected successfully")
 		} else {
 			s.logVerbose("Connected successfully")
-			close(s.connectedCh)
 		}
+
+		s.markConnected()
 	})
 
 	client.On("connect_error", func(args ...any) {
@@ -128,6 +129,15 @@ func (s *Service) Connect(orgId string) error {
 		s.logVerbose("Connection timed out after 10 seconds")
 		return errors.New("Socket.io connection timeout")
 	}
+}
+
+// markConnected closes connectedCh exactly once, signalling waiters in Connect
+// that the initial connection succeeded. sync.Once makes "connectedCh is
+// closed exactly once" a property of the type rather than a state machine that
+// the disconnect path can invalidate by flipping s.connected on a transient
+// reconnect, which previously caused close-of-closed-channel panics.
+func (s *Service) markConnected() {
+	s.connectedOnce.Do(func() { close(s.connectedCh) })
 }
 
 func (s *Service) On(event string, handler func(...any)) {
