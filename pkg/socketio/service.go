@@ -21,6 +21,7 @@ type Service struct {
 	mu              sync.Mutex
 	connected       bool
 	connectedCh     chan struct{}
+	connectedOnce   sync.Once
 	verboseCallback func(string)
 }
 
@@ -99,13 +100,18 @@ func (s *Service) Connect(orgId string) error {
 		s.connected = true
 		s.mu.Unlock()
 
-		// If this is a reconnect, the connected channel will already have been closed, and trying to close it again will panic
 		if wasConnected {
 			s.logVerbose("Reconnected successfully")
 		} else {
 			s.logVerbose("Connected successfully")
-			close(s.connectedCh)
 		}
+
+		// Closing connectedCh signals waiters in Connect that the initial
+		// connection succeeded. We only want this to happen on the first
+		// connect; sync.Once makes that a structural invariant rather than
+		// relying on s.connected, which the disconnect handler legitimately
+		// flips back to false on a transient blip.
+		s.connectedOnce.Do(func() { close(s.connectedCh) })
 	})
 
 	client.On("connect_error", func(args ...any) {
