@@ -106,12 +106,7 @@ func (s *Service) Connect(orgId string) error {
 			s.logVerbose("Connected successfully")
 		}
 
-		// Closing connectedCh signals waiters in Connect that the initial
-		// connection succeeded. We only want this to happen on the first
-		// connect; sync.Once makes that a structural invariant rather than
-		// relying on s.connected, which the disconnect handler legitimately
-		// flips back to false on a transient blip.
-		s.connectedOnce.Do(func() { close(s.connectedCh) })
+		s.markConnected()
 	})
 
 	client.On("connect_error", func(args ...any) {
@@ -134,6 +129,15 @@ func (s *Service) Connect(orgId string) error {
 		s.logVerbose("Connection timed out after 10 seconds")
 		return errors.New("Socket.io connection timeout")
 	}
+}
+
+// markConnected closes connectedCh exactly once, signalling waiters in Connect
+// that the initial connection succeeded. sync.Once makes "connectedCh is
+// closed exactly once" a property of the type rather than a state machine that
+// the disconnect path can invalidate by flipping s.connected on a transient
+// reconnect, which previously caused close-of-closed-channel panics.
+func (s *Service) markConnected() {
+	s.connectedOnce.Do(func() { close(s.connectedCh) })
 }
 
 func (s *Service) On(event string, handler func(...any)) {
