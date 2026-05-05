@@ -250,19 +250,25 @@ func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 			return result, err
 		}
 
+		var missingApps []string
+		for _, pa := range parsedApps {
+			if _, err := resolveDeploymentApp(pa.ID, selectedDeployment); err != nil {
+				missingApps = append(missingApps, pa.ID)
+			}
+		}
+		if len(missingApps) > 0 {
+			printer.Print(fmt.Sprintf("Adding app(s) %v to deployment with default settings", missingApps))
+			updated, addErr := service.AddAppsToDeployment(orgId, selectedDeployment.ID, missingApps)
+			if addErr != nil {
+				return result, fmt.Errorf("failed to add apps %v to deployment: %w", missingApps, addErr)
+			}
+			selectedDeployment = *updated
+		}
+
 		for _, pa := range parsedApps {
 			deployApp, err := resolveDeploymentApp(pa.ID, selectedDeployment)
 			if err != nil {
-				printer.Print(fmt.Sprintf("Adding app %q to deployment with default settings", pa.ID))
-				updated, addErr := service.AddAppToDeployment(orgId, selectedDeployment.ID, pa.ID)
-				if addErr != nil {
-					return result, fmt.Errorf("failed to add app %q to deployment: %w", pa.ID, addErr)
-				}
-				selectedDeployment = *updated
-				deployApp, err = resolveDeploymentApp(pa.ID, selectedDeployment)
-				if err != nil {
-					return result, fmt.Errorf("failed to resolve app %q after adding to deployment: %w", pa.ID, err)
-				}
+				return result, fmt.Errorf("failed to resolve app %q after adding to deployment: %w", pa.ID, err)
 			}
 
 			if noBuild {
@@ -699,7 +705,7 @@ func ensureLocalAppInDeployment(service *Deployment.DeploymentService, orgId str
 		return nil, nil
 	}
 	printer.Print(fmt.Sprintf("Adding app %q to deployment with default settings", *cfg.AppId))
-	updated, err := service.AddAppToDeployment(orgId, deployment.ID, *cfg.AppId)
+	updated, err := service.AddAppsToDeployment(orgId, deployment.ID, []string{*cfg.AppId})
 	if err != nil {
 		return nil, fmt.Errorf("failed to add app %q to deployment: %w", *cfg.AppId, err)
 	}

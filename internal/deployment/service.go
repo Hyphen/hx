@@ -236,13 +236,65 @@ func (ds *DeploymentService) GetDeployment(organizationId, deploymentId string) 
 	return &deployment, nil
 }
 
-// AddAppToDeployment patches a deployment to include a new app entry. The new
-// entry is sent without deploymentSettings, so the API fills in defaults
+// patchDeploymentApp mirrors the subset of fields that PATCH
+// /deployments/:id accepts on each app entry. Decoding the GET response into
+// this shape naturally drops fields the PATCH validator rejects — notably
+// projectEnvironment, which is part of the GET response but not part of the
+// PATCH input schema (additionalProperties: false).
+type patchDeploymentApp struct {
+	Project            *patchProjectRef         `json:"project,omitempty"`
+	App                patchAppRef              `json:"app"`
+	DeploymentSettings *patchDeploymentSettings `json:"deploymentSettings,omitempty"`
+}
+
+type patchProjectRef struct {
+	ID          string `json:"id"`
+	AlternateID string `json:"alternateId,omitempty"`
+	Name        string `json:"name,omitempty"`
+}
+
+type patchAppRef struct {
+	ID          string `json:"id"`
+	AlternateID string `json:"alternateId,omitempty"`
+	Name        string `json:"name,omitempty"`
+}
+
+type patchDeploymentSettings struct {
+	Targets        []patchTarget   `json:"targets"`
+	Path           string          `json:"path,omitempty"`
+	Hostname       string          `json:"hostname,omitempty"`
+	DNS            *patchDNS       `json:"dns,omitempty"`
+	Availability   string          `json:"availability"`
+	Scale          string          `json:"scale"`
+	TrafficRegions []string        `json:"trafficRegions"`
+	Advanced       json.RawMessage `json:"advanced,omitempty"`
+}
+
+type patchTarget struct {
+	ID   string `json:"id"`
+	Type string `json:"type,omitempty"`
+}
+
+type patchDNS struct {
+	ZoneName string `json:"zoneName"`
+}
+
+// AddAppsToDeployment patches a deployment to include the given app ids. Each
+// new entry is sent without deploymentSettings, so the API fills in defaults
 // (availability/scale/trafficRegions and the org's first cloud integration as
-// the target). Existing apps are re-sent so they're preserved — the PATCH
-// endpoint replaces the apps array wholesale.
-func (ds *DeploymentService) AddAppToDeployment(organizationId, deploymentId, appId string) (*models.Deployment, error) {
-	deploymentUrl := fmt.Sprintf("%s/api/organizations/%s/deployments/%s", ds.baseUrl, organizationId, deploymentId)
+// the target). The PATCH replaces the apps array wholesale, so existing apps
+// are re-sent verbatim from the GET response.
+func (ds *DeploymentService) AddAppsToDeployment(organizationId, deploymentId string, appIds []string) (*models.Deployment, error) {
+	if len(appIds) == 0 {
+		return ds.GetDeployment(organizationId, deploymentId)
+	}
+
+	deploymentUrl := fmt.Sprintf(
+		"%s/api/organizations/%s/deployments/%s",
+		ds.baseUrl,
+		url.PathEscape(organizationId),
+		url.PathEscape(deploymentId),
+	)
 
 	getReq, err := http.NewRequest("GET", deploymentUrl, nil)
 	if err != nil {
@@ -256,35 +308,39 @@ func (ds *DeploymentService) AddAppToDeployment(organizationId, deploymentId, ap
 	if getResp.StatusCode != http.StatusOK {
 		return nil, errors.HandleHTTPError(getResp)
 	}
-	getBody, err := io.ReadAll(getResp.Body)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to read response body")
-	}
 
 	var current struct {
-		Apps []map[string]any `json:"apps"`
+		Apps []patchDeploymentApp `json:"apps"`
 	}
-	if err := json.Unmarshal(getBody, &current); err != nil {
+	if err := json.NewDecoder(getResp.Body).Decode(&current); err != nil {
 		return nil, errors.Wrap(err, "Failed to parse JSON response")
 	}
 
-	for _, app := range current.Apps {
-		if settings, ok := app["deploymentSettings"].(map[string]any); ok {
-			delete(settings, "projectEnvironment")
-			if dns, ok := settings["dns"].(map[string]any); ok {
-				if zoneName, _ := dns["zoneName"].(string); zoneName == "" {
-					delete(settings, "dns")
-				}
-			}
+	// Apps without DNS come back as `dns: {}` in the GET response (the GET
+	// schema only exposes zoneName). PATCH requires zoneName when dns is
+	// present, so drop the empty DNS object before re-sending. Same for an
+	// `advanced: null` from the wire — the PATCH schema requires an object.
+	for i := range current.Apps {
+		s := current.Apps[i].DeploymentSettings
+		if s == nil {
+			continue
+		}
+		if s.DNS != nil && s.DNS.ZoneName == "" {
+			s.DNS = nil
+		}
+		if string(s.Advanced) == "null" {
+			s.Advanced = nil
 		}
 	}
 
-	apps := append(current.Apps, map[string]any{
-		"app": map[string]any{"id": appId},
-	})
+	for _, appId := range appIds {
+		current.Apps = append(current.Apps, patchDeploymentApp{
+			App: patchAppRef{ID: appId},
+		})
+	}
 
 	requestBody, err := json.Marshal(map[string]any{
-		"apps": apps,
+		"apps": current.Apps,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to marshal request body")
