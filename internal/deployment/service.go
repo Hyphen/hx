@@ -236,6 +236,81 @@ func (ds *DeploymentService) GetDeployment(organizationId, deploymentId string) 
 	return &deployment, nil
 }
 
+// AddAppToDeployment patches a deployment to include a new app entry. The new
+// entry is sent without deploymentSettings, so the API fills in defaults
+// (availability/scale/trafficRegions and the org's first cloud integration as
+// the target). Existing apps are re-sent so they're preserved — the PATCH
+// endpoint replaces the apps array wholesale.
+func (ds *DeploymentService) AddAppToDeployment(organizationId, deploymentId, appId string) (*models.Deployment, error) {
+	deploymentUrl := fmt.Sprintf("%s/api/organizations/%s/deployments/%s", ds.baseUrl, organizationId, deploymentId)
+
+	getReq, err := http.NewRequest("GET", deploymentUrl, nil)
+	if err != nil {
+		return nil, err
+	}
+	getResp, err := ds.httpClient.Do(getReq)
+	if err != nil {
+		return nil, err
+	}
+	defer getResp.Body.Close()
+	if getResp.StatusCode != http.StatusOK {
+		return nil, errors.HandleHTTPError(getResp)
+	}
+	getBody, err := io.ReadAll(getResp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to read response body")
+	}
+
+	var current struct {
+		Apps []map[string]any `json:"apps"`
+	}
+	if err := json.Unmarshal(getBody, &current); err != nil {
+		return nil, errors.Wrap(err, "Failed to parse JSON response")
+	}
+
+	for _, app := range current.Apps {
+		if settings, ok := app["deploymentSettings"].(map[string]any); ok {
+			delete(settings, "projectEnvironment")
+			if dns, ok := settings["dns"].(map[string]any); ok {
+				if zoneName, _ := dns["zoneName"].(string); zoneName == "" {
+					delete(settings, "dns")
+				}
+			}
+		}
+	}
+
+	apps := append(current.Apps, map[string]any{
+		"app": map[string]any{"id": appId},
+	})
+
+	requestBody, err := json.Marshal(map[string]any{
+		"apps": apps,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to marshal request body")
+	}
+
+	req, err := http.NewRequest("PATCH", deploymentUrl, io.NopCloser(bytes.NewReader(requestBody)))
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create a new HTTP request")
+	}
+
+	resp, err := ds.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.HandleHTTPError(resp)
+	}
+
+	// The PATCH response doesn't include readiness fields (isReady,
+	// readinessIssues) — only GET does. Re-fetch so callers get a fully
+	// populated deployment.
+	return ds.GetDeployment(organizationId, deploymentId)
+}
+
 func (ds *DeploymentService) CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description string) (*models.Deployment, error) {
 	url := fmt.Sprintf("%s/api/organizations/%s/deployments/", ds.baseUrl, organizationId)
 
