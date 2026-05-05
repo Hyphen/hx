@@ -180,6 +180,14 @@ func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 
 	result["deploymentId"] = selectedDeployment.ID
 
+	if appsFlag == "" {
+		if updated, err := ensureLocalAppInDeployment(service, orgId, selectedDeployment); err != nil {
+			return result, err
+		} else if updated != nil {
+			selectedDeployment = *updated
+		}
+	}
+
 	if !selectedDeployment.IsReady {
 		printer.Print("❌ There are issues blocking this deployment from being run.")
 		issues := []string{}
@@ -242,10 +250,25 @@ func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 			return result, err
 		}
 
+		var missingApps []string
+		for _, pa := range parsedApps {
+			if _, err := resolveDeploymentApp(pa.ID, selectedDeployment); err != nil {
+				missingApps = append(missingApps, pa.ID)
+			}
+		}
+		if len(missingApps) > 0 {
+			printer.Print(fmt.Sprintf("Adding app(s) %v to deployment with default settings", missingApps))
+			updated, addErr := service.AddAppsToDeployment(orgId, selectedDeployment.ID, missingApps)
+			if addErr != nil {
+				return result, fmt.Errorf("failed to add apps %v to deployment: %w", missingApps, addErr)
+			}
+			selectedDeployment = *updated
+		}
+
 		for _, pa := range parsedApps {
 			deployApp, err := resolveDeploymentApp(pa.ID, selectedDeployment)
 			if err != nil {
-				return result, err
+				return result, fmt.Errorf("failed to resolve app %q after adding to deployment: %w", pa.ID, err)
 			}
 
 			if noBuild {
@@ -660,6 +683,33 @@ func parseAppsFlag(appsFlag string) ([]parsedApp, error) {
 		return nil, fmt.Errorf("--apps flag is empty")
 	}
 	return result, nil
+}
+
+// ensureLocalAppInDeployment makes sure the app referenced by the local .hx
+// config is part of the deployment. If the local config can't be read or
+// doesn't have an app id, it's a no-op. If the app is missing from the
+// deployment, it's added with default settings and the updated deployment is
+// returned. Returns (nil, nil) when no change was made.
+func ensureLocalAppInDeployment(service *Deployment.DeploymentService, orgId string, deployment models.Deployment) (*models.Deployment, error) {
+	cfg, err := config.RestoreLocalConfig()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to restore config: %w", err)
+	}
+	if cfg.AppId == nil {
+		return nil, nil
+	}
+	if _, err := resolveDeploymentApp(*cfg.AppId, deployment); err == nil {
+		return nil, nil
+	}
+	printer.Print(fmt.Sprintf("Adding app %q to deployment with default settings", *cfg.AppId))
+	updated, err := service.AddAppsToDeployment(orgId, deployment.ID, []string{*cfg.AppId})
+	if err != nil {
+		return nil, fmt.Errorf("failed to add app %q to deployment: %w", *cfg.AppId, err)
+	}
+	return updated, nil
 }
 
 func resolveDeploymentApp(identifier string, deployment models.Deployment) (*models.DeploymentApp, error) {
