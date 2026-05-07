@@ -12,6 +12,7 @@ import (
 type Database interface {
 	GetSecret(key SecretKey) (Secret, bool)
 	UpsertSecret(key SecretKey, data string, version int) error
+	UpsertSecrets(updates []SecretUpdate) error
 }
 
 type database struct {
@@ -32,6 +33,12 @@ type Secret struct {
 	Hash    string `json:"hash"`
 }
 
+type SecretUpdate struct {
+	Key     SecretKey
+	Data    string
+	Version int
+}
+
 func newSecret(data string, version int) Secret {
 	hash := sha256.New()
 
@@ -47,28 +54,46 @@ func newSecret(data string, version int) Secret {
 }
 
 func (db *database) GetSecret(key SecretKey) (Secret, bool) {
-	secret, ok := db.Secrets[key.ProjectId][key.AppId][key.EnvName]
+	project, ok := db.Secrets[key.ProjectId]
+	if !ok {
+		return Secret{}, false
+	}
+	app, ok := project[key.AppId]
+	if !ok {
+		return Secret{}, false
+	}
+	secret, ok := app[key.EnvName]
 	return secret, ok
 }
 
 // UpsertSecret saves a secret to the database.
 // Data will be hashed before saving
 func (db *database) UpsertSecret(key SecretKey, data string, version int) error {
+	return db.UpsertSecrets([]SecretUpdate{{
+		Key:     key,
+		Data:    data,
+		Version: version,
+	}})
+}
+
+func (db *database) UpsertSecrets(updates []SecretUpdate) error {
 	if db.Secrets == nil {
 		db.Secrets = make(map[string]map[string]map[string]Secret)
 	}
 
-	// Initialize the nested maps if they don't exist
-	if _, ok := db.Secrets[key.ProjectId]; !ok {
-		db.Secrets[key.ProjectId] = make(map[string]map[string]Secret)
-	}
-	if _, ok := db.Secrets[key.ProjectId][key.AppId]; !ok {
-		db.Secrets[key.ProjectId][key.AppId] = make(map[string]Secret)
-	}
+	for _, update := range updates {
+		key := update.Key
 
-	secret := newSecret(data, version)
+		// Initialize the nested maps if they don't exist
+		if _, ok := db.Secrets[key.ProjectId]; !ok {
+			db.Secrets[key.ProjectId] = make(map[string]map[string]Secret)
+		}
+		if _, ok := db.Secrets[key.ProjectId][key.AppId]; !ok {
+			db.Secrets[key.ProjectId][key.AppId] = make(map[string]Secret)
+		}
 
-	db.Secrets[key.ProjectId][key.AppId][key.EnvName] = secret
+		db.Secrets[key.ProjectId][key.AppId][key.EnvName] = newSecret(update.Data, update.Version)
+	}
 
 	return save(*db)
 }

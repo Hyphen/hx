@@ -17,3 +17,8 @@ func (m *MockDatabase) UpsertSecret(key SecretKey, data string, version int) err
 	args := m.Called(key, data, version)
 	return args.Error(0)
 }
+
+func (m *MockDatabase) UpsertSecrets(updates []SecretUpdate) error {
+	args := m.Called(updates)
+	return args.Error(0)
+}

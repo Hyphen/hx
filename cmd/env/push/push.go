@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secret"
+	"github.com/Hyphen/cli/internal/timing"
 	"github.com/Hyphen/cli/internal/vinz"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
@@ -19,6 +21,8 @@ import (
 
 var Silent bool = false
 var printer *cprint.CPrinter
+
+const maxConcurrentEnvOps = 4
 
 var PushCmd = &cobra.Command{
 	Use:   "push [environment]",
@@ -50,26 +54,49 @@ After pushing, all environment variables will be securely stored in Hyphen and a
 }
 
 func RunPush(args []string, cmd *cobra.Command) error {
-	config, err := config.RestoreConfig()
-	if err != nil {
+	recorder := timing.NewRecorder()
+	defer recorder.Print(printer, "env push")
+
+	var cfg config.Config
+	if err := recorder.Measure("config load", func() error {
+		var err error
+		cfg, err = config.RestoreConfig()
 		return err
-	}
-	secret, _, err := secret.LoadSecret(config.OrganizationId, *config.ProjectId)
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 
-	return RunPushUsingSecret(args, secret, cmd)
+	var secretValue models.Secret
+	if err := recorder.Measure("secret load", func() error {
+		var err error
+		secretValue, _, err = secret.LoadSecret(cfg.OrganizationId, *cfg.ProjectId)
+		return err
+	}); err != nil {
+		return err
+	}
+
+	return runPushUsingSecret(args, secretValue, cmd, recorder)
 }
 
 func RunPushUsingSecret(args []string, secret models.Secret, cmd *cobra.Command) error {
-	config, err := config.RestoreConfig()
-	if err != nil {
+	recorder := timing.NewRecorder()
+	defer recorder.Print(printer, "env push")
+
+	return runPushUsingSecret(args, secret, cmd, recorder)
+}
+
+func runPushUsingSecret(args []string, secret models.Secret, cmd *cobra.Command, recorder *timing.Recorder) error {
+	var cfg config.Config
+	if err := recorder.Measure("config load", func() error {
+		var err error
+		cfg, err = config.RestoreConfig()
+		return err
+	}); err != nil {
 		return err
 	}
 
 	// Check if this is a monorepo
-	if config.IsMonorepoProject() && config.Project != nil {
+	if cfg.IsMonorepoProject() && cfg.Project != nil {
 		// Store current directory
 		currentDir, err := os.Getwd()
 		if err != nil {
@@ -77,7 +104,7 @@ func RunPushUsingSecret(args []string, secret models.Secret, cmd *cobra.Command)
 		}
 
 		// Push for each workspace member
-		for _, memberDir := range config.Project.Apps {
+		for _, memberDir := range cfg.Project.Apps {
 			if !Silent {
 				printer.Print(fmt.Sprintf("Pushing for workspace member: %s", memberDir))
 			}
@@ -90,7 +117,7 @@ func RunPushUsingSecret(args []string, secret models.Secret, cmd *cobra.Command)
 			}
 
 			// Run push for this member
-			err = pushForMember(args, secret, cmd)
+			err = pushForMember(args, secret, cmd, recorder)
 			if err != nil {
 				printer.Warning(fmt.Sprintf("Failed to push for member %s: %s", memberDir, err))
 			}
@@ -106,18 +133,26 @@ func RunPushUsingSecret(args []string, secret models.Secret, cmd *cobra.Command)
 	}
 
 	// If not a monorepo, proceed with regular push
-	return pushForMember(args, secret, cmd)
+	return pushForMember(args, secret, cmd, recorder)
 }
 
 // pushForMember contains the original push logic
-func pushForMember(args []string, secret models.Secret, cmd *cobra.Command) error {
-	config, err := config.RestoreConfig()
-	if err != nil {
+func pushForMember(args []string, secret models.Secret, cmd *cobra.Command, recorder *timing.Recorder) error {
+	var cfg config.Config
+	if err := recorder.Measure("config load", func() error {
+		var err error
+		cfg, err = config.RestoreConfig()
+		return err
+	}); err != nil {
 		return err
 	}
 
-	db, err := database.Restore()
-	if err != nil {
+	var db database.Database
+	if err := recorder.Measure("database load", func() error {
+		var err error
+		db, err = database.Restore()
+		return err
+	}); err != nil {
 		return err
 	}
 
@@ -150,22 +185,40 @@ func pushForMember(args []string, secret models.Secret, cmd *cobra.Command) erro
 		}
 	}
 
-	if err := service.checkIfLocalEnvsExistAsEnvironments(envsToPush, orgId, projectId); err != nil {
+	cloudEnvs, err := service.loadPushRemoteState(envsToPush, orgId, appId, projectId, recorder)
+	if err != nil {
 		return err
 	}
 
-	for _, envName := range envsToPush {
-		e, err := env.GetLocalEncryptedEnv(envName, nil, secret)
-		if err != nil {
-			printer.Error(cmd, err)
+	var results []pushEnvResult
+	if err := recorder.Measure("transfer work", func() error {
+		results = service.pushEnvsConcurrently(orgId, appId, secret, cfg, envsToPush, cloudEnvs)
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	var updates []database.SecretUpdate
+	for _, result := range results {
+		if result.err != nil {
+			printer.Error(cmd, result.err)
 			continue
 		}
-		err, skippable := service.putEnv(orgId, envName, appId, e, secret, config, &skippedEnvs)
-		if err != nil {
-			printer.Error(cmd, err)
+		if result.skipped {
+			skippedEnvs = append(skippedEnvs, result.envName)
 			continue
-		} else if !skippable {
-			envsPushed = append(envsPushed, envName)
+		}
+		envsPushed = append(envsPushed, result.envName)
+		if result.hasUpdate {
+			updates = append(updates, result.update)
+		}
+	}
+
+	if len(updates) > 0 {
+		if err := recorder.Measure("db update", func() error {
+			return service.db.UpsertSecrets(updates)
+		}); err != nil {
+			return err
 		}
 	}
 
@@ -189,7 +242,63 @@ func newService(envService env.EnvServicer, db database.Database, vinzService vi
 	}
 }
 
-func (s *service) putEnv(orgID, envName, appID string, e models.Env, currentSecret models.Secret, config config.Config, skippedEnvs *[]string) (err error, skippable bool) {
+type pushEnvResult struct {
+	index     int
+	envName   string
+	skipped   bool
+	update    database.SecretUpdate
+	hasUpdate bool
+	err       error
+}
+
+func (s *service) pushEnvsConcurrently(orgID, appID string, currentSecret models.Secret, config config.Config, envNames []string, cloudEnvs map[string]models.Env) []pushEnvResult {
+	results := make([]pushEnvResult, len(envNames))
+	sem := make(chan struct{}, maxConcurrentEnvOps)
+	var wg sync.WaitGroup
+
+	for i, envName := range envNames {
+		i := i
+		envName := envName
+		var cloudEnv *models.Env
+		if e, ok := cloudEnvs[envName]; ok {
+			e := e
+			cloudEnv = &e
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			result := s.pushEnv(orgID, envName, appID, currentSecret, config, cloudEnv)
+			result.index = i
+			results[i] = result
+		}()
+	}
+
+	wg.Wait()
+	return results
+}
+
+func (s *service) pushEnv(orgID, envName, appID string, currentSecret models.Secret, config config.Config, cloudEnv *models.Env) pushEnvResult {
+	result := pushEnvResult{
+		envName: envName,
+	}
+
+	envFileName, err := env.GetFileName(envName)
+	if err != nil {
+		result.err = err
+		return result
+	}
+
+	localEnv, err := env.New(envFileName)
+	if err != nil {
+		result.err = err
+		return result
+	}
+	plainData := localEnv.Data
+
 	// Check local environment
 	currentLocalEnv, exists := s.db.GetSecret(database.SecretKey{
 		ProjectId: *config.ProjectId,
@@ -197,73 +306,139 @@ func (s *service) putEnv(orgID, envName, appID string, e models.Env, currentSecr
 		EnvName:   envName,
 	})
 
-	var replacingSecretKeyID int64 = 0
-	if exists {
-		err, skippable := s.validateLocalEnv(&currentLocalEnv, &e, currentSecret)
-		if err != nil {
-			return err, false
-		}
+	latestCloudEnv, cloudExists, err := s.resolveCloudEnvForPush(orgID, appID, envName, cloudEnv)
+	if err != nil {
+		result.err = err
+		return result
+	}
 
-		// get the latest secret key id for this env, if it exists
-		latestEnv, err := s.envService.GetEnvironmentEnv(orgID, appID, envName, nil, nil)
-		if err != nil {
-			// if this is not found, we'll use a nil secretKeyId - first push
-			if !errors.Is(err, errors.ErrNotFound) {
-				return err, false
-			}
-		} else {
-			replacingSecretKeyID = *latestEnv.SecretKeyID
-		}
+	replacingSecretKeyID := currentSecret.SecretKeyId
+	if cloudExists && latestCloudEnv.SecretKeyID != nil {
+		replacingSecretKeyID = *latestCloudEnv.SecretKeyID
+	}
 
-		if skippable && currentSecret.SecretKeyId == replacingSecretKeyID {
-			*skippedEnvs = append(*skippedEnvs, envName)
-			return nil, true
-		}
+	if exists && cloudExists && currentLocalEnv.Hash == localEnv.HashData() && currentSecret.SecretKeyId == replacingSecretKeyID {
+		result.skipped = true
+		return result
 	}
 
 	// try pushing version+1
-	newVersion := currentLocalEnv.Version + 1
-	e.Version = &newVersion
+	newVersion := nextEnvVersion(currentLocalEnv, exists, latestCloudEnv, cloudExists)
+	localEnv.Version = &newVersion
+	localEnv.SecretKeyID = &currentSecret.SecretKeyId
+
+	envEncryptedData, err := localEnv.EncryptData(currentSecret)
+	if err != nil {
+		result.err = err
+		return result
+	}
+	localEnv.Data = envEncryptedData
 
 	// Update cloud environment
-	if err := s.envService.PutEnvironmentEnv(orgID, appID, envName, replacingSecretKeyID, e); err != nil {
+	if err := s.envService.PutEnvironmentEnv(orgID, appID, envName, replacingSecretKeyID, localEnv); err != nil {
 		// Workaround for apix#1599: API returns 400 "secretKeyId must be >= 1" when secretKeyId is 0.
 		// This happens for new environments. Retry with the project's secret key.
 		if strings.Contains(err.Error(), "secretKeyId must be >= 1") {
-			if retryErr := s.envService.PutEnvironmentEnv(orgID, appID, envName, currentSecret.SecretKeyId, e); retryErr != nil {
-				return fmt.Errorf("failed to update cloud %s environment: %w", envName, retryErr), false
+			if retryErr := s.envService.PutEnvironmentEnv(orgID, appID, envName, currentSecret.SecretKeyId, localEnv); retryErr != nil {
+				result.err = fmt.Errorf("failed to update cloud %s environment: %w", envName, retryErr)
+				return result
 			}
 		} else {
-			return fmt.Errorf("failed to update cloud %s environment: %w", envName, err), false
+			result.err = fmt.Errorf("failed to update cloud %s environment: %w", envName, err)
+			return result
 		}
 	}
 
-	// Update local environment
-	newEnvDcrypted, err := e.DecryptData(currentSecret)
-	if err != nil {
-		return err, false
+	result.update = database.SecretUpdate{
+		Key: database.SecretKey{
+			ProjectId: *config.ProjectId,
+			AppId:     *config.AppId,
+			EnvName:   envName,
+		},
+		Data:    plainData,
+		Version: newVersion,
 	}
-	if err := s.db.UpsertSecret(database.SecretKey{
-		ProjectId: *config.ProjectId,
-		AppId:     *config.AppId,
-		EnvName:   envName,
-	}, newEnvDcrypted, currentLocalEnv.Version+1); err != nil {
-		return fmt.Errorf("failed to save local %s environment: %w", envName, err), false
-	}
+	result.hasUpdate = true
 
-	return nil, false
+	return result
 }
 
-func (s *service) validateLocalEnv(local *database.Secret, new *models.Env, secret models.Secret) (err error, skippable bool) {
-	newEnvDcrypted, err := new.DecryptData(secret)
-	if err != nil {
-		return err, false
+func (s *service) resolveCloudEnvForPush(orgID, appID, envName string, cloudEnv *models.Env) (models.Env, bool, error) {
+	if cloudEnv == nil {
+		return models.Env{}, false, nil
 	}
-	if local.Hash == models.HashData(newEnvDcrypted) {
-		return nil, true
+	if cloudEnv.SecretKeyID != nil {
+		return *cloudEnv, true, nil
 	}
 
-	return nil, false
+	latestEnv, err := s.envService.GetEnvironmentEnv(orgID, appID, envName, nil, nil)
+	if err != nil {
+		if errors.Is(err, errors.ErrNotFound) {
+			return models.Env{}, false, nil
+		}
+		return models.Env{}, false, err
+	}
+
+	return latestEnv, true, nil
+}
+
+func nextEnvVersion(local database.Secret, localExists bool, cloud models.Env, cloudExists bool) int {
+	if localExists && local.Version > 0 {
+		return local.Version + 1
+	}
+
+	if cloudExists && cloud.Version != nil && *cloud.Version > 0 {
+		return *cloud.Version + 1
+	}
+
+	return 1
+}
+
+func (s *service) loadPushRemoteState(envs []string, orgId, appId, projectId string, recorder *timing.Recorder) (map[string]models.Env, error) {
+	var environments []models.Environment
+	var cloudEnvs []models.Env
+
+	if err := recorder.Measure("remote list", func() error {
+		var wg sync.WaitGroup
+		var environmentsErr error
+		var cloudEnvsErr error
+
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			environments, environmentsErr = s.envService.ListEnvironments(orgId, projectId, 100, 1)
+		}()
+		go func() {
+			defer wg.Done()
+			cloudEnvs, cloudEnvsErr = s.envService.ListEnvs(orgId, appId, 100, 1)
+		}()
+		wg.Wait()
+
+		if environmentsErr != nil {
+			return environmentsErr
+		}
+		return cloudEnvsErr
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := validateLocalEnvsExistAsEnvironments(envs, environments); err != nil {
+		return nil, err
+	}
+
+	return pushEnvMapByName(cloudEnvs), nil
+}
+
+func pushEnvMapByName(allEnvs []models.Env) map[string]models.Env {
+	envsByName := make(map[string]models.Env, len(allEnvs))
+	for _, e := range allEnvs {
+		envName := "default"
+		if e.ProjectEnv != nil {
+			envName = e.ProjectEnv.AlternateID
+		}
+		envsByName[envName] = e
+	}
+	return envsByName
 }
 
 func (s *service) checkIfLocalEnvsExistAsEnvironments(envs []string, orgId, projectId string) error {
@@ -271,6 +446,10 @@ func (s *service) checkIfLocalEnvsExistAsEnvironments(envs []string, orgId, proj
 	if err != nil {
 		return err
 	}
+	return validateLocalEnvsExistAsEnvironments(envs, environments)
+}
+
+func validateLocalEnvsExistAsEnvironments(envs []string, environments []models.Environment) error {
 	mapEnvs := make(map[string]bool)
 	for _, env := range environments {
 		mapEnvs[env.AlternateID] = true
