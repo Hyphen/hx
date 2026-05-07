@@ -3,12 +3,14 @@ package pull
 import (
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/secret"
+	"github.com/Hyphen/cli/internal/timing"
 	"github.com/Hyphen/cli/internal/vinz"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
@@ -24,6 +26,8 @@ var (
 	versionPtr *int = nil
 	printer    *cprint.CPrinter
 )
+
+const maxConcurrentEnvOps = 4
 
 var PullCmd = &cobra.Command{
 	Use:   "pull [environment]",
@@ -46,6 +50,7 @@ After pulling, all environment variables will be locally available and ready for
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
+		versionPtr = nil
 		if version != 0 {
 			versionPtr = &version
 		}
@@ -57,13 +62,20 @@ After pulling, all environment variables will be locally available and ready for
 }
 
 func RunPull(args []string, forceFlag bool) error {
-	config, err := config.RestoreConfig()
-	if err != nil {
+	recorder := timing.NewRecorder()
+	defer recorder.Print(printer, "env pull")
+
+	var cfg config.Config
+	if err := recorder.Measure("config load", func() error {
+		var err error
+		cfg, err = config.RestoreConfig()
+		return err
+	}); err != nil {
 		return err
 	}
 
 	// Check if this is a monorepo
-	if config.IsMonorepoProject() && config.Project != nil {
+	if cfg.IsMonorepoProject() && cfg.Project != nil {
 		// Store current directory
 		currentDir, err := os.Getwd()
 		if err != nil {
@@ -71,7 +83,7 @@ func RunPull(args []string, forceFlag bool) error {
 		}
 
 		// Pull for each workspace app
-		for _, appDir := range config.Project.Apps {
+		for _, appDir := range cfg.Project.Apps {
 			if !Silent {
 				printer.Print(fmt.Sprintf("Pulling for workspace app: %s", appDir))
 			}
@@ -84,7 +96,7 @@ func RunPull(args []string, forceFlag bool) error {
 			}
 
 			// Run pull for this app
-			err = pullForApp(args, forceFlag)
+			err = pullForApp(args, forceFlag, recorder)
 			if err != nil {
 				printer.Warning(fmt.Sprintf("Failed to pull for app %s: %s", appDir, err))
 			}
@@ -100,12 +112,16 @@ func RunPull(args []string, forceFlag bool) error {
 	}
 
 	// If not a monorepo, proceed with regular pull for top-level app
-	return pullForApp(args, forceFlag)
+	return pullForApp(args, forceFlag, recorder)
 }
 
-func pullForApp(args []string, forceFlag bool) error {
-	db, err := database.Restore()
-	if err != nil {
+func pullForApp(args []string, forceFlag bool, recorder *timing.Recorder) error {
+	var db database.Database
+	if err := recorder.Measure("database load", func() error {
+		var err error
+		db, err = database.Restore()
+		return err
+	}); err != nil {
 		return err
 	}
 
@@ -136,14 +152,18 @@ func pullForApp(args []string, forceFlag bool) error {
 		envName = args[0]
 	}
 
-	secret, _, err := secret.LoadSecret(config.OrganizationId, *config.ProjectId)
-	if err != nil {
+	var secretValue models.Secret
+	if err := recorder.Measure("secret load", func() error {
+		var err error
+		secretValue, _, err = secret.LoadSecret(config.OrganizationId, *config.ProjectId)
+		return err
+	}); err != nil {
 		return err
 	}
 
 	switch envName {
 	case "": // ALL
-		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId, secret, config, forceFlag)
+		pulledEnvs, err := service.getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId, secretValue, config, forceFlag, recorder)
 		if err != nil {
 			return err
 		}
@@ -153,7 +173,7 @@ func pullForApp(args []string, forceFlag bool) error {
 		}
 		return nil
 	case "default":
-		if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, secret, config, forceFlag); err != nil {
+		if err = service.saveDecryptedEnvIntoFile(orgId, "default", appId, secretValue, config, forceFlag, nil, recorder); err != nil {
 			return err
 		}
 
@@ -166,7 +186,7 @@ func pullForApp(args []string, forceFlag bool) error {
 		if err != nil {
 			return err
 		}
-		if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, secret, config, forceFlag); err != nil {
+		if err = service.saveDecryptedEnvIntoFile(orgId, envName, appId, secretValue, config, forceFlag, nil, recorder); err != nil {
 			return err
 		}
 
@@ -208,11 +228,50 @@ func (s *service) checkForEnvironment(orgId, envName, projectId string) error {
 	return nil
 }
 
-func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secret models.Secret, config config.Config, force bool) error {
-	envFileName, err := env.GetFileName(envName)
-	if err != nil {
+type pullEnvResult struct {
+	index     int
+	envName   string
+	fileName  string
+	update    database.SecretUpdate
+	hasUpdate bool
+	err       error
+}
+
+func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secret models.Secret, cfg config.Config, force bool, listedEnv *models.Env, recorder *timing.Recorder) error {
+	var result pullEnvResult
+	if err := recorder.Measure("transfer work", func() error {
+		result = s.pullEnv(orgId, envName, appId, secret, cfg, force, listedEnv)
+		return result.err
+	}); err != nil {
 		return err
 	}
+
+	if result.hasUpdate {
+		if err := recorder.Measure("db update", func() error {
+			return s.db.UpsertSecrets([]database.SecretUpdate{result.update})
+		}); err != nil {
+			return err
+		}
+	}
+
+	if result.fileName != "" {
+		_ = gitutil.EnsureGitignore(result.fileName)
+	}
+
+	return nil
+}
+
+func (s *service) pullEnv(orgId, envName, appId string, secret models.Secret, cfg config.Config, force bool, listedEnv *models.Env) pullEnvResult {
+	result := pullEnvResult{
+		envName: envName,
+	}
+
+	envFileName, err := env.GetFileName(envName)
+	if err != nil {
+		result.err = err
+		return result
+	}
+	result.fileName = envFileName
 
 	_, err = os.Stat(envFileName)
 	fileExists := !os.IsNotExist(err)
@@ -220,120 +279,223 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secret 
 	if fileExists && !force {
 		currentLocal, err := env.New(envFileName)
 		if err != nil {
-			return err
+			result.err = err
+			return result
 		}
 
 		currentLocalSecret, dbSecretExists := s.db.GetSecret(database.SecretKey{
-			ProjectId: *config.ProjectId,
-			AppId:     *config.AppId,
+			ProjectId: *cfg.ProjectId,
+			AppId:     *cfg.AppId,
 			EnvName:   envName,
 		})
 		if dbSecretExists {
 			actual := currentLocal.HashData()
 			expectedHash := currentLocalSecret.Hash
 			if actual != expectedHash && !force {
-				return fmt.Errorf("local \"%s\" environment has been modified. Use --force to overwrite", envName)
+				result.err = fmt.Errorf("local \"%s\" environment has been modified. Use --force to overwrite", envName)
+				return result
 			}
 		}
 	}
 
-	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName, &secret.SecretKeyId, versionPtr)
-
-	// Case 1: Error occurred and no version specified
-	if err != nil && versionPtr == nil {
-		return err
+	e, err := s.getEnvPayloadForPull(orgId, appId, envName, secret, listedEnv)
+	if err != nil {
+		result.err = err
+		return result
 	}
 
-	// Case 2: Error occurred and version specified
-	if err != nil && versionPtr != nil {
-		// Check if it's a NotFound error
-		if !errors.Is(err, errors.ErrNotFound) {
-			return err
-		}
-
-		// Handle NotFound error
-		if !Silent {
-			printer.Warning(fmt.Sprintf("No version found for environment %s. Pulling the latest version.", envName))
-		}
-
-		// Retry without version
-		e, err = s.envService.GetEnvironmentEnv(orgId, appId, envName, &secret.SecretKeyId, nil)
-		if err != nil {
-			return err
-		}
+	if e.Version == nil {
+		result.err = fmt.Errorf("remote \"%s\" environment has no version", envName)
+		return result
 	}
 
 	envDataDecrypted, err := e.DecryptData(secret)
 	if err != nil {
-		return err
+		result.err = err
+		return result
 	}
 
-	if err := s.db.UpsertSecret(
-		database.SecretKey{
-			ProjectId: *config.ProjectId,
-			AppId:     *config.AppId,
+	if err := os.WriteFile(envFileName, []byte(envDataDecrypted), 0600); err != nil {
+		result.err = fmt.Errorf("failed to save decrypted environment %s to file %s: %w", envName, envFileName, err)
+		return result
+	}
+
+	result.update = database.SecretUpdate{
+		Key: database.SecretKey{
+			ProjectId: *cfg.ProjectId,
+			AppId:     *cfg.AppId,
 			EnvName:   envName,
 		},
-		envDataDecrypted, *e.Version); err != nil {
-		return err
+		Data:    envDataDecrypted,
+		Version: *e.Version,
 	}
+	result.hasUpdate = true
 
-	if _, err = e.DecryptVarsAndSaveIntoFile(envFileName, secret); err != nil {
-		return fmt.Errorf("failed to save decrypted environment: %s, variables to file: %s", envName, envFileName)
-	}
-
-	// attempt to add this to .gitignore for the user. Do not fail out if we can't
-	_ = gitutil.EnsureGitignore(envFileName)
-
-	return nil
+	return result
 }
 
-func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId string, secret models.Secret, config config.Config, force bool) ([]string, error) {
-	// Currently, api/organizations/:orgId/dot-envs returns all stored ENV files, even if the environment has been deleted
-	allEnvs, err := s.envService.ListEnvs(orgId, appId, 100, 1)
-	if err != nil {
-		return nil, err
+func (s *service) getEnvPayloadForPull(orgId, appId, envName string, secret models.Secret, listedEnv *models.Env) (models.Env, error) {
+	if versionPtr == nil && listedEnv != nil && listedEnv.Data != "" && listedEnv.Version != nil &&
+		listedEnv.SecretKeyID != nil && *listedEnv.SecretKeyID == secret.SecretKeyId {
+		return *listedEnv, nil
 	}
 
-	// Get the current list of environments that doesn't include deleted ones
-	currentEnvironments, err := s.envService.ListEnvironments(orgId, projectId, 100, 1)
-	if err != nil {
+	e, err := s.envService.GetEnvironmentEnv(orgId, appId, envName, &secret.SecretKeyId, versionPtr)
+	if err == nil {
+		return e, nil
+	}
+
+	if versionPtr == nil || !errors.Is(err, errors.ErrNotFound) {
+		return models.Env{}, err
+	}
+
+	if !Silent {
+		printer.Warning(fmt.Sprintf("No version found for environment %s. Pulling the latest version.", envName))
+	}
+
+	return s.envService.GetEnvironmentEnv(orgId, appId, envName, &secret.SecretKeyId, nil)
+}
+
+func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId string, secret models.Secret, cfg config.Config, force bool, recorder *timing.Recorder) ([]string, error) {
+	var allEnvs []models.Env
+	var currentEnvironments []models.Environment
+
+	if err := recorder.Measure("remote list", func() error {
+		var wg sync.WaitGroup
+		var allErr error
+		var currentErr error
+
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			// Currently, api/organizations/:orgId/dot-envs returns all stored ENV files, even if the environment has been deleted.
+			allEnvs, allErr = s.envService.ListEnvs(orgId, appId, 100, 1)
+		}()
+		go func() {
+			defer wg.Done()
+			// Get the current list of environments that doesn't include deleted ones.
+			currentEnvironments, currentErr = s.envService.ListEnvironments(orgId, projectId, 100, 1)
+		}()
+		wg.Wait()
+
+		if allErr != nil {
+			return allErr
+		}
+		return currentErr
+	}); err != nil {
 		return nil, err
 	}
 
 	// Filters out the environments that have been deleted
 	envsSansDeleted := filterEnvsByCurrentEnvironments(allEnvs, currentEnvironments)
+	envsByName := envMapByName(allEnvs)
 
-	var pulledEnvs []string
-	for _, envName := range envsSansDeleted {
-		if err := s.saveDecryptedEnvIntoFile(orgId, envName, appId, secret, config, force); err != nil {
+	var results []pullEnvResult
+	if err := recorder.Measure("transfer work", func() error {
+		results = s.pullEnvsConcurrently(orgId, appId, secret, cfg, force, envsSansDeleted, envsByName)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	var (
+		pulledEnvs []string
+		updates    []database.SecretUpdate
+		files      []string
+	)
+	for _, result := range results {
+		if result.err != nil {
 			if !Silent {
-				printer.Warning(fmt.Sprintf("Failed to pull environment %s: %s", envName, err))
+				printer.Warning(fmt.Sprintf("Failed to pull environment %s: %s", result.envName, result.err))
 			}
 			continue
 		}
-		pulledEnvs = append(pulledEnvs, envName)
+		pulledEnvs = append(pulledEnvs, result.envName)
+		if result.hasUpdate {
+			updates = append(updates, result.update)
+		}
+		if result.fileName != "" {
+			files = append(files, result.fileName)
+		}
+	}
 
+	if len(updates) > 0 {
+		if err := recorder.Measure("db update", func() error {
+			return s.db.UpsertSecrets(updates)
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	// Workaround for apix#1599: Create empty env files for environments that exist in
 	// ListEnvironments but not in ListEnvs (new environments with no secrets pushed yet)
 	missingEnvs := findMissingEnvironments(allEnvs, currentEnvironments)
-	for _, envName := range missingEnvs {
-		created, err := createEmptyEnvFile(envName)
-		if err != nil {
-			if !Silent {
-				printer.Warning(fmt.Sprintf("Failed to create empty environment file for %s: %s", envName, err))
+	if err := recorder.Measure("local file setup", func() error {
+		for _, file := range files {
+			_ = gitutil.EnsureGitignore(file)
+		}
+
+		for _, envName := range missingEnvs {
+			created, err := createEmptyEnvFile(envName)
+			if err != nil {
+				if !Silent {
+					printer.Warning(fmt.Sprintf("Failed to create empty environment file for %s: %s", envName, err))
+				}
+				continue
 			}
-			continue
+			if created {
+				printer.PrintVerbose(fmt.Sprintf("Creating empty .env file for missing new environment %s", envName))
+				pulledEnvs = append(pulledEnvs, envName)
+			}
 		}
-		if created {
-			printer.PrintVerbose(fmt.Sprintf("Creating empty .env file for missing new environment %s", envName))
-			pulledEnvs = append(pulledEnvs, envName)
-		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return pulledEnvs, nil
+}
+
+func (s *service) pullEnvsConcurrently(orgId, appId string, secret models.Secret, cfg config.Config, force bool, envNames []string, envsByName map[string]models.Env) []pullEnvResult {
+	results := make([]pullEnvResult, len(envNames))
+	sem := make(chan struct{}, maxConcurrentEnvOps)
+	var wg sync.WaitGroup
+
+	for i, envName := range envNames {
+		i := i
+		envName := envName
+		var listedEnv *models.Env
+		if e, ok := envsByName[envName]; ok {
+			e := e
+			listedEnv = &e
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			result := s.pullEnv(orgId, envName, appId, secret, cfg, force, listedEnv)
+			result.index = i
+			results[i] = result
+		}()
+	}
+
+	wg.Wait()
+	return results
+}
+
+func envMapByName(allEnvs []models.Env) map[string]models.Env {
+	envsByName := make(map[string]models.Env, len(allEnvs))
+	for _, e := range allEnvs {
+		envName := "default"
+		if e.ProjectEnv != nil {
+			envName = e.ProjectEnv.AlternateID
+		}
+		envsByName[envName] = e
+	}
+	return envsByName
 }
 
 func filterEnvsByCurrentEnvironments(allEnvs []models.Env, validEnvironments []models.Environment) []string {

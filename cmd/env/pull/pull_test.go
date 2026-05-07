@@ -9,6 +9,7 @@ import (
 	"github.com/Hyphen/cli/internal/database"
 	"github.com/Hyphen/cli/internal/env"
 	"github.com/Hyphen/cli/internal/models"
+	"github.com/Hyphen/cli/internal/timing"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/stretchr/testify/assert"
@@ -259,7 +260,7 @@ func TestGetAllEnvsAndDecryptIntoFiles(t *testing.T) {
 			}, nil)
 
 		secret := models.Secret{}
-		pulledEnvs, err := svc.getAllEnvsAndDecryptIntoFiles(theOrgId, theAppId, theProjectId, secret, cfg, false)
+		pulledEnvs, err := svc.getAllEnvsAndDecryptIntoFiles(theOrgId, theAppId, theProjectId, secret, cfg, false, timing.NewRecorder())
 
 		assert.NoError(t, err)
 		assert.Contains(t, pulledEnvs, "staging")
@@ -313,7 +314,7 @@ func TestGetAllEnvsAndDecryptIntoFiles(t *testing.T) {
 			Return(models.Env{}, assert.AnError)
 
 		secret := models.Secret{}
-		pulledEnvs, err := svc.getAllEnvsAndDecryptIntoFiles(theOrgId, theAppId, theProjectId, secret, cfg, false)
+		pulledEnvs, err := svc.getAllEnvsAndDecryptIntoFiles(theOrgId, theAppId, theProjectId, secret, cfg, false, timing.NewRecorder())
 
 		assert.NoError(t, err)
 		// No envs should be pulled because GetEnvironmentEnv fails
@@ -373,7 +374,7 @@ func TestGetAllEnvsAndDecryptIntoFiles(t *testing.T) {
 			Return(models.Env{}, assert.AnError)
 
 		secret := models.Secret{}
-		_, err := svc.getAllEnvsAndDecryptIntoFiles(theOrgId, theAppId, theProjectId, secret, cfg, false)
+		_, err := svc.getAllEnvsAndDecryptIntoFiles(theOrgId, theAppId, theProjectId, secret, cfg, false, timing.NewRecorder())
 
 		assert.NoError(t, err)
 
