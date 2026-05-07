@@ -237,10 +237,10 @@ type pullEnvResult struct {
 	err       error
 }
 
-func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secret models.Secret, config config.Config, force bool, listedEnv *models.Env, recorder *timing.Recorder) error {
+func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secret models.Secret, cfg config.Config, force bool, listedEnv *models.Env, recorder *timing.Recorder) error {
 	var result pullEnvResult
 	if err := recorder.Measure("transfer work", func() error {
-		result = s.pullEnv(orgId, envName, appId, secret, config, force, listedEnv)
+		result = s.pullEnv(orgId, envName, appId, secret, cfg, force, listedEnv)
 		return result.err
 	}); err != nil {
 		return err
@@ -261,7 +261,7 @@ func (s *service) saveDecryptedEnvIntoFile(orgId, envName, appId string, secret 
 	return nil
 }
 
-func (s *service) pullEnv(orgId, envName, appId string, secret models.Secret, config config.Config, force bool, listedEnv *models.Env) pullEnvResult {
+func (s *service) pullEnv(orgId, envName, appId string, secret models.Secret, cfg config.Config, force bool, listedEnv *models.Env) pullEnvResult {
 	result := pullEnvResult{
 		envName: envName,
 	}
@@ -284,8 +284,8 @@ func (s *service) pullEnv(orgId, envName, appId string, secret models.Secret, co
 		}
 
 		currentLocalSecret, dbSecretExists := s.db.GetSecret(database.SecretKey{
-			ProjectId: *config.ProjectId,
-			AppId:     *config.AppId,
+			ProjectId: *cfg.ProjectId,
+			AppId:     *cfg.AppId,
 			EnvName:   envName,
 		})
 		if dbSecretExists {
@@ -315,15 +315,15 @@ func (s *service) pullEnv(orgId, envName, appId string, secret models.Secret, co
 		return result
 	}
 
-	if err := os.WriteFile(envFileName, []byte(envDataDecrypted), 0644); err != nil {
+	if err := os.WriteFile(envFileName, []byte(envDataDecrypted), 0600); err != nil {
 		result.err = fmt.Errorf("failed to save decrypted environment: %s, variables to file: %s", envName, envFileName)
 		return result
 	}
 
 	result.update = database.SecretUpdate{
 		Key: database.SecretKey{
-			ProjectId: *config.ProjectId,
-			AppId:     *config.AppId,
+			ProjectId: *cfg.ProjectId,
+			AppId:     *cfg.AppId,
 			EnvName:   envName,
 		},
 		Data:    envDataDecrypted,
@@ -356,7 +356,7 @@ func (s *service) getEnvPayloadForPull(orgId, appId, envName string, secret mode
 	return s.envService.GetEnvironmentEnv(orgId, appId, envName, &secret.SecretKeyId, nil)
 }
 
-func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId string, secret models.Secret, config config.Config, force bool, recorder *timing.Recorder) ([]string, error) {
+func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId string, secret models.Secret, cfg config.Config, force bool, recorder *timing.Recorder) ([]string, error) {
 	var allEnvs []models.Env
 	var currentEnvironments []models.Environment
 
@@ -392,7 +392,7 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId string, 
 
 	var results []pullEnvResult
 	if err := recorder.Measure("transfer work", func() error {
-		results = s.pullEnvsConcurrently(orgId, appId, secret, config, force, envsSansDeleted, envsByName)
+		results = s.pullEnvsConcurrently(orgId, appId, secret, cfg, force, envsSansDeleted, envsByName)
 		return nil
 	}); err != nil {
 		return nil, err
@@ -456,7 +456,7 @@ func (s *service) getAllEnvsAndDecryptIntoFiles(orgId, appId, projectId string, 
 	return pulledEnvs, nil
 }
 
-func (s *service) pullEnvsConcurrently(orgId, appId string, secret models.Secret, config config.Config, force bool, envNames []string, envsByName map[string]models.Env) []pullEnvResult {
+func (s *service) pullEnvsConcurrently(orgId, appId string, secret models.Secret, cfg config.Config, force bool, envNames []string, envsByName map[string]models.Env) []pullEnvResult {
 	results := make([]pullEnvResult, len(envNames))
 	sem := make(chan struct{}, maxConcurrentEnvOps)
 	var wg sync.WaitGroup
@@ -476,7 +476,7 @@ func (s *service) pullEnvsConcurrently(orgId, appId string, secret models.Secret
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			result := s.pullEnv(orgId, envName, appId, secret, config, force, listedEnv)
+			result := s.pullEnv(orgId, envName, appId, secret, cfg, force, listedEnv)
 			result.index = i
 			results[i] = result
 		}()

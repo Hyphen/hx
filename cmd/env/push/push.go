@@ -251,7 +251,7 @@ type pushEnvResult struct {
 	err       error
 }
 
-func (s *service) pushEnvsConcurrently(orgID, appID string, currentSecret models.Secret, config config.Config, envNames []string, cloudEnvs map[string]models.Env) []pushEnvResult {
+func (s *service) pushEnvsConcurrently(orgID, appID string, currentSecret models.Secret, cfg config.Config, envNames []string, cloudEnvs map[string]models.Env) []pushEnvResult {
 	results := make([]pushEnvResult, len(envNames))
 	sem := make(chan struct{}, maxConcurrentEnvOps)
 	var wg sync.WaitGroup
@@ -271,7 +271,7 @@ func (s *service) pushEnvsConcurrently(orgID, appID string, currentSecret models
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			result := s.pushEnv(orgID, envName, appID, currentSecret, config, cloudEnv)
+			result := s.pushEnv(orgID, envName, appID, currentSecret, cfg, cloudEnv)
 			result.index = i
 			results[i] = result
 		}()
@@ -281,7 +281,7 @@ func (s *service) pushEnvsConcurrently(orgID, appID string, currentSecret models
 	return results
 }
 
-func (s *service) pushEnv(orgID, envName, appID string, currentSecret models.Secret, config config.Config, cloudEnv *models.Env) pushEnvResult {
+func (s *service) pushEnv(orgID, envName, appID string, currentSecret models.Secret, cfg config.Config, cloudEnv *models.Env) pushEnvResult {
 	result := pushEnvResult{
 		envName: envName,
 	}
@@ -301,8 +301,8 @@ func (s *service) pushEnv(orgID, envName, appID string, currentSecret models.Sec
 
 	// Check local environment
 	currentLocalEnv, exists := s.db.GetSecret(database.SecretKey{
-		ProjectId: *config.ProjectId,
-		AppId:     *config.AppId,
+		ProjectId: *cfg.ProjectId,
+		AppId:     *cfg.AppId,
 		EnvName:   envName,
 	})
 
@@ -351,8 +351,8 @@ func (s *service) pushEnv(orgID, envName, appID string, currentSecret models.Sec
 
 	result.update = database.SecretUpdate{
 		Key: database.SecretKey{
-			ProjectId: *config.ProjectId,
-			AppId:     *config.AppId,
+			ProjectId: *cfg.ProjectId,
+			AppId:     *cfg.AppId,
 			EnvName:   envName,
 		},
 		Data:    plainData,
