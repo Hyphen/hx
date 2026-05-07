@@ -37,12 +37,12 @@ func Ensure(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if err := ensureAuthenticated(); err != nil {
-		return err
-	}
-
 	if shouldFailWithoutPrompt(cmd) {
 		return fmt.Errorf("%s", guidance)
+	}
+
+	if err := ensureAuthenticated(); err != nil {
+		return err
 	}
 
 	if err := runInitApp(cmd, []string{}); err != nil {
@@ -115,7 +115,7 @@ func deployNeedsLocalAppConfig(cmd *cobra.Command, args []string) bool {
 }
 
 func shouldFailWithoutPrompt(cmd *cobra.Command) bool {
-	return boolFlag(cmd, "no") || isJSONOutput(cmd) || !isStdinTerminal()
+	return boolFlag(cmd, "no") || isJSONOutput(cmd) || (!isStdinTerminal() && !boolFlag(cmd, "yes"))
 }
 
 func isJSONOutput(cmd *cobra.Command) bool {

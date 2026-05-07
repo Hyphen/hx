@@ -159,6 +159,10 @@ func TestEnsure(t *testing.T) {
 		withTempDir(t)
 		restore := stubAutoInit(t)
 		restore.isStdinTerminal = func() bool { return false }
+		restore.ensureAuthenticated = func() error {
+			t.Fatalf("ensureAuthenticated should not be called when auto-init cannot run")
+			return nil
+		}
 		restore.runInitApp = func(cmd *cobra.Command, args []string) error {
 			t.Fatalf("runInitApp should not be called")
 			return nil
@@ -171,6 +175,30 @@ func TestEnsure(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "Run `hx init`") {
 			t.Fatalf("expected guidance error, got: %v", err)
+		}
+	})
+
+	t.Run("runs_init_noninteractively_when_yes_flag_is_set", func(t *testing.T) {
+		dir := withTempDir(t)
+		restore := stubAutoInit(t)
+		restore.isStdinTerminal = func() bool { return false }
+		called := false
+		restore.runInitApp = func(cmd *cobra.Command, args []string) error {
+			called = true
+			writeCompleteLocalConfig(t, dir)
+			return nil
+		}
+		cmd := commandForPath("build")
+		cmd.Flags().Bool("yes", false, "")
+		_ = cmd.Flags().Set("yes", "true")
+
+		err := Ensure(cmd, nil)
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !called {
+			t.Fatalf("expected runInitApp to be called")
 		}
 	})
 
@@ -258,8 +286,9 @@ func TestEnsure(t *testing.T) {
 }
 
 type autoInitStubs struct {
-	isStdinTerminal func() bool
-	runInitApp      func(*cobra.Command, []string) error
+	isStdinTerminal     func() bool
+	runInitApp          func(*cobra.Command, []string) error
+	ensureAuthenticated func() error
 }
 
 func stubAutoInit(t *testing.T) *autoInitStubs {
@@ -270,13 +299,14 @@ func stubAutoInit(t *testing.T) *autoInitStubs {
 	originalEnsureAuthenticated := ensureAuthenticated
 
 	stubs := &autoInitStubs{
-		isStdinTerminal: func() bool { return true },
-		runInitApp:      func(cmd *cobra.Command, args []string) error { return nil },
+		isStdinTerminal:     func() bool { return true },
+		runInitApp:          func(cmd *cobra.Command, args []string) error { return nil },
+		ensureAuthenticated: func() error { return nil },
 	}
 
 	isStdinTerminal = func() bool { return stubs.isStdinTerminal() }
 	runInitApp = func(cmd *cobra.Command, args []string) error { return stubs.runInitApp(cmd, args) }
-	ensureAuthenticated = func() error { return nil }
+	ensureAuthenticated = func() error { return stubs.ensureAuthenticated() }
 
 	t.Cleanup(func() {
 		isStdinTerminal = originalIsStdinTerminal
