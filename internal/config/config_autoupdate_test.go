@@ -26,7 +26,7 @@ func TestConfigIsAutoUpdateEnabled(t *testing.T) {
 
 func TestUpsertGlobalAutoUpdateEnabled(t *testing.T) {
 	tempHome := t.TempDir()
-	t.Setenv("HOME", tempHome)
+	setTestHome(t, tempHome)
 
 	if err := UpsertGlobalAutoUpdateEnabled(false); err != nil {
 		t.Fatalf("unexpected error writing auto-update setting: %v", err)
@@ -40,7 +40,7 @@ func TestUpsertGlobalAutoUpdateEnabled(t *testing.T) {
 
 func TestUpsertGlobalConfigPreservesAutoUpdateSetting(t *testing.T) {
 	tempHome := t.TempDir()
-	t.Setenv("HOME", tempHome)
+	setTestHome(t, tempHome)
 
 	if err := UpsertGlobalAutoUpdateEnabled(false); err != nil {
 		t.Fatalf("unexpected error writing auto-update setting: %v", err)
@@ -74,4 +74,11 @@ func mustReadGlobalConfig(t *testing.T, homeDir string) Config {
 	}
 
 	return cfg
+}
+
+func setTestHome(t *testing.T, homeDir string) {
+	t.Helper()
+
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
 }
