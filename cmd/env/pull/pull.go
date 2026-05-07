@@ -316,7 +316,7 @@ func (s *service) pullEnv(orgId, envName, appId string, secret models.Secret, cf
 	}
 
 	if err := os.WriteFile(envFileName, []byte(envDataDecrypted), 0600); err != nil {
-		result.err = fmt.Errorf("failed to save decrypted environment: %s, variables to file: %s", envName, envFileName)
+		result.err = fmt.Errorf("failed to save decrypted environment %s to file %s: %w", envName, envFileName, err)
 		return result
 	}
 

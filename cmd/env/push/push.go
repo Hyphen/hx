@@ -383,15 +383,14 @@ func (s *service) resolveCloudEnvForPush(orgID, appID, envName string, cloudEnv 
 }
 
 func nextEnvVersion(local database.Secret, localExists bool, cloud models.Env, cloudExists bool) int {
-	if localExists && local.Version > 0 {
-		return local.Version + 1
+	version := 0
+	if localExists && local.Version > version {
+		version = local.Version
 	}
-
-	if cloudExists && cloud.Version != nil && *cloud.Version > 0 {
-		return *cloud.Version + 1
+	if cloudExists && cloud.Version != nil && *cloud.Version > version {
+		version = *cloud.Version
 	}
-
-	return 1
+	return version + 1
 }
 
 func (s *service) loadPushRemoteState(envs []string, orgId, appId, projectId string, recorder *timing.Recorder) (map[string]models.Env, error) {

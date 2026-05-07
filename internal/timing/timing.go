@@ -24,6 +24,10 @@ func NewRecorder() *Recorder {
 }
 
 func (r *Recorder) Measure(label string, fn func() error) error {
+	if r == nil {
+		return fn()
+	}
+
 	started := time.Now()
 	err := fn()
 	r.Record(label, time.Since(started))

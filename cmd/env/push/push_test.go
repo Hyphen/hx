@@ -169,6 +169,21 @@ func TestPushEnv(t *testing.T) {
 	})
 }
 
+func TestNextEnvVersionUsesHighestKnownVersion(t *testing.T) {
+	cloudVersion := 7
+	assert.Equal(t, 8, nextEnvVersion(database.Secret{Version: 3}, true, models.Env{Version: &cloudVersion}, true))
+
+	cloudVersion = 2
+	assert.Equal(t, 6, nextEnvVersion(database.Secret{Version: 5}, true, models.Env{Version: &cloudVersion}, true))
+
+	assert.Equal(t, 6, nextEnvVersion(database.Secret{Version: 5}, true, models.Env{}, false))
+
+	cloudVersion = 4
+	assert.Equal(t, 5, nextEnvVersion(database.Secret{}, false, models.Env{Version: &cloudVersion}, true))
+
+	assert.Equal(t, 1, nextEnvVersion(database.Secret{}, false, models.Env{}, false))
+}
+
 func withEnvFile(t *testing.T, envName, contents string) {
 	t.Helper()
 
