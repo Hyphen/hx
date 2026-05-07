@@ -69,12 +69,17 @@ func init() {
 }
 
 func RunInitApp(cmd *cobra.Command, args []string) {
+	if err := RunInitAppE(cmd, args); err != nil {
+		printer.Error(cmd, err)
+	}
+}
+
+func RunInitAppE(cmd *cobra.Command, args []string) error {
 	printer = cprint.NewCPrinter(flags.VerboseFlag)
 
 	if err := isValidDirectory(cmd); err != nil {
-		printer.Error(cmd, err)
 		printer.Info("Please change to a project directory and try again.")
-		return
+		return err
 	}
 
 	appService := app.NewService()
@@ -82,23 +87,21 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 
 	orgID, err := flags.GetOrganizationID()
 	if err != nil {
-		printer.Error(cmd, err)
-		return
+		return err
 	}
 
 	appName, shouldContinue, err := GetAppName(cmd, args)
 	if err != nil {
-		printer.Error(cmd, err)
-		return
+		return err
 	}
 	//If the operation is canceled
 	if !shouldContinue {
-		return
+		return nil
 	}
 
 	appAlternateId := GetAppID(cmd, appName)
 	if appAlternateId == "" {
-		return
+		return nil
 	}
 
 	if config.ExistsLocal() {
@@ -109,31 +112,28 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 			} else {
 				printer.Info("Operation cancelled.")
 			}
-			return
+			return nil
 		}
 	}
 
 	projectID, err := flags.GetProjectID()
 	if err != nil {
-		printer.Error(cmd, err)
-		return
+		return err
 	}
 
 	newApp, err := appService.CreateApp(orgID, projectID, appAlternateId, appName)
 	if err != nil {
 		if !errors.Is(err, errors.ErrConflict) {
-			printer.Error(cmd, err)
-			return
+			return err
 		}
 
 		existingApp, handleErr := HandleExistingApp(cmd, *appService, orgID, appAlternateId)
 		if handleErr != nil {
-			printer.Error(cmd, handleErr)
-			return
+			return handleErr
 		}
 		if existingApp == nil {
 			printer.Info("Operation cancelled.")
-			return
+			return nil
 		}
 
 		newApp = *existingApp
@@ -149,14 +149,12 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 
 	err = config.InitializeConfig(mcl, config.ManifestConfigFile)
 	if err != nil {
-		printer.Error(cmd, err)
-		return
+		return err
 	}
 
 	ms, _, err := secret.LoadOrInitializeSecret(mcl.OrganizationId, *mcl.ProjectId)
 	if err != nil {
-		printer.Error(cmd, err)
-		return
+		return err
 	}
 
 	if err := gitutil.EnsureGitignore(secret.ManifestSecretFile); err != nil {
@@ -166,8 +164,7 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 	// List the environments for the project
 	environments, err := envService.ListEnvironments(orgID, *mcl.ProjectId, 100, 1)
 	if err != nil {
-		printer.Error(cmd, err)
-		return
+		return err
 	}
 
 	// Create an empty .env file for each environment, push it up, and add it to .gitignore
@@ -176,28 +173,27 @@ func RunInitApp(cmd *cobra.Command, args []string) {
 		envID := e.ID
 		err = CreateAndPushEmptyEnvFile(cmd, envService, mcl, ms, orgID, newApp.ID, envID, envName)
 		if err != nil {
-			printer.Error(cmd, err)
-			return
+			return err
 		}
 	}
 
 	err = CreateAndPushEmptyEnvFile(cmd, envService, mcl, ms, orgID, newApp.ID, "default", "default")
 	if err != nil {
-		printer.Error(cmd, err)
-		return
+		return err
 	}
 
 	err = CreateGitignoredFile(cmd, ".env.local")
 	if err != nil {
-		return
+		return err
 	}
 
 	err = entrypoint.CreateEntrypoint(true)
 	if err != nil {
-		return
+		return err
 	}
 
 	PrintInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID, projectID)
+	return nil
 }
 
 func GetAppName(cmd *cobra.Command, args []string) (string, bool, error) {
