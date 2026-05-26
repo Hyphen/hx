@@ -61,6 +61,43 @@ func TestHasCompleteLocalAppConfig(t *testing.T) {
 			t.Fatalf("expected complete local app config")
 		}
 	})
+
+	t.Run("returns_true_when_global_app_config_is_complete_and_local_is_missing", func(t *testing.T) {
+		withTempDir(t)
+		home := withTempHome(t)
+		writeCompleteGlobalConfig(t, home)
+
+		complete, err := HasCompleteLocalAppConfig()
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !complete {
+			t.Fatalf("expected complete global app config to satisfy the guard")
+		}
+	})
+
+	t.Run("returns_true_when_global_and_local_merge_to_complete", func(t *testing.T) {
+		dir := withTempDir(t)
+		home := withTempHome(t)
+		writeGlobalConfig(t, home, `{
+  "organization_id": "org_test",
+  "project_id": "proj_test"
+}`)
+		writeLocalConfig(t, dir, `{
+  "app_id": "app_test",
+  "app_alternate_id": "app-test"
+}`)
+
+		complete, err := HasCompleteLocalAppConfig()
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !complete {
+			t.Fatalf("expected merged global+local config to satisfy the guard")
+		}
+	})
 }
 
 func TestNeedsLocalAppConfig(t *testing.T) {
@@ -142,6 +179,23 @@ func TestEnsure(t *testing.T) {
 	t.Run("does_nothing_when_local_app_config_is_complete", func(t *testing.T) {
 		dir := withTempDir(t)
 		writeCompleteLocalConfig(t, dir)
+		restore := stubAutoInit(t)
+		restore.runInitApp = func(cmd *cobra.Command, args []string) error {
+			t.Fatalf("runInitApp should not be called")
+			return nil
+		}
+
+		err := Ensure(commandForPath("build"), nil)
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("does_nothing_when_global_app_config_is_complete_and_local_is_missing", func(t *testing.T) {
+		withTempDir(t)
+		home := withTempHome(t)
+		writeCompleteGlobalConfig(t, home)
 		restore := stubAutoInit(t)
 		restore.runInitApp = func(cmd *cobra.Command, args []string) error {
 			t.Fatalf("runInitApp should not be called")
@@ -364,5 +418,31 @@ func writeLocalConfig(t *testing.T, dir, contents string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, config.ManifestConfigFile), []byte(contents), 0644); err != nil {
 		t.Fatalf("failed to write local config: %v", err)
+	}
+}
+
+func withTempHome(t *testing.T) string {
+	t.Helper()
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	return home
+}
+
+func writeCompleteGlobalConfig(t *testing.T, home string) {
+	t.Helper()
+	writeGlobalConfig(t, home, `{
+  "organization_id": "org_test",
+  "project_id": "proj_test",
+  "app_id": "app_test",
+  "app_alternate_id": "app-test"
+}`)
+}
+
+func writeGlobalConfig(t *testing.T, home, contents string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(home, config.ManifestConfigFile), []byte(contents), 0644); err != nil {
+		t.Fatalf("failed to write global config: %v", err)
 	}
 }
