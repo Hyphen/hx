@@ -11,11 +11,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestHasCompleteLocalAppConfig(t *testing.T) {
+func TestHasCompleteAppConfig(t *testing.T) {
 	t.Run("returns_false_when_local_config_is_missing", func(t *testing.T) {
 		withTempDir(t)
 
-		complete, err := HasCompleteLocalAppConfig()
+		complete, err := HasCompleteAppConfig()
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -33,7 +33,7 @@ func TestHasCompleteLocalAppConfig(t *testing.T) {
   "app_id": "app_test"
 }`)
 
-		complete, err := HasCompleteLocalAppConfig()
+		complete, err := HasCompleteAppConfig()
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -52,7 +52,7 @@ func TestHasCompleteLocalAppConfig(t *testing.T) {
   "app_alternate_id": "app-test"
 }`)
 
-		complete, err := HasCompleteLocalAppConfig()
+		complete, err := HasCompleteAppConfig()
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -67,7 +67,7 @@ func TestHasCompleteLocalAppConfig(t *testing.T) {
 		home := withTempHome(t)
 		writeCompleteGlobalConfig(t, home)
 
-		complete, err := HasCompleteLocalAppConfig()
+		complete, err := HasCompleteAppConfig()
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -89,7 +89,7 @@ func TestHasCompleteLocalAppConfig(t *testing.T) {
   "app_alternate_id": "app-test"
 }`)
 
-		complete, err := HasCompleteLocalAppConfig()
+		complete, err := HasCompleteAppConfig()
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -100,7 +100,7 @@ func TestHasCompleteLocalAppConfig(t *testing.T) {
 	})
 }
 
-func TestNeedsLocalAppConfig(t *testing.T) {
+func TestNeedsAppConfig(t *testing.T) {
 	testCases := []struct {
 		name     string
 		path     []string
@@ -151,7 +151,7 @@ func TestNeedsLocalAppConfig(t *testing.T) {
 				tc.config(cmd)
 			}
 
-			actual := NeedsLocalAppConfig(cmd, tc.args)
+			actual := NeedsAppConfig(cmd, tc.args)
 
 			if actual != tc.expected {
 				t.Fatalf("expected %v, got %v", tc.expected, actual)
@@ -161,7 +161,7 @@ func TestNeedsLocalAppConfig(t *testing.T) {
 }
 
 func TestEnsure(t *testing.T) {
-	t.Run("does_nothing_when_command_does_not_need_local_app_config", func(t *testing.T) {
+	t.Run("does_nothing_when_command_does_not_need_app_config", func(t *testing.T) {
 		withTempDir(t)
 		restore := stubAutoInit(t)
 		restore.runInitApp = func(cmd *cobra.Command, args []string) error {
@@ -394,6 +394,13 @@ func withTempDir(t *testing.T) string {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to chdir to temp dir: %v", err)
 	}
+
+	// Isolate $HOME so tests don't pick up the developer's real ~/.hx when
+	// the guard reads merged global+local config. Tests that need to write
+	// a global config should call withTempHome to overlay a known location.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	t.Cleanup(func() {
 		if err := os.Chdir(originalDir); err != nil {
