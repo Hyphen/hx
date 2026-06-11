@@ -10,10 +10,10 @@ import (
 	"github.com/Hyphen/cli/internal/config"
 	Deployment "github.com/Hyphen/cli/internal/deployment"
 	"github.com/Hyphen/cli/internal/env"
+	hyphenapp "github.com/Hyphen/cli/internal/hyphenApp"
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/projects"
 	"github.com/Hyphen/cli/internal/user"
-	"github.com/Hyphen/cli/pkg/apiconf"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
@@ -341,8 +341,11 @@ func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 	if err != nil {
 		return result, fmt.Errorf("failed to create run: %w", err)
 	}
+	if run == nil {
+		return result, fmt.Errorf("failed to create run: empty response")
+	}
 
-	appUrl := fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), orgId, selectedDeployment.ID, run.ID)
+	appUrl := hyphenapp.DeploymentRunLinkForRun(orgId, &selectedDeployment, run)
 
 	result["runId"] = run.ID
 	result["deploymentUrl"] = appUrl
