@@ -341,8 +341,11 @@ func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 	if err != nil {
 		return result, fmt.Errorf("failed to create run: %w", err)
 	}
+	if run == nil {
+		return result, fmt.Errorf("failed to create run: empty response")
+	}
 
-	appUrl := hyphenapp.DeploymentRunLinkForRun(orgId, selectedDeployment, *run)
+	appUrl := hyphenapp.DeploymentRunLinkForRun(orgId, &selectedDeployment, run)
 
 	result["runId"] = run.ID
 	result["deploymentUrl"] = appUrl

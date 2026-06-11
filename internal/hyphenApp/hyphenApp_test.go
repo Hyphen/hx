@@ -24,7 +24,7 @@ func TestDeploymentRunLink(t *testing.T) {
 			},
 		}
 
-		link := DeploymentRunLink("org_123", deployment, "run_123")
+		link := DeploymentRunLink("org_123", &deployment, "run_123")
 
 		assert.Equal(t, "https://app.hyphen.ai/org_123/projects/project-alt/environments/env-alt/runs/run_123", link)
 	})
@@ -40,7 +40,7 @@ func TestDeploymentRunLink(t *testing.T) {
 			},
 		}
 
-		link := DeploymentRunLink("org_123", deployment, "run_123")
+		link := DeploymentRunLink("org_123", &deployment, "run_123")
 
 		assert.Equal(t, "https://app.hyphen.ai/org_123/projects/proj_123/environments/pevr_123/runs/run_123", link)
 	})
@@ -54,7 +54,7 @@ func TestDeploymentRunLink(t *testing.T) {
 			},
 		}
 
-		link := DeploymentRunLink("org_123", deployment, "run_123")
+		link := DeploymentRunLink("org_123", &deployment, "run_123")
 
 		assert.Equal(t, "https://app.hyphen.ai/org_123/deploy/depl_123/runs/run_123", link)
 	})
@@ -68,7 +68,7 @@ func TestDeploymentRunLink(t *testing.T) {
 			},
 		}
 
-		link := DeploymentRunLink("org_123", deployment, "run_123")
+		link := DeploymentRunLink("org_123", &deployment, "run_123")
 
 		assert.Equal(t, "https://app.hyphen.ai/org_123/deploy/depl_123/runs/run_123", link)
 	})
@@ -96,7 +96,7 @@ func TestDeploymentRunLinkForRun(t *testing.T) {
 			},
 		}
 
-		link := DeploymentRunLinkForRun("org_123", selectedDeployment, run)
+		link := DeploymentRunLinkForRun("org_123", &selectedDeployment, &run)
 
 		assert.Equal(t, "https://app.hyphen.ai/org_123/projects/project-alt/environments/env-alt/runs/run_123", link)
 	})
@@ -120,10 +120,17 @@ func TestDeploymentRunLinkForRun(t *testing.T) {
 			},
 		}
 
-		link := DeploymentRunLinkForRun("org_123", selectedDeployment, run)
+		link := DeploymentRunLinkForRun("org_123", &selectedDeployment, &run)
 
 		assert.Equal(t, "https://app.hyphen.ai/org_123/projects/project-alt/environments/env-alt/runs/run_123", link)
 	})
+}
+
+func TestDeploymentRunLinkNilInputs(t *testing.T) {
+	resetAppUrlConfig(t)
+
+	assert.Empty(t, DeploymentRunLink("org_123", nil, "run_123"))
+	assert.Empty(t, DeploymentRunLinkForRun("org_123", &models.Deployment{ID: "depl_123"}, nil))
 }
 
 func resetAppUrlConfig(t *testing.T) {

@@ -27,16 +27,24 @@ func DeploymentLink(organizationId, deploymentId string) string {
 	return fmt.Sprintf("%s/%s/deploy/%s", apiconf.GetBaseAppUrl(), organizationId, deploymentId)
 }
 
-func DeploymentRunLinkForRun(organizationId string, selectedDeployment models.Deployment, run models.DeploymentRun) string {
+func DeploymentRunLinkForRun(organizationId string, selectedDeployment *models.Deployment, run *models.DeploymentRun) string {
+	if run == nil {
+		return ""
+	}
+
 	deployment := selectedDeployment
-	if hasProjectEnvironmentRunPath(run.DeploymentSnapshot) {
-		deployment = run.DeploymentSnapshot
+	if hasProjectEnvironmentRunPath(&run.DeploymentSnapshot) {
+		deployment = &run.DeploymentSnapshot
 	}
 
 	return DeploymentRunLink(organizationId, deployment, run.ID)
 }
 
-func DeploymentRunLink(organizationId string, deployment models.Deployment, runId string) string {
+func DeploymentRunLink(organizationId string, deployment *models.Deployment, runId string) string {
+	if deployment == nil {
+		return ""
+	}
+
 	projectSegment := deploymentProjectSegment(deployment)
 	environmentSegment := deploymentEnvironmentSegment(deployment)
 
@@ -54,11 +62,15 @@ func DeploymentRunLink(organizationId string, deployment models.Deployment, runI
 	return fmt.Sprintf("%s/%s/deploy/%s/runs/%s", apiconf.GetBaseAppUrl(), organizationId, deployment.ID, runId)
 }
 
-func hasProjectEnvironmentRunPath(deployment models.Deployment) bool {
+func hasProjectEnvironmentRunPath(deployment *models.Deployment) bool {
 	return deploymentProjectSegment(deployment) != "" && deploymentEnvironmentSegment(deployment) != ""
 }
 
-func deploymentProjectSegment(deployment models.Deployment) string {
+func deploymentProjectSegment(deployment *models.Deployment) string {
+	if deployment == nil {
+		return ""
+	}
+
 	if deployment.Project.AlternateID != "" {
 		return deployment.Project.AlternateID
 	}
@@ -66,7 +78,11 @@ func deploymentProjectSegment(deployment models.Deployment) string {
 	return deployment.Project.ID
 }
 
-func deploymentEnvironmentSegment(deployment models.Deployment) string {
+func deploymentEnvironmentSegment(deployment *models.Deployment) string {
+	if deployment == nil {
+		return ""
+	}
+
 	if deployment.ProjectEnvironment.AlternateID != "" {
 		return deployment.ProjectEnvironment.AlternateID
 	}
