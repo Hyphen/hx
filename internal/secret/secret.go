@@ -44,6 +44,12 @@ func NewSecret(secretBase64 string) models.Secret {
 func LoadOrInitializeSecret(organizationId, projectIdOrAlternateId string) (models.Secret, SecretLocation, error) {
 	// First, attempt to load the secret
 	secret, location, err := LoadSecret(organizationId, projectIdOrAlternateId)
+	if err != nil {
+		// A load failure (auth error, transient Vinz failure, etc.) must not be
+		// treated as "no secret exists" — generating a new key here would orphan
+		// the existing one in Vinz. Surface the error instead of initializing.
+		return models.Secret{}, location, err
+	}
 	if location == SecretLocationNone {
 		initToLocation := SecretLocationVinz
 		if flags.LocalSecret {
@@ -64,6 +70,7 @@ func LoadOrInitializeSecret(organizationId, projectIdOrAlternateId string) (mode
 
 func LoadSecret(organizationId, projectIdOrAlternateId string) (models.Secret, SecretLocation, error) {
 	// Always default to looking in Vinz first, unless there is a LocalSecret flag.
+	var vinzErr error
 	if !flags.LocalSecret {
 		secret, err := getVinzService().GetKey(organizationId, projectIdOrAlternateId)
 		if err == nil {
@@ -72,6 +79,13 @@ func LoadSecret(organizationId, projectIdOrAlternateId string) (models.Secret, S
 				Base64SecretKey: secret.SecretKey,
 			}, SecretLocationVinz, nil
 		}
+		// Only a genuine 404 means the key does not exist yet. Any other error
+		// (401/403 auth failures, 5xx, network/timeouts) must NOT be treated as
+		// "no secret" — doing so lets callers generate a brand-new key and orphan
+		// the real one in Vinz. Remember it and surface it if no local fallback exists.
+		if !errors.Is(err, errors.ErrNotFound) {
+			vinzErr = err
+		}
 	}
 
 	if _, err := os.Stat(ManifestSecretFile); err == nil {
@@ -79,6 +93,10 @@ func LoadSecret(organizationId, projectIdOrAlternateId string) (models.Secret, S
 		if err == nil {
 			return secret, SecretLocationLocal, nil
 		}
+	}
+
+	if vinzErr != nil {
+		return models.Secret{}, SecretLocationNone, errors.Wrap(vinzErr, "Failed to load secret")
 	}
 
 	return models.Secret{}, SecretLocationNone, nil

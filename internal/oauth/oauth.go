@@ -238,8 +238,15 @@ func (s *OAuthService) StartOAuthServer() (*TokenResponse, error) {
 	}
 }
 
+// tokenExpirySkewSeconds treats a token as expired slightly before its actual
+// expiry so we proactively refresh instead of sending a token the server may
+// reject as expired due to clock skew or an expiry-boundary race. A rejected
+// (401) token can otherwise be misread downstream as "no secret exists" and
+// trigger generation of a new, orphaned Vinz key.
+const tokenExpirySkewSeconds = 60
+
 func (s *OAuthService) IsTokenExpired(expiryTime int64) bool {
-	return s.timeProvider.Now().Unix() > expiryTime
+	return s.timeProvider.Now().Unix() > expiryTime-tokenExpirySkewSeconds
 }
 
 func (s *OAuthService) RefreshToken(refreshToken string) (*TokenResponse, error) {

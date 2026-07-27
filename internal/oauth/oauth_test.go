@@ -98,8 +98,14 @@ func TestIsTokenExpired(t *testing.T) {
 
 	mockTime.On("Now").Return(time.Unix(1000000000, 0))
 
+	// Already past expiry.
 	assert.True(t, service.IsTokenExpired(999999999))
-	assert.False(t, service.IsTokenExpired(1000000001))
+	// At/after the skew boundary (expiry is at least buffer seconds out) — not expired.
+	assert.False(t, service.IsTokenExpired(1000000000+tokenExpirySkewSeconds))
+	assert.False(t, service.IsTokenExpired(1000000000+tokenExpirySkewSeconds+1))
+	// Within the skew buffer of expiry — treated as expired so we refresh early.
+	assert.True(t, service.IsTokenExpired(1000000001))
+	assert.True(t, service.IsTokenExpired(1000000000+tokenExpirySkewSeconds-1))
 
 	mockTime.AssertExpectations(t)
 }
