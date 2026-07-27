@@ -70,7 +70,6 @@ func LoadOrInitializeSecret(organizationId, projectIdOrAlternateId string) (mode
 
 func LoadSecret(organizationId, projectIdOrAlternateId string) (models.Secret, SecretLocation, error) {
 	// Always default to looking in Vinz first, unless there is a LocalSecret flag.
-	var vinzErr error
 	if !flags.LocalSecret {
 		secret, err := getVinzService().GetKey(organizationId, projectIdOrAlternateId)
 		if err == nil {
@@ -93,10 +92,6 @@ func LoadSecret(organizationId, projectIdOrAlternateId string) (models.Secret, S
 		if err == nil {
 			return secret, SecretLocationLocal, nil
 		}
-	}
-
-	if vinzErr != nil {
-		return models.Secret{}, SecretLocationNone, errors.Wrap(vinzErr, "Failed to load secret")
 	}
 
 	return models.Secret{}, SecretLocationNone, nil
