@@ -82,9 +82,9 @@ func LoadSecret(organizationId, projectIdOrAlternateId string) (models.Secret, S
 		// Only a genuine 404 means the key does not exist yet. Any other error
 		// (401/403 auth failures, 5xx, network/timeouts) must NOT be treated as
 		// "no secret" — doing so lets callers generate a brand-new key and orphan
-		// the real one in Vinz. Remember it and surface it if no local fallback exists.
+		// the real one in Vinz. Return the error immediately.
 		if !errors.Is(err, errors.ErrNotFound) {
-			vinzErr = err
+			return models.Secret{}, SecretLocationNone, errors.Wrap(err, "Failed to load secret")
 		}
 	}
 
