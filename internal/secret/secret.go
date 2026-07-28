@@ -44,6 +44,12 @@ func NewSecret(secretBase64 string) models.Secret {
 func LoadOrInitializeSecret(organizationId, projectIdOrAlternateId string) (models.Secret, SecretLocation, error) {
 	// First, attempt to load the secret
 	secret, location, err := LoadSecret(organizationId, projectIdOrAlternateId)
+	if err != nil {
+		// A load failure (auth error, transient Vinz failure, etc.) must not be
+		// treated as "no secret exists" — generating a new key here would orphan
+		// the existing one in Vinz. Surface the error instead of initializing.
+		return models.Secret{}, location, err
+	}
 	if location == SecretLocationNone {
 		initToLocation := SecretLocationVinz
 		if flags.LocalSecret {
@@ -71,6 +77,13 @@ func LoadSecret(organizationId, projectIdOrAlternateId string) (models.Secret, S
 				SecretKeyId:     secret.SecretKeyId,
 				Base64SecretKey: secret.SecretKey,
 			}, SecretLocationVinz, nil
+		}
+		// Only a genuine 404 means the key does not exist yet. Any other error
+		// (401/403 auth failures, 5xx, network/timeouts) must NOT be treated as
+		// "no secret" — doing so lets callers generate a brand-new key and orphan
+		// the real one in Vinz. Return the error immediately.
+		if !errors.Is(err, errors.ErrNotFound) {
+			return models.Secret{}, SecretLocationNone, errors.Wrap(err, "Failed to load secret")
 		}
 	}
 
