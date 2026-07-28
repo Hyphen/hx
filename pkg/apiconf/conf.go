@@ -37,6 +37,19 @@ func GetBaseAppUrl() string {
 	return "https://app.hyphen.ai"
 }
 
+// GetBaseAppCloudUrl returns the base URL for the AppCloud management API.
+// It mirrors the other services' dev/local/prod switch so that `--dev`
+// (or HYPHEN_DEV=true) targets the AppCloud development environment.
+func GetBaseAppCloudUrl() string {
+	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
+		return "https://api.dev-app.hyphen.cloud"
+	}
+	if strings.ToLower(os.Getenv("HYPHEN_Local")) == "true" {
+		return "http://localhost:8080"
+	}
+	return "https://api.app.hyphen.cloud"
+}
+
 func GetBaseAuthUrl() string {
 	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
 		return "https://dev-auth.hyphen.ai"
