@@ -16,7 +16,7 @@ import (
 	"golang.org/x/term"
 )
 
-const guidance = "local Hyphen app config is missing or incomplete. Run `hx init` in this directory, then rerun this command."
+const guidance = "Hyphen app config is missing or incomplete. Run `hx init` in this directory, then rerun this command."
 
 var (
 	isStdinTerminal     = func() bool { return term.IsTerminal(int(os.Stdin.Fd())) }
@@ -25,13 +25,13 @@ var (
 )
 
 func Ensure(cmd *cobra.Command, args []string) error {
-	if !NeedsLocalAppConfig(cmd, args) {
+	if !NeedsAppConfig(cmd, args) {
 		return nil
 	}
 
-	complete, err := HasCompleteLocalAppConfig()
+	complete, err := HasCompleteAppConfig()
 	if err != nil {
-		return fmt.Errorf("failed to read local .hx config: %w", err)
+		return fmt.Errorf("failed to read .hx config: %w", err)
 	}
 	if complete {
 		return nil
@@ -49,25 +49,29 @@ func Ensure(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("auto-init failed: %w", err)
 	}
 
-	complete, err = HasCompleteLocalAppConfig()
+	complete, err = HasCompleteAppConfig()
 	if err != nil {
-		return fmt.Errorf("auto-init did not create a readable local .hx config: %w", err)
+		return fmt.Errorf("auto-init did not create a readable .hx config: %w", err)
 	}
 	if !complete {
-		return fmt.Errorf("auto-init did not create complete local app config. %s", guidance)
+		return fmt.Errorf("auto-init did not produce a complete app config. %s", guidance)
 	}
 
 	cprint.NewCPrinter(flags.VerboseFlag).Info(fmt.Sprintf("Local Hyphen app initialized. Continuing with `%s`.", cmd.CommandPath()))
 	return nil
 }
 
-func HasCompleteLocalAppConfig() (bool, error) {
-	cfg, err := config.RestoreLocalConfig()
+// HasCompleteAppConfig reports whether the merged global+local .hx config
+// contains every field required by the guarded commands. This mirrors what
+// those commands themselves see via RestoreConfigFromFile, so the guard does
+// not reject setups the command would accept.
+func HasCompleteAppConfig() (bool, error) {
+	cfg, found, err := config.RestoreMergedConfig(config.ManifestConfigFile)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
 		return false, err
+	}
+	if !found {
+		return false, nil
 	}
 
 	return strings.TrimSpace(cfg.OrganizationId) != "" &&
@@ -76,7 +80,7 @@ func HasCompleteLocalAppConfig() (bool, error) {
 		nonEmptyStringPtr(cfg.AppAlternateId), nil
 }
 
-func NeedsLocalAppConfig(cmd *cobra.Command, args []string) bool {
+func NeedsAppConfig(cmd *cobra.Command, args []string) bool {
 	names := commandNames(cmd)
 	if len(names) == 0 {
 		return false
@@ -96,13 +100,13 @@ func NeedsLocalAppConfig(cmd *cobra.Command, args []string) bool {
 	}
 
 	if matches(names, "deploy") {
-		return deployNeedsLocalAppConfig(cmd, args)
+		return deployNeedsAppConfig(cmd, args)
 	}
 
 	return false
 }
 
-func deployNeedsLocalAppConfig(cmd *cobra.Command, args []string) bool {
+func deployNeedsAppConfig(cmd *cobra.Command, args []string) bool {
 	if len(args) == 0 {
 		return true
 	}
