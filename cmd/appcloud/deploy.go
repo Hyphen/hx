@@ -13,7 +13,6 @@ import (
 )
 
 var (
-	deployName        string
 	deployOwner       string
 	deployDomains     []string
 	deployKind        string
@@ -23,26 +22,27 @@ var (
 )
 
 var deployCmd = &cobra.Command{
-	Use:   "deploy <dir>",
-	Short: "Deploy a directory to AppCloud (create-or-find app, upload, activate)",
+	Use:   "deploy <name> <dir>",
+	Short: "Deploy a directory to an AppCloud app (create-or-find, upload, activate)",
 	Long: `
-End-to-end deploy: find the app by its first --domain (or create one), register
-a new revision, upload the directory's contents, and pin it active.
+End-to-end deploy of <dir> to the app named <name>: find the app (by its first
+--domain, else by name), or create it, then register a revision, upload the
+directory's contents, and pin it active.
 
 Examples:
-  hx appcloud deploy ./dist --name my-site --owner me --domain my-site.app.hyphen.cloud
-  hx appcloud deploy ./public --name docs --owner me --domain docs.acme.com --no-activate`,
-	Args: cobra.ExactArgs(1),
+  hx appcloud deploy my-site ./dist --domain my-site.app.hyphen.cloud
+  hx appcloud deploy docs ./public --domain docs.acme.com --no-activate`,
+	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		printer := cprint.NewCPrinter(flags.VerboseFlag)
-		dir := args[0]
+		name, dir := args[0], args[1]
 		info, err := os.Stat(dir)
 		if err != nil || !info.IsDir() {
 			return errors.Wrapf(errors.New("not a directory"), "%s", dir)
 		}
 		svc := newAppCloudService()
 
-		app, err := resolveDeployApp(svc, printer)
+		app, err := resolveDeployApp(svc, printer, name)
 		if err != nil {
 			return err
 		}
@@ -91,33 +91,30 @@ func shipRevision(svc appcloud.AppCloudServicer, printer *cprint.CPrinter, app a
 	return nil
 }
 
-// resolveDeployApp finds the target app by its first domain, or creates one.
-// When an existing app matches the domain, its owner/name must match the flags
-// so a deploy can't silently ship into a foreign app that shares a domain.
-func resolveDeployApp(svc appcloud.AppCloudServicer, printer *cprint.CPrinter) (appcloud.App, error) {
+// resolveDeployApp finds the target app for `name` — by its first domain if
+// one is given, else by name — or creates it. When an existing app is found
+// by domain, its name must match so a deploy can't silently ship into a
+// foreign app that happens to share a domain.
+func resolveDeployApp(svc appcloud.AppCloudServicer, printer *cprint.CPrinter, name string) (appcloud.App, error) {
 	if len(deployDomains) > 0 {
 		existing, err := svc.FindAppByDomain(deployDomains[0])
 		if err != nil {
 			return appcloud.App{}, err
 		}
 		if existing != nil {
-			if deployOwner != "" && existing.Owner != deployOwner ||
-				deployName != "" && existing.Name != deployName {
+			if existing.Name != name {
 				return appcloud.App{}, fmt.Errorf(
-					"domain %s is already attached to app %s (owner=%s, name=%s); refusing to deploy with mismatched --owner/--name",
-					deployDomains[0], existing.ID, existing.Owner, existing.Name)
+					"domain %s is already attached to app %s (name=%s); refusing to deploy as %q",
+					deployDomains[0], existing.ID, existing.Name, name)
 			}
 			printer.Info(fmt.Sprintf("found existing app %s for %s", existing.ID, deployDomains[0]))
 			return *existing, nil
 		}
 	}
-	return createDeployApp(svc, printer)
+	return createDeployApp(svc, printer, name)
 }
 
-func createDeployApp(svc appcloud.AppCloudServicer, printer *cprint.CPrinter) (appcloud.App, error) {
-	if deployName == "" {
-		return appcloud.App{}, errors.New("creating a new app requires --name")
-	}
+func createDeployApp(svc appcloud.AppCloudServicer, printer *cprint.CPrinter, name string) (appcloud.App, error) {
 	owner, err := resolveOwner(deployOwner)
 	if err != nil {
 		return appcloud.App{}, err
@@ -130,7 +127,7 @@ func createDeployApp(svc appcloud.AppCloudServicer, printer *cprint.CPrinter) (a
 	if err != nil {
 		return appcloud.App{}, err
 	}
-	app, err := svc.CreateApp(owner, deployName, orgID, projID, deployDomains)
+	app, err := svc.CreateApp(owner, name, orgID, projID, deployDomains)
 	if err != nil {
 		return appcloud.App{}, err
 	}
@@ -139,7 +136,6 @@ func createDeployApp(svc appcloud.AppCloudServicer, printer *cprint.CPrinter) (a
 }
 
 func init() {
-	deployCmd.Flags().StringVar(&deployName, "name", "", "App name (URL-safe slug); required when creating")
 	deployCmd.Flags().StringVar(&deployOwner, "owner", "", "Owner label (default: your logged-in user)")
 	deployCmd.Flags().StringArrayVar(&deployDomains, "domain", nil, "Domain to attach (repeatable); the first is used to find an existing app")
 	deployCmd.Flags().StringVar(&deployKind, "kind", "static", "Revision kind")

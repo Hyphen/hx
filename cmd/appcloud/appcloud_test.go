@@ -94,8 +94,9 @@ func TestResolveOwner(t *testing.T) {
 }
 
 func TestDeployCmdArgs(t *testing.T) {
-	t.Run("requires_exactly_one_directory_argument", func(t *testing.T) {
+	t.Run("requires_a_name_and_a_directory_argument", func(t *testing.T) {
 		assert.Error(t, deployCmd.Args(deployCmd, []string{}))
-		assert.NoError(t, deployCmd.Args(deployCmd, []string{"./dist"}))
+		assert.Error(t, deployCmd.Args(deployCmd, []string{"my-site"}))
+		assert.NoError(t, deployCmd.Args(deployCmd, []string{"my-site", "./dist"}))
 	})
 }
