@@ -32,12 +32,17 @@ With an <app-id>, remember it as the default app for other ` + "`hx appcloud`" +
 			return nil
 		}
 
-		// `app` — show the current default app.
-		appID, err := resolveAppID("")
+		// `app` (no args) — show the current default app, or guide the user
+		// to set one rather than erroring out.
+		mc, err := config.RestoreConfig()
 		if err != nil {
 			return err
 		}
-		app, err := newAppCloudService().GetApp(appID)
+		if mc.AppCloudAppId == nil || *mc.AppCloudAppId == "" {
+			printer.Info("No default app set. Run `hx appcloud app <app-id>` to select one, or `hx appcloud apps list` to see your apps.")
+			return nil
+		}
+		app, err := newAppCloudService().GetApp(*mc.AppCloudAppId)
 		if err != nil {
 			return err
 		}

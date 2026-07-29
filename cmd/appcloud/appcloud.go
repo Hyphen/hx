@@ -1,6 +1,8 @@
 package appcloud
 
 import (
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/Hyphen/cli/internal/appcloud"
@@ -11,6 +13,20 @@ import (
 	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/spf13/cobra"
 )
+
+// requireDir errors clearly when `dir` is missing or is not a directory. A
+// plain `os.Stat` check that returns the (nil) error for a non-directory path
+// would let a command exit 0 without doing anything.
+func requireDir(dir string) error {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", dir)
+	}
+	return nil
+}
 
 // newAppCloudService is an injection seam: commands call it to obtain the
 // service, and tests swap it for a mock.

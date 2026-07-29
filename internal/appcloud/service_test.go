@@ -3,7 +3,6 @@ package appcloud
 import (
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 
@@ -14,8 +13,7 @@ import (
 
 func TestNewService(t *testing.T) {
 	t.Run("targets_the_dev_management_api_when_HYPHEN_DEV_is_set", func(t *testing.T) {
-		os.Setenv("HYPHEN_DEV", "true")
-		t.Cleanup(func() { os.Unsetenv("HYPHEN_DEV") })
+		t.Setenv("HYPHEN_DEV", "true")
 
 		service := NewService()
 
@@ -24,7 +22,7 @@ func TestNewService(t *testing.T) {
 	})
 
 	t.Run("targets_the_prod_management_api_by_default", func(t *testing.T) {
-		os.Unsetenv("HYPHEN_DEV")
+		t.Setenv("HYPHEN_DEV", "")
 
 		service := NewService()
 

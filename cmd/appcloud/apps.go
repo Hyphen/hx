@@ -1,8 +1,6 @@
 package appcloud
 
 import (
-	"os"
-
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
@@ -117,8 +115,7 @@ var appsDeployCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		printer := cprint.NewCPrinter(flags.VerboseFlag)
 		appID, dir := args[0], args[1]
-		info, err := os.Stat(dir)
-		if err != nil || !info.IsDir() {
+		if err := requireDir(dir); err != nil {
 			return err
 		}
 		svc := newAppCloudService()

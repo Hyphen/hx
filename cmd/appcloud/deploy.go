@@ -2,12 +2,10 @@ package appcloud
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/Hyphen/cli/internal/appcloud"
 	"github.com/Hyphen/cli/pkg/cprint"
-	"github.com/Hyphen/cli/pkg/errors"
 	"github.com/Hyphen/cli/pkg/flags"
 	"github.com/spf13/cobra"
 )
@@ -36,9 +34,8 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		printer := cprint.NewCPrinter(flags.VerboseFlag)
 		name, dir := args[0], args[1]
-		info, err := os.Stat(dir)
-		if err != nil || !info.IsDir() {
-			return errors.Wrapf(errors.New("not a directory"), "%s", dir)
+		if err := requireDir(dir); err != nil {
+			return err
 		}
 		svc := newAppCloudService()
 
