@@ -106,7 +106,7 @@ func TestGetApp(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(responseBody)),
 		}, nil).Once()
 
-		app, err := service.GetApp("the_org_id", "the_app_id")
+		app, err := service.GetApp("the_app_id")
 
 		assert.NoError(t, err)
 		assert.Equal(t, "the_app_id", app.ID)
@@ -122,7 +122,7 @@ func TestGetApp(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(`{"error":"app not found"}`)),
 		}, nil).Once()
 
-		_, err := service.GetApp("the_org_id", "missing_app")
+		_, err := service.GetApp("missing_app")
 
 		assert.Error(t, err)
 		mockHTTPClient.AssertExpectations(t)

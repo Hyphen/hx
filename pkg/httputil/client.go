@@ -58,7 +58,10 @@ func (hc *HyphenClient) Do(req *http.Request) (*http.Response, error) {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
-	if req.Body != nil {
+	// Default the body content type to JSON, but never override a caller that
+	// set one explicitly (e.g. multipart/form-data uploads, whose boundary
+	// parameter would otherwise be lost).
+	if req.Body != nil && req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
 

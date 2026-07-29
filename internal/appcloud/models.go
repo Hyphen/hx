@@ -16,13 +16,64 @@ type App struct {
 	UpdatedAt      string    `json:"updatedAt"`
 }
 
-// AppConfig is the app's routing/serving config as returned by the API. It is
-// intentionally permissive: the management API owns the schema, so we keep the
-// raw representation and only pull out what the CLI needs.
+// AppConfig is the app's routing/serving config. The management API owns the
+// schema; the CLI keeps the raw representation and round-trips it verbatim.
 type AppConfig map[string]any
 
-// listResponse is the shape of `GET /v1/apps` (items + optional cursor).
-type listResponse struct {
-	Items      []App  `json:"items"`
+// Revision mirrors the management `RevisionView`.
+type Revision struct {
+	ID          string `json:"id"`
+	AppID       string `json:"appId"`
+	Hex         string `json:"hex"`
+	Kind        string `json:"kind"`
+	ArtifactRef string `json:"artifactRef"`
+	PreviewURL  string `json:"previewUrl"`
+	CreatedAt   string `json:"createdAt"`
+}
+
+// ConfigView is the body of `GET`/`PUT /v1/apps/{id}/config`.
+type ConfigView struct {
+	Config     AppConfig `json:"config"`
+	ConfigETag string    `json:"configEtag"`
+}
+
+// UploadResponse is the body of a revision file-upload batch.
+type UploadResponse struct {
+	Files []UploadedFile `json:"files"`
+}
+
+type UploadedFile struct {
+	Path string `json:"path"`
+	Key  string `json:"key"`
+	Size uint64 `json:"size"`
+}
+
+// HTTPLog mirrors management's `HttpLogView` (one served request).
+type HTTPLog struct {
+	ID         string `json:"id"`
+	TS         string `json:"ts"`
+	Domain     string `json:"domain"`
+	Method     string `json:"method"`
+	Path       string `json:"path"`
+	Status     int    `json:"status"`
+	Bytes      uint64 `json:"bytes"`
+	DurationMS uint64 `json:"durationMs"`
+	Revision   string `json:"revision"`
+	CacheHit   bool   `json:"cacheHit"`
+}
+
+// ErrorLog mirrors management's `ErrorLogView`.
+type ErrorLog struct {
+	ID       string `json:"id"`
+	TS       string `json:"ts"`
+	Domain   string `json:"domain"`
+	Kind     string `json:"kind"`
+	Message  string `json:"message"`
+	Revision string `json:"revision"`
+}
+
+// listResponse is the generic `{items, nextCursor}` envelope.
+type listResponse[T any] struct {
+	Items      []T    `json:"items"`
 	NextCursor string `json:"nextCursor"`
 }

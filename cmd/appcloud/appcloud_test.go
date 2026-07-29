@@ -3,20 +3,25 @@ package appcloud
 import (
 	"testing"
 
-	"github.com/Hyphen/cli/internal/appcloud"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
-func TestAppCloudCmd(t *testing.T) {
-	t.Run("registers_the_apps_and_app_subcommands", func(t *testing.T) {
-		names := map[string]bool{}
-		for _, c := range AppCloudCmd.Commands() {
-			names[c.Name()] = true
-		}
+func subcommandNames(c *cobra.Command) map[string]bool {
+	names := map[string]bool{}
+	for _, sub := range c.Commands() {
+		names[sub.Name()] = true
+	}
+	return names
+}
 
-		assert.True(t, names["apps"], "expected an `apps` subcommand")
-		assert.True(t, names["app"], "expected an `app` subcommand")
+func TestAppCloudCmd(t *testing.T) {
+	t.Run("registers_deploy_apps_app_and_metrics", func(t *testing.T) {
+		names := subcommandNames(AppCloudCmd)
+
+		for _, want := range []string{"deploy", "apps", "app", "metrics"} {
+			assert.True(t, names[want], "expected an `%s` subcommand", want)
+		}
 	})
 
 	t.Run("aliases_appcloud_to_ac", func(t *testing.T) {
@@ -24,32 +29,37 @@ func TestAppCloudCmd(t *testing.T) {
 	})
 }
 
-func TestAppCmdArgs(t *testing.T) {
-	t.Run("requires_exactly_one_app_id", func(t *testing.T) {
-		err := appCmd.Args(appCmd, []string{})
+func TestAppsGroup(t *testing.T) {
+	t.Run("registers_the_crud_and_deploy_subcommands", func(t *testing.T) {
+		names := subcommandNames(appsCmd)
 
-		assert.Error(t, err)
-	})
-
-	t.Run("accepts_a_single_app_id", func(t *testing.T) {
-		err := appCmd.Args(appCmd, []string{"the_app_id"})
-
-		assert.NoError(t, err)
+		for _, want := range []string{"list", "get", "create", "delete", "deploy", "config"} {
+			assert.True(t, names[want], "expected `apps %s`", want)
+		}
 	})
 }
 
-func TestAppsCmdUsesTheService(t *testing.T) {
-	t.Run("lists_apps_from_the_service_for_the_resolved_org", func(t *testing.T) {
-		mockService := new(appcloud.MockAppCloudService)
-		mockService.On("ListApps", mock.Anything, mock.Anything).
-			Return([]appcloud.App{{ID: "the_app_id", Name: "the app"}}, nil)
-		original := newAppCloudService
-		newAppCloudService = func() appcloud.AppCloudServicer { return mockService }
-		t.Cleanup(func() { newAppCloudService = original })
+func TestMetricsGroup(t *testing.T) {
+	t.Run("registers_http_and_errors", func(t *testing.T) {
+		names := subcommandNames(metricsCmd)
 
-		// The command resolves the org from flags/config; we only assert the
-		// service is wired in (org resolution is covered by the flags package).
-		assert.NotNil(t, appsCmd.RunE)
-		assert.NotNil(t, newAppCloudService())
+		assert.True(t, names["http"])
+		assert.True(t, names["errors"])
+	})
+}
+
+func TestResolveAppID(t *testing.T) {
+	t.Run("returns_the_explicit_id_when_given", func(t *testing.T) {
+		id, err := resolveAppID("the_app_id")
+
+		assert.NoError(t, err)
+		assert.Equal(t, "the_app_id", id)
+	})
+}
+
+func TestDeployCmdArgs(t *testing.T) {
+	t.Run("requires_exactly_one_directory_argument", func(t *testing.T) {
+		assert.Error(t, deployCmd.Args(deployCmd, []string{}))
+		assert.NoError(t, deployCmd.Args(deployCmd, []string{"./dist"}))
 	})
 }
