@@ -115,8 +115,12 @@ func resolveDeployApp(svc appcloud.AppCloudServicer, printer *cprint.CPrinter) (
 }
 
 func createDeployApp(svc appcloud.AppCloudServicer, printer *cprint.CPrinter) (appcloud.App, error) {
-	if deployName == "" || deployOwner == "" {
-		return appcloud.App{}, errors.New("creating a new app requires --name and --owner")
+	if deployName == "" {
+		return appcloud.App{}, errors.New("creating a new app requires --name")
+	}
+	owner, err := resolveOwner(deployOwner)
+	if err != nil {
+		return appcloud.App{}, err
 	}
 	orgID, err := flags.GetOrganizationID()
 	if err != nil {
@@ -126,7 +130,7 @@ func createDeployApp(svc appcloud.AppCloudServicer, printer *cprint.CPrinter) (a
 	if err != nil {
 		return appcloud.App{}, err
 	}
-	app, err := svc.CreateApp(deployOwner, deployName, orgID, projID, deployDomains)
+	app, err := svc.CreateApp(owner, deployName, orgID, projID, deployDomains)
 	if err != nil {
 		return appcloud.App{}, err
 	}
@@ -136,7 +140,7 @@ func createDeployApp(svc appcloud.AppCloudServicer, printer *cprint.CPrinter) (a
 
 func init() {
 	deployCmd.Flags().StringVar(&deployName, "name", "", "App name (URL-safe slug); required when creating")
-	deployCmd.Flags().StringVar(&deployOwner, "owner", "", "Owner label; required when creating")
+	deployCmd.Flags().StringVar(&deployOwner, "owner", "", "Owner label (default: your logged-in user)")
 	deployCmd.Flags().StringArrayVar(&deployDomains, "domain", nil, "Domain to attach (repeatable); the first is used to find an existing app")
 	deployCmd.Flags().StringVar(&deployKind, "kind", "static", "Revision kind")
 	deployCmd.Flags().StringVar(&deployArtifactRef, "artifact-ref", "", "Client artifact reference (default: {name}@{unix_ts})")

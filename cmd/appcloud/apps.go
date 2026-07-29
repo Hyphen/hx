@@ -57,16 +57,16 @@ var appsGetCmd = &cobra.Command{
 
 var (
 	createOwner   string
-	createName    string
 	createDomains []string
 )
 
 var appsCreateCmd = &cobra.Command{
-	Use:   "create",
+	Use:   "create <name>",
 	Short: "Create a new AppCloud app",
-	Args:  cobra.NoArgs,
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		printer := cprint.NewCPrinter(flags.VerboseFlag)
+		name := args[0]
 		orgID, err := flags.GetOrganizationID()
 		if err != nil {
 			return err
@@ -75,7 +75,11 @@ var appsCreateCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		app, err := newAppCloudService().CreateApp(createOwner, createName, orgID, projID, createDomains)
+		owner, err := resolveOwner(createOwner)
+		if err != nil {
+			return err
+		}
+		app, err := newAppCloudService().CreateApp(owner, name, orgID, projID, createDomains)
 		if err != nil {
 			return err
 		}
@@ -127,8 +131,7 @@ var appsDeployCmd = &cobra.Command{
 }
 
 func init() {
-	appsCreateCmd.Flags().StringVar(&createOwner, "owner", "", "Owner label")
-	appsCreateCmd.Flags().StringVar(&createName, "name", "", "App name (URL-safe slug)")
+	appsCreateCmd.Flags().StringVar(&createOwner, "owner", "", "Owner label (default: your logged-in user)")
 	appsCreateCmd.Flags().StringArrayVar(&createDomains, "domain", nil, "Domain to attach (repeatable)")
 
 	appsDeployCmd.Flags().StringVar(&appsDeployKind, "kind", "static", "Revision kind")

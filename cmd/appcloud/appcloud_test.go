@@ -1,8 +1,10 @@
 package appcloud
 
 import (
+	"errors"
 	"testing"
 
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
@@ -54,6 +56,40 @@ func TestResolveAppID(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, "the_app_id", id)
+	})
+}
+
+func TestResolveOwner(t *testing.T) {
+	t.Run("returns_the_explicit_owner_when_given", func(t *testing.T) {
+		owner, err := resolveOwner("the-explicit-owner")
+
+		assert.NoError(t, err)
+		assert.Equal(t, "the-explicit-owner", owner)
+	})
+
+	t.Run("defaults_to_the_logged_in_users_email", func(t *testing.T) {
+		original := getExecutionContext
+		getExecutionContext = func() (models.ExecutionContext, error) {
+			return models.ExecutionContext{Member: models.Member{Email: "me@hyphen.ai", ID: "mem_1"}}, nil
+		}
+		t.Cleanup(func() { getExecutionContext = original })
+
+		owner, err := resolveOwner("")
+
+		assert.NoError(t, err)
+		assert.Equal(t, "me@hyphen.ai", owner)
+	})
+
+	t.Run("returns_an_error_when_identity_cannot_be_resolved", func(t *testing.T) {
+		original := getExecutionContext
+		getExecutionContext = func() (models.ExecutionContext, error) {
+			return models.ExecutionContext{}, errors.New("the fake error")
+		}
+		t.Cleanup(func() { getExecutionContext = original })
+
+		_, err := resolveOwner("")
+
+		assert.Error(t, err)
 	})
 }
 

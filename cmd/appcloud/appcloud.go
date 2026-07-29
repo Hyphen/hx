@@ -5,6 +5,7 @@ import (
 
 	"github.com/Hyphen/cli/internal/appcloud"
 	"github.com/Hyphen/cli/internal/config"
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/internal/user"
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/errors"
@@ -14,6 +15,34 @@ import (
 // newAppCloudService is an injection seam: commands call it to obtain the
 // service, and tests swap it for a mock.
 var newAppCloudService = func() appcloud.AppCloudServicer { return appcloud.NewService() }
+
+// getExecutionContext resolves the caller's Hyphen identity; a seam for tests.
+var getExecutionContext = func() (models.ExecutionContext, error) {
+	return user.NewService().GetExecutionContext()
+}
+
+// resolveOwner returns the explicit --owner if given, otherwise defaults to
+// the logged-in user's email (falling back to their member/user id). `owner`
+// is a display/attribution label on the app, not a security principal.
+func resolveOwner(explicit string) (string, error) {
+	if explicit != "" {
+		return explicit, nil
+	}
+	ctx, err := getExecutionContext()
+	if err != nil {
+		return "", errors.Wrap(err, "could not determine your Hyphen identity for the app owner; pass --owner explicitly")
+	}
+	switch {
+	case ctx.Member.Email != "":
+		return ctx.Member.Email, nil
+	case ctx.Member.ID != "":
+		return ctx.Member.ID, nil
+	case ctx.User.ID != "":
+		return ctx.User.ID, nil
+	default:
+		return "", errors.New("could not determine an owner from your account; pass --owner explicitly")
+	}
+}
 
 var AppCloudCmd = &cobra.Command{
 	Use:     "appcloud",
