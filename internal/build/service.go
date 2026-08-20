@@ -110,7 +110,7 @@ func (bs *BuildService) CreateBuild(opts CreateBuildOptions) (*models.Build, err
 	return &NewBuild, nil
 }
 
-func (bs *BuildService) FindRegistryConnection(organizationId, projectId string) (*models.ContainerRegistry, error) {
+func (bs *BuildService) FindRegistryConnections(organizationId, projectId string) ([]models.ContainerRegistry, error) {
 	///api/organizations/{organizationId}/deployments/containerRegistries
 	queryParams := url.Values{}
 	queryParams.Add("projectId", projectId)
@@ -147,10 +147,7 @@ func (bs *BuildService) FindRegistryConnection(organizationId, projectId string)
 		return nil, fmt.Errorf("no registry connection found")
 	}
 
-	// For now we are just going to take the first one,
-	// in theory the index will keep this from being more than one
-	return &response[0], nil
-
+	return response, nil
 }
 
 func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, environmentId string, verbose bool, dockerfilePath string, preview string) (*models.Build, error) {
@@ -193,9 +190,9 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 	}
 	printer.PrintVerbose(fmt.Sprintf("found docker file at %s", dockerfilePathOrDir))
 
-	containerRegistry, err := bs.FindRegistryConnection(config.OrganizationId, *config.ProjectId)
+	containerRegistries, err := bs.FindRegistryConnections(config.OrganizationId, *config.ProjectId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find registry connection: %w", err)
+		return nil, fmt.Errorf("failed to find registry connections: %w", err)
 	}
 
 	// registerUrl := "deploydevelopmentregistry.azurecr.io"
@@ -262,24 +259,35 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 		}
 	}
 
-	// check to see if we need to login into the registry so we don't stomp creds
-	needsLogin := !dockerutil.IsLoggedIn(containerRegistry.Auth.Server)
-
-	if needsLogin {
-		// make sure we are logged into the registry
-		err = dockerutil.Login(containerRegistry.Auth.Server, containerRegistry.Auth.Username, containerRegistry.Auth.Password)
-		if err != nil {
-			return nil, fmt.Errorf("failed to login to docker registry: %w", err)
+	var containerUrl string
+	for _, containerRegistry := range containerRegistries {
+		registryLabel := containerRegistry.Name
+		if registryLabel == "" {
+			registryLabel = containerRegistry.Url
 		}
-		defer dockerutil.Logout(containerRegistry.Auth.Server)
-	}
 
-	// push the image to a register
-	printer.Print("Uploading artifact")
-	containerUrl, err := dockerutil.Push(name, containerRegistry.Url)
+		// check to see if we need to login into the registry so we don't stomp creds
+		needsLogin := !dockerutil.IsLoggedIn(containerRegistry.Auth.Server)
+		if needsLogin {
+			err = dockerutil.Login(containerRegistry.Auth.Server, containerRegistry.Auth.Username, containerRegistry.Auth.Password)
+			if err != nil {
+				return nil, fmt.Errorf("failed to login to docker registry %s: %w", registryLabel, err)
+			}
+		}
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to push docker image: %w", err)
+		printer.Print(fmt.Sprintf("Uploading artifact to %s", registryLabel))
+		pushedUrl, err := dockerutil.Push(name, containerRegistry.Url)
+		if needsLogin {
+			_ = dockerutil.Logout(containerRegistry.Auth.Server)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to push docker image to %s: %w", registryLabel, err)
+		}
+
+		// Register the first registry's URI with the build API
+		if containerUrl == "" {
+			containerUrl = pushedUrl
+		}
 	}
 
 	// Tell Hyphen about the build
