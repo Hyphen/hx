@@ -61,7 +61,7 @@ func TestFindRegistryConnections(t *testing.T) {
 		registries, err := service.FindRegistryConnections("anOrgId", "aProjectId")
 
 		assert.Nil(t, registries)
-		assert.EqualError(t, err, "no registry connection found")
+		assert.EqualError(t, err, "no registry connections found")
 		mockHTTPClient.AssertExpectations(t)
 	})
 

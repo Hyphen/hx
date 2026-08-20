@@ -144,7 +144,7 @@ func (bs *BuildService) FindRegistryConnections(organizationId, projectId string
 	}
 
 	if len(response) == 0 {
-		return nil, fmt.Errorf("no registry connection found")
+		return nil, fmt.Errorf("no registry connections found")
 	}
 
 	return response, nil
@@ -190,6 +190,9 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 	}
 	printer.PrintVerbose(fmt.Sprintf("found docker file at %s", dockerfilePathOrDir))
 
+	if config.ProjectId == nil {
+		return nil, fmt.Errorf("project ID is not set in configuration")
+	}
 	containerRegistries, err := bs.FindRegistryConnections(config.OrganizationId, *config.ProjectId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find registry connections: %w", err)
@@ -261,32 +264,38 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 
 	var containerUrl string
 	for _, containerRegistry := range containerRegistries {
-		registryLabel := containerRegistry.Name
-		if registryLabel == "" {
-			registryLabel = containerRegistry.Url
-		}
-
-		// check to see if we need to login into the registry so we don't stomp creds
-		needsLogin := !dockerutil.IsLoggedIn(containerRegistry.Auth.Server)
-		if needsLogin {
-			err = dockerutil.Login(containerRegistry.Auth.Server, containerRegistry.Auth.Username, containerRegistry.Auth.Password)
-			if err != nil {
-				return nil, fmt.Errorf("failed to login to docker registry %s: %w", registryLabel, err)
+		err := func(containerRegistry models.ContainerRegistry) error {
+			registryLabel := containerRegistry.Name
+			if registryLabel == "" {
+				registryLabel = containerRegistry.Url
 			}
-		}
 
-		printer.Print(fmt.Sprintf("Uploading artifact to %s", registryLabel))
-		pushedUrl, err := dockerutil.Push(name, containerRegistry.Url)
-		if needsLogin {
-			_ = dockerutil.Logout(containerRegistry.Auth.Server)
-		}
+			// check to see if we need to login into the registry so we don't stomp creds
+			needsLogin := !dockerutil.IsLoggedIn(containerRegistry.Auth.Server)
+			if needsLogin {
+				err := dockerutil.Login(containerRegistry.Auth.Server, containerRegistry.Auth.Username, containerRegistry.Auth.Password)
+				if err != nil {
+					return fmt.Errorf("failed to login to docker registry %s: %w", registryLabel, err)
+				}
+				defer func() {
+					_ = dockerutil.Logout(containerRegistry.Auth.Server)
+				}()
+			}
+
+			printer.Print(fmt.Sprintf("Uploading artifact to %s", registryLabel))
+			pushedUrl, err := dockerutil.Push(name, containerRegistry.Url)
+			if err != nil {
+				return fmt.Errorf("failed to push docker image to %s: %w", registryLabel, err)
+			}
+
+			// Register the first registry's URI with the build API
+			if containerUrl == "" {
+				containerUrl = pushedUrl
+			}
+			return nil
+		}(containerRegistry)
 		if err != nil {
-			return nil, fmt.Errorf("failed to push docker image to %s: %w", registryLabel, err)
-		}
-
-		// Register the first registry's URI with the build API
-		if containerUrl == "" {
-			containerUrl = pushedUrl
+			return nil, err
 		}
 	}
 
