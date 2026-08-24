@@ -13,6 +13,81 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestFindRegistryConnections(t *testing.T) {
+	t.Run("returns_all_registries_when_multiple_are_present", func(t *testing.T) {
+		mockHTTPClient := new(httputil.MockHTTPClient)
+		service := &BuildService{
+			baseUrl:    "https://api.example.com",
+			httpClient: mockHTTPClient,
+		}
+
+		var capturedURL string
+		mockHTTPClient.On("Do", mock.Anything).Run(func(args mock.Arguments) {
+			req := args.Get(0).(*http.Request)
+			capturedURL = req.URL.String()
+		}).Return(&http.Response{
+			StatusCode: http.StatusOK,
+			Body: io.NopCloser(strings.NewReader(`[
+				{"id":"reg1","name":"azure-registry","url":"myregistry.azurecr.io","auth":{"server":"myregistry.azurecr.io","username":"user1","password":"pass1"}},
+				{"id":"reg2","name":"aws-registry","url":"123.dkr.ecr.us-east-1.amazonaws.com/repo","auth":{"server":"123.dkr.ecr.us-east-1.amazonaws.com","username":"AWS","password":"token"}}
+			]`)),
+		}, nil)
+
+		registries, err := service.FindRegistryConnections("anOrgId", "aProjectId")
+
+		assert.NoError(t, err)
+		require.Len(t, registries, 2)
+		assert.Equal(t, "azure-registry", registries[0].Name)
+		assert.Equal(t, "myregistry.azurecr.io", registries[0].Url)
+		assert.Equal(t, "aws-registry", registries[1].Name)
+		assert.Equal(t, "123.dkr.ecr.us-east-1.amazonaws.com/repo", registries[1].Url)
+		assert.Contains(t, capturedURL, "/api/organizations/anOrgId/deployments/containerRegistries")
+		assert.Contains(t, capturedURL, "projectId=aProjectId")
+		mockHTTPClient.AssertExpectations(t)
+	})
+
+	t.Run("returns_error_when_no_registries_are_found", func(t *testing.T) {
+		mockHTTPClient := new(httputil.MockHTTPClient)
+		service := &BuildService{
+			baseUrl:    "https://api.example.com",
+			httpClient: mockHTTPClient,
+		}
+
+		mockHTTPClient.On("Do", mock.Anything).Return(&http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`[]`)),
+		}, nil)
+
+		registries, err := service.FindRegistryConnections("anOrgId", "aProjectId")
+
+		assert.Nil(t, registries)
+		assert.EqualError(t, err, "no registry connections found")
+		mockHTTPClient.AssertExpectations(t)
+	})
+
+	t.Run("returns_single_registry_when_only_one_is_present", func(t *testing.T) {
+		mockHTTPClient := new(httputil.MockHTTPClient)
+		service := &BuildService{
+			baseUrl:    "https://api.example.com",
+			httpClient: mockHTTPClient,
+		}
+
+		mockHTTPClient.On("Do", mock.Anything).Return(&http.Response{
+			StatusCode: http.StatusOK,
+			Body: io.NopCloser(strings.NewReader(`[
+				{"id":"reg1","name":"azure-registry","url":"myregistry.azurecr.io","auth":{"server":"myregistry.azurecr.io","username":"user1","password":"pass1"}}
+			]`)),
+		}, nil)
+
+		registries, err := service.FindRegistryConnections("anOrgId", "aProjectId")
+
+		assert.NoError(t, err)
+		require.Len(t, registries, 1)
+		assert.Equal(t, "azure-registry", registries[0].Name)
+		mockHTTPClient.AssertExpectations(t)
+	})
+}
+
 func TestCreateBuild(t *testing.T) {
 	t.Run("includes_environmentId_query_param_when_environmentId_is_provided", func(t *testing.T) {
 		mockHTTPClient := new(httputil.MockHTTPClient)
