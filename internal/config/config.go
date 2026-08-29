@@ -160,6 +160,21 @@ func InitializeConfig(mc Config, configFile string) error {
 }
 
 func RestoreConfigFromFile(manifestConfigFile string) (Config, error) {
+	mconfig, hasConfig, err := RestoreMergedConfig(manifestConfigFile)
+	if err != nil {
+		return Config{}, err
+	}
+	if !hasConfig {
+		return Config{}, errors.New("No valid .hx found (neither global nor local). Please authenticate using `hx auth` or `hx init`")
+	}
+	return mconfig, nil
+}
+
+// RestoreMergedConfig reads the global (~/.hx) and local (./.hx) configs and
+// returns their merge, with local fields overriding global. The bool reports
+// whether at least one of the two files was found; callers that need to treat
+// "neither file present" as an error should check it (see RestoreConfigFromFile).
+func RestoreMergedConfig(manifestConfigFile string) (Config, bool, error) {
 	var mconfig Config
 	var hasConfig bool
 
@@ -170,25 +185,21 @@ func RestoreConfigFromFile(manifestConfigFile string) (Config, error) {
 		mconfig = globalConfig
 		hasConfig = true
 	} else if !os.IsNotExist(err) {
-		return Config{}, err
+		return Config{}, false, err
 	}
 
 	localConfig, localConfigErr := readAndUnmarshalConfigJSON[Config](manifestConfigFile)
 	if localConfigErr == nil {
 		mergeErr := mergo.Merge(&mconfig, localConfig, mergo.WithOverride)
 		if mergeErr != nil {
-			return Config{}, errors.Wrap(mergeErr, "Error merging your .hx config(s)")
+			return Config{}, false, errors.Wrap(mergeErr, "Error merging your .hx config(s)")
 		}
 		hasConfig = true
 	} else if !os.IsNotExist(localConfigErr) {
-		return Config{}, localConfigErr
+		return Config{}, false, localConfigErr
 	}
 
-	if !hasConfig {
-		return Config{}, errors.New("No valid .hx found (neither global nor local). Please authenticate using `hx auth` or `hx init`")
-	}
-
-	return mconfig, nil
+	return mconfig, hasConfig, nil
 }
 
 func RestoreGlobalConfig() (Config, error) {
