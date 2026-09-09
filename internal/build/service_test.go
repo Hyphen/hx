@@ -2,12 +2,12 @@ package build
 
 import (
 	"fmt"
-	"github.com/Hyphen/cli/internal/models"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

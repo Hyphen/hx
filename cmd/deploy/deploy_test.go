@@ -1,11 +1,11 @@
 package deploy
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDeployCmd(t *testing.T) {
