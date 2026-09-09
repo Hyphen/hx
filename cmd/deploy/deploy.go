@@ -735,6 +735,7 @@ func matchesHxApp(identifier string, cfg config.Config) bool {
 }
 
 func init() {
+	DeployCmd.Flags().String("registry", "", "Registry URL or ID to record as the build source (all ready registries receive the image)")
 	DeployCmd.Flags().BoolVar(&noBuild, "no-build", false, "Skip the build step and use the latest build")
 	DeployCmd.Flags().StringVarP(&flags.DockerfileFlag, "dockerfile", "f", "", "Path to Dockerfile (e.g., ./Dockerfile or ./docker/Dockerfile.prod)")
 	DeployCmd.Flags().StringVarP(&flags.PreviewNameFlag, "preview", "r", "", "Preview name to deploy to")

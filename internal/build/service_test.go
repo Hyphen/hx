@@ -2,6 +2,7 @@ package build
 
 import (
 	"fmt"
+	"github.com/Hyphen/cli/internal/models"
 	"io"
 	"net/http"
 	"strings"
@@ -288,4 +289,39 @@ func TestCreateBuild(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestSelectBuildRegistry(t *testing.T) {
+	gcp := models.ContainerRegistry{Id: "gcp", Url: "us-docker.pkg.dev/project/images"}
+	azure := models.ContainerRegistry{Id: "azure", Url: "project.azurecr.io"}
+	cases := []struct {
+		name                         string
+		registries                   []models.ContainerRegistry
+		selector, wantURL, wantError string
+	}{
+		{"single registry", []models.ContainerRegistry{gcp}, "", gcp.Url, ""},
+		{"explicit URL", []models.ContainerRegistry{gcp, azure}, azure.Url, azure.Url, ""},
+		{"explicit ID", []models.ContainerRegistry{azure, gcp}, gcp.Id, gcp.Url, ""},
+		{"selection is independent of order", []models.ContainerRegistry{gcp, azure}, gcp.Id, gcp.Url, ""},
+		{"multiple requires selection", []models.ContainerRegistry{gcp, azure}, "", "", "choose the build source with --registry"},
+		{"reversed order requires selection", []models.ContainerRegistry{azure, gcp}, "", "", "choose the build source with --registry"},
+		{"unknown selection", []models.ContainerRegistry{gcp}, "other", "", "not a ready registry for this project"},
+		{"ambiguous selector", []models.ContainerRegistry{gcp, gcp}, gcp.Id, "", "choose the build source with --registry"},
+		{"no registries", nil, "", "", "no registry connections found"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			original := append([]models.ContainerRegistry(nil), tc.registries...)
+			registry, err := selectBuildRegistry(tc.registries, tc.selector)
+			assert.Equal(t, original, tc.registries, "source selection must not filter or reorder upload destinations")
+			if tc.wantError != "" {
+				require.ErrorContains(t, err, tc.wantError)
+				assert.Nil(t, registry)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, registry)
+				assert.Equal(t, tc.wantURL, registry.Url)
+			}
+		})
+	}
 }

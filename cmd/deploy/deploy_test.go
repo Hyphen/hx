@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/Hyphen/cli/pkg/cprint"
@@ -31,4 +32,10 @@ func TestShouldUseTUI(t *testing.T) {
 
 		assert.False(t, result)
 	})
+}
+
+func TestRegistryFlag(t *testing.T) {
+	flag := DeployCmd.Flags().Lookup("registry")
+	require.NotNil(t, flag)
+	assert.Equal(t, "", flag.DefValue)
 }

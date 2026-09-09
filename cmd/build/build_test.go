@@ -1,6 +1,7 @@
 package build
 
 import (
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,4 +25,10 @@ func TestBuildCmd(t *testing.T) {
 
 		assert.Equal(t, "", flag.DefValue)
 	})
+}
+
+func TestRegistryFlag(t *testing.T) {
+	flag := BuildCmd.Flags().Lookup("registry")
+	require.NotNil(t, flag)
+	assert.Equal(t, "", flag.DefValue)
 }

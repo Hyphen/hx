@@ -93,6 +93,7 @@ func runBuild(cmd *cobra.Command) (map[string]any, error) {
 }
 
 func init() {
+	BuildCmd.Flags().String("registry", "", "Registry URL or ID to record as the build source (all ready registries receive the image)")
 	BuildCmd.Flags().StringVarP(&flags.DockerfileFlag, "dockerfile", "f", "", "Path to Dockerfile (e.g., ./Dockerfile or ./docker/Dockerfile.prod)")
 	BuildCmd.Flags().StringVarP(&flags.EnvironmentFlag, "env", "e", "", "Environment ID for the build")
 	BuildCmd.Flags().StringVarP(&flags.PreviewNameFlag, "preview", "r", "", "Preview name to associate with this build")

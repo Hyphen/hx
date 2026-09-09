@@ -150,6 +150,27 @@ func (bs *BuildService) FindRegistryConnections(organizationId, projectId string
 	return response, nil
 }
 
+func selectBuildRegistry(registries []models.ContainerRegistry, selector string) (*models.ContainerRegistry, error) {
+	if len(registries) == 0 {
+		return nil, fmt.Errorf("no registry connections found")
+	}
+	var matches []models.ContainerRegistry
+	var choices []string
+	for _, registry := range registries {
+		choices = append(choices, registry.Url)
+		if selector == "" || registry.Id == selector || registry.Url == selector {
+			matches = append(matches, registry)
+		}
+	}
+	if len(matches) == 1 {
+		return &matches[0], nil
+	}
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("registry %q is not a ready registry for this project; choose --registry from: %s", selector, strings.Join(choices, ", "))
+	}
+	return nil, fmt.Errorf("multiple ready registries found; choose the build source with --registry <url-or-id>: %s (the image is uploaded to all ready registries)", strings.Join(choices, ", "))
+}
+
 func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, environmentId string, verbose bool, dockerfilePath string, preview string) (*models.Build, error) {
 	// grab the manifest to get app details
 	config, err := config.RestoreConfig()
@@ -197,6 +218,15 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to find registry connections: %w", err)
 	}
+	registrySelector, err := cmd.Flags().GetString("registry")
+	if err != nil {
+		return nil, err
+	}
+	sourceRegistry, err := selectBuildRegistry(containerRegistries, registrySelector)
+	if err != nil {
+		return nil, err
+	}
+	printer.Print(fmt.Sprintf("Build source registry: %s", sourceRegistry.Url))
 
 	// registerUrl := "deploydevelopmentregistry.azurecr.io"
 	fullCommitSha, err := gitutil.GetLastCommitHash()
@@ -288,8 +318,7 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 				return fmt.Errorf("failed to push docker image to %s: %w", registryLabel, err)
 			}
 
-			// Register the first registry's URI with the build API
-			if containerUrl == "" {
+			if containerRegistry.Id == sourceRegistry.Id && containerRegistry.Url == sourceRegistry.Url {
 				containerUrl = pushedUrl
 			}
 			return nil
