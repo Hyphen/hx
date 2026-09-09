@@ -154,18 +154,19 @@ func selectBuildRegistry(registries []models.ContainerRegistry, selector string)
 	if len(registries) == 0 {
 		return nil, fmt.Errorf("no registry connections found")
 	}
-	var matches []models.ContainerRegistry
+	matchIndex, matchCount := -1, 0
 	var choices []string
-	for _, registry := range registries {
+	for index, registry := range registries {
 		choices = append(choices, registry.Url)
 		if selector == "" || registry.Id == selector || registry.Url == selector {
-			matches = append(matches, registry)
+			matchIndex = index
+			matchCount++
 		}
 	}
-	if len(matches) == 1 {
-		return &matches[0], nil
+	if matchCount == 1 {
+		return &registries[matchIndex], nil
 	}
-	if len(matches) == 0 {
+	if matchCount == 0 {
 		return nil, fmt.Errorf("registry %q is not a ready registry for this project; choose --registry from: %s", selector, strings.Join(choices, ", "))
 	}
 	return nil, fmt.Errorf("multiple ready registries found; choose the build source with --registry <url-or-id>: %s (the image is uploaded to all ready registries)", strings.Join(choices, ", "))
