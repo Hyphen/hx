@@ -33,24 +33,32 @@ var (
 )
 
 var DeployCmd = &cobra.Command{
-	Use:   "deploy [deploymentId]",
+	Use:   "deploy [deployment-id-or-alternate-id]",
 	Short: "Run a deployment",
 	Long: `
-Run a deployment by ID, or omit it to deploy the development environment.
+Run a deployment by its ID or alternate ID (not its display name or environment).
+In the dashboard, select the project's environment and use Copy CLI command
+in the menu beside Deploy to get the command for that deployment.
 
-If no deploymentId is provided, the CLI will use the current project config to
-find the development environment deployment. If it doesn't exist yet, it will
-be created automatically.
+Without a positional argument, --env selects an environment by ID or alternate ID
+in the project configured in the local .hx file. Without --env, the CLI selects
+the environment of type development, regardless of the selection in the browser.
+Missing deployment configuration can be created automatically; a ready project
+container registry and cloud workspace are still required before deployment.
 
-Usage:
-  hyphen deploy [deploymentId] [flags]
+Run from the app folder initialized with hx init. The CLI builds and uploads the
+current local app; other included apps use uploaded builds. A GitHub connection
+or Git commit is not required for a local build. Use --no-build to reuse uploaded
+builds without building local code.
 
-Examples:
-  hyphen deploy                  # deploys the dev environment (auto-detected)
-  hyphen deploy depl_abc123      # deploys a specific deployment by ID
-
-Use 'hyphen deploy --help' for more information about available flags.
+A preview is requested explicitly with --preview. Include --prefix when creating
+a preview or selecting between previews with the same name.
 `,
+	Example: `  hx deploy web-development                         # Deployment alternate ID
+  hx deploy --env production                        # Environment in the configured project
+  hx deploy                                         # Environment of type development
+  hx deploy web-development --preview "PR 200" --prefix pr200
+  hx deploy web-development --no-build               # Reuse uploaded builds`,
 	Args: cobra.RangeArgs(0, 1),
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return user.ErrorIfNotAuthenticated()
@@ -739,7 +747,7 @@ func init() {
 	DeployCmd.Flags().StringVarP(&flags.DockerfileFlag, "dockerfile", "f", "", "Path to Dockerfile (e.g., ./Dockerfile or ./docker/Dockerfile.prod)")
 	DeployCmd.Flags().StringVarP(&flags.PreviewNameFlag, "preview", "r", "", "Preview name to deploy to")
 	DeployCmd.Flags().StringVarP(&flags.PreviewPrefixFlag, "prefix", "x", "", "Host prefix for the preview deployment")
-	DeployCmd.Flags().StringVar(&envFlag, "env", "", "Environment to deploy (defaults to the environment flagged as the \"development\" type)")
+	DeployCmd.Flags().StringVar(&envFlag, "env", "", "Environment ID or alternate ID when no deployment argument is given (defaults to the development type)")
 	DeployCmd.Flags().StringVar(&projectFlag, "project", "", "Project to deploy (defaults to project ID in hx config)")
 	DeployCmd.Flags().StringVar(&appsFlag, "apps", "", "Comma-separated list of apps to deploy, each optionally specifying a build (e.g. app1,app2:abld_xxxx,app3:latest,app4:lastDeployed,app5:latestPreview)")
 	DeployCmd.Flags().StringVar(&outputFormatFlag, "output", "", "Output format. Set to \"json\" to emit a JSON object with deploymentId, runId, deploymentUrl, status, and a messages array on completion instead of streaming human-readable progress.")
