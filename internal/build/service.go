@@ -43,7 +43,7 @@ type CreateBuildOptions struct {
 	CommitShaHref  string
 	Tag            string
 	TagHref        string
-	DockerUri      string
+	DockerUris     []string
 	Ports          []int
 	Preview        string
 }
@@ -60,21 +60,26 @@ func (bs *BuildService) CreateBuild(opts CreateBuildOptions) (*models.Build, err
 	}
 	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/builds?%s", bs.baseUrl, opts.OrganizationId, opts.AppId, queryParams.Encode())
 
+	artifacts := make([]models.Artifact, 0, len(opts.DockerUris))
+	for _, dockerUri := range opts.DockerUris {
+		artifacts = append(artifacts, models.Artifact{
+			Type:  "Docker",
+			Ports: opts.Ports,
+			Image: struct {
+				URI string `json:"uri"`
+			}{
+				URI: dockerUri,
+			},
+		})
+	}
+
 	build := models.NewBuild{
 		Tags:          []string{},
 		CommitSha:     opts.CommitSha,
 		CommitShaHref: opts.CommitShaHref,
 		Tag:           opts.Tag,
 		TagHref:       opts.TagHref,
-		Artifact: models.Artifact{
-			Type:  "Docker",
-			Ports: opts.Ports,
-			Image: struct {
-				URI string `json:"uri"`
-			}{
-				URI: opts.DockerUri,
-			},
-		},
+		Artifacts:     artifacts,
 	}
 
 	buildJSON, err := json.Marshal(build)
@@ -262,7 +267,7 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 		}
 	}
 
-	var containerUrl string
+	var containerUrls []string
 	for _, containerRegistry := range containerRegistries {
 		err := func(containerRegistry models.ContainerRegistry) error {
 			registryLabel := containerRegistry.Name
@@ -288,15 +293,16 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 				return fmt.Errorf("failed to push docker image to %s: %w", registryLabel, err)
 			}
 
-			// Register the first registry's URI with the build API
-			if containerUrl == "" {
-				containerUrl = pushedUrl
-			}
+			containerUrls = append(containerUrls, pushedUrl)
 			return nil
 		}(containerRegistry)
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if len(containerUrls) == 0 {
+		return nil, fmt.Errorf("no container registries available to publish the build")
 	}
 
 	// Tell Hyphen about the build
@@ -308,7 +314,7 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 		CommitShaHref:  commitShaHref,
 		Tag:            tag,
 		TagHref:        tagHref,
-		DockerUri:      containerUrl,
+		DockerUris:     containerUrls,
 		Ports:          ports,
 		Preview:        preview,
 	})
