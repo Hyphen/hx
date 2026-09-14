@@ -62,9 +62,10 @@ func (bs *BuildService) CreateBuild(opts CreateBuildOptions) (*models.Build, err
 
 	artifacts := make([]models.Artifact, 0, len(opts.DockerUris))
 	for _, dockerUri := range opts.DockerUris {
+		ports := append([]int(nil), opts.Ports...)
 		artifacts = append(artifacts, models.Artifact{
 			Type:  "Docker",
-			Ports: opts.Ports,
+			Ports: ports,
 			Image: struct {
 				URI string `json:"uri"`
 			}{
@@ -267,7 +268,7 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 		}
 	}
 
-	var containerUrls []string
+	containerUrls := make([]string, 0, len(containerRegistries))
 	for _, containerRegistry := range containerRegistries {
 		err := func(containerRegistry models.ContainerRegistry) error {
 			registryLabel := containerRegistry.Name

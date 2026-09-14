@@ -14,7 +14,7 @@ type Build struct {
 	Project            ProjectReference                        `json:"project"`
 	ProjectEnvironment ProjectEnvironmentWithWildCardReference `json:"projectEnvironment"`
 	App                AppReference                            `json:"app"`
-	Tags               []string                                `json:"tags;omitempty"`
+	Tags               []string                                `json:"tags,omitempty"`
 	CommitSha          string                                  `json:"commitSha"`
 	Artifacts          []Artifact                              `json:"artifacts"`
 }

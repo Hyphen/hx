@@ -221,6 +221,40 @@ func TestCreateBuild(t *testing.T) {
 		mockHTTPClient.AssertExpectations(t)
 	})
 
+	t.Run("maps_each_docker_uri_to_its_own_artifact_in_the_request_body", func(t *testing.T) {
+		mockHTTPClient := new(httputil.MockHTTPClient)
+		service := &BuildService{
+			baseUrl:    "https://api.example.com",
+			httpClient: mockHTTPClient,
+		}
+
+		var capturedBody string
+		mockHTTPClient.On("Do", mock.Anything).Run(func(args mock.Arguments) {
+			req := args.Get(0).(*http.Request)
+			bodyBytes, err := io.ReadAll(req.Body)
+			require.NoError(t, err)
+			capturedBody = string(bodyBytes)
+		}).Return(&http.Response{
+			StatusCode: http.StatusCreated,
+			Body: io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifacts":[{"type":"Docker","ports":[8080],"image":{"uri":"aws.dkr.ecr/web:1"}},{"type":"Docker","ports":[8080],"image":{"uri":"gcr.io/web:1"}}]}`)),
+		}, nil)
+
+		build, err := service.CreateBuild(CreateBuildOptions{
+			OrganizationId: "anOrgId",
+			AppId:          "anAppId",
+			CommitSha:      "abc1234",
+			DockerUris:     []string{"aws.dkr.ecr/web:1", "gcr.io/web:1"},
+			Ports:          []int{8080},
+		})
+
+		assert.NoError(t, err)
+		assert.NotNil(t, build)
+		assert.Contains(t, capturedBody, `"uri":"aws.dkr.ecr/web:1"`)
+		assert.Contains(t, capturedBody, `"uri":"gcr.io/web:1"`)
+		assert.Equal(t, 2, strings.Count(capturedBody, `"type":"Docker"`))
+		mockHTTPClient.AssertExpectations(t)
+	})
+
 	t.Run("passes_through_commitShaHref_and_tagHref_values_unchanged_in_request_body_for_each_provider", func(t *testing.T) {
 		tests := []struct {
 			provider      string
