@@ -2,7 +2,7 @@
 
 ## Env variables
 - `HYPHEN_DEV`: set to `true` if you wish to interact against the Hyphen dev environment. You can also use `--dev`, but it would be required with each command.
-- `HYPHEN_LOCAL_APIX`: set to `true` for local APIX/Socket.IO (`http://localhost:4000`) and app links (`http://localhost:3000`). This uses **dev authentication** (`https://dev-auth.hyphen.ai`) and the dev OAuth client without changing the project Horizon endpoint.
+- `HYPHEN_LOCAL_APIX`: set to `true` for local APIX (`http://localhost:4000`), Socket.IO (`http://localhost:4100`), and app links (`http://localhost:3000`). This uses **dev authentication** (`https://dev-auth.hyphen.ai`) and the dev OAuth client without changing the project Horizon endpoint.
 - `HYPHEN_LOCAL_HORIZON`: set to `true` for your project's local Horizon requests (`http://localhost:3333`), including environment/dot-env reads, without changing APIX or authentication.
 - `HYPHEN_LOCAL`: set to `true` to force both local switches on, even if either individual switch is `false`. Local endpoints take precedence over `HYPHEN_DEV`/`--dev`. Variable names are uppercase and case-sensitive.
 

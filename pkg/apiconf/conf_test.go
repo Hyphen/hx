@@ -29,8 +29,10 @@ func TestEnvironmentRouting(t *testing.T) {
 							if dev || devFlag {
 								api, app, horizon = "https://dev-api.hyphen.ai", "https://dev-app.hyphen.ai", "https://dev-horizon.hyphen.ai"
 							}
+							ioURL := api
 							if local || localApix {
 								api, app = "http://localhost:4000", "http://localhost:3000"
+								ioURL = "http://localhost:4100"
 							}
 							if local || localHorizon {
 								horizon = "http://localhost:3333"
@@ -39,7 +41,7 @@ func TestEnvironmentRouting(t *testing.T) {
 								auth, clientID = "https://dev-auth.hyphen.ai", "8d5fb36d-2886-4c53-ab70-e6203e781fbc"
 							}
 							assert.Equal(t, api, GetBaseApixUrl())
-							assert.Equal(t, api, GetIOBaseUrl())
+							assert.Equal(t, ioURL, GetIOBaseUrl())
 							assert.Equal(t, auth, GetBaseAuthUrl())
 							assert.Equal(t, clientID, GetAuthClientID())
 							assert.Equal(t, app, GetBaseAppUrl())
