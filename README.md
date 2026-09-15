@@ -2,6 +2,31 @@
 
 ## Env variables
 - `HYPHEN_DEV`: set to `true` if you wish to interact against the Hyphen dev environment. You can also use `--dev`, but it would be required with each command.
+- `HYPHEN_LOCAL_APIX`: set to `true` for local APIX/Socket.IO (`http://localhost:4000`) and app links (`http://localhost:3000`). This uses **dev authentication** (`https://dev-auth.hyphen.ai`) and the dev OAuth client without changing the project Horizon endpoint.
+- `HYPHEN_LOCAL_HORIZON`: set to `true` for your project's local Horizon requests (`http://localhost:3333`), including environment/dot-env reads, without changing APIX or authentication.
+- `HYPHEN_LOCAL`: set to `true` to force both local switches on, even if either individual switch is `false`. Local endpoints take precedence over `HYPHEN_DEV`/`--dev`. Variable names are uppercase and case-sensitive.
+
+The CLI's own feature-flag provider **always uses production Horizon** through
+the SDK's organization-specific production endpoint. None of these local
+switches change that endpoint. `HYPHEN_DEV` still selects its `development`
+evaluation environment; otherwise it evaluates `production`.
+
+After rebuilding hx, authenticate again to replace credentials obtained from production:
+
+```sh
+export HYPHEN_LOCAL=true
+hx auth
+```
+
+For **local APIX with dev project Horizon and dev authentication**:
+
+```sh
+export HYPHEN_LOCAL=false
+export HYPHEN_LOCAL_APIX=true
+export HYPHEN_LOCAL_HORIZON=false
+export HYPHEN_DEV=true
+hx auth
+```
 
 ## Installation
 **Linux/MacOS**
