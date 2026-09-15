@@ -84,6 +84,13 @@ func TestNeedsLocalAppConfig(t *testing.T) {
 		{name: "project list", path: []string{"project", "list"}, expected: false},
 		{name: "init", path: []string{"init"}, expected: false},
 		{name: "deploy default", path: []string{"deploy"}, expected: true},
+		{name: "static build needs local app even with sites selection", path: []string{"deploy"}, args: []string{"dply_test", "dist"}, config: func(cmd *cobra.Command) {
+			cmd.Flags().String("type", "static", "")
+			cmd.Flags().String("sites", "website", "")
+		}, expected: true},
+		{name: "remote site selector needs no local app", path: []string{"deploy"}, args: []string{"dply_test"}, config: func(cmd *cobra.Command) {
+			cmd.Flags().String("sites", "website:latest", "")
+		}, expected: false},
 		{name: "deploy explicit id builds local app", path: []string{"deploy"}, args: []string{"depl_test"}, expected: true},
 		{
 			name: "deploy explicit id with no build",

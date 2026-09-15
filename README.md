@@ -16,6 +16,80 @@ powershell -c "irm https://cdn.hyphen.ai/install/install.ps1 | iex"
 
 ## Main Commands
 
+## Build and deploy
+
+`hx` and `hyphen` support the same commands. Run these from your app's `.hx`
+directory. `--type` selects the **local build**: `docker` (default) or `static`.
+Docker keeps the existing Dockerfile generation, build, registry push, and build
+registration flow. Use `--dockerfile/-f` to choose a Dockerfile.
+
+```sh
+hx build
+hx deploy
+hx build --type static ./dist
+hx deploy --type static ./dist
+hx deploy dply_123 --type static ./dist
+```
+
+For static builds, the final positional argument is a **required directory**
+containing the already-built website. hx does not run a frontend build tool or
+Docker. Build your frontend first. Supply a directory, not an archive, symlink,
+or individual `.gz` file.
+An empty directory, symlinks within it, non-regular files, or paths containing
+`\\`, `%`, `?`, `#`, control characters, or invalid UTF-8 fail validation.
+
+The project must have exactly one ready HyphenCloud **SiteRegistry** connection.
+hx hashes the original files and stages a gzip copy of each in a temporary
+directory, then requests a short-lived upload capability through APIX. It sends
+each gzip file as multipart directly to the returned upload URL, finalizes the
+revision, validates the sealed receipt, and registers a `Static` build artifact.
+File bytes do not pass through APIX or nFabric. The upload uses only its
+capability bearer; APIX credentials are not sent to the upload host, and upload
+redirects are refused. Temporary gzip files are removed on completion or failure.
+
+The returned registry limits apply to file count, decompressed file sizes, and
+multipart request size. Failed uploads do not register a build. hx attempts to
+abort unfinished uploads; an expired/rejected capability requires rerunning the
+build. Once sealed, the revision is not aborted, including if build registration
+fails. No deployment runs until build registration succeeds.
+
+### Selecting apps and sites
+
+`--apps` selects **container apps**; `--sites` selects **static sites**. Both use
+comma-separated app IDs or alternate IDs, with optional build selectors:
+`latest`, `lastDeployed`, `latestPreview`, or an `abld_...` build ID.
+
+```sh
+hx deploy dply_123 --no-build --apps api:latest --sites website:abld_123
+hx deploy dply_123 --no-build --sites website:lastDeployed
+hx deploy dply_123 --type static --apps api:latest --sites website ./dist
+```
+
+An unqualified selector matching the local `.hx` app builds that app when its
+kind matches `--type`. Other unqualified selectors use `latest`. Explicit build
+selectors always use that build, including with `--no-build`. Static local
+builds require the local site to be selected without a build selector; otherwise
+use `--no-build`. No directory is needed or used with `--no-build`.
+
+When either selection flag is supplied, only those selected apps/sites are
+submitted to the run. When neither is supplied, all deployment apps and sites
+are submitted: the local app uses its new build unless `--no-build`, and other
+members use `latest`. Static auto-add/create writes the app under `sites` with
+the HyphenCloud **organization integration ID** in `deploymentSettings.targets`;
+the registry connection ID is only used for artifacts/uploads. Existing app and
+site settings are preserved. An existing container app cannot silently be moved
+to `sites`, or vice versa; update deployment settings explicitly first.
+
+Without a deployment ID, hx resolves the project's development environment (or
+`--env`) and creates its deployment if needed. Preview deployment keeps the
+existing `--preview/-r` and `--prefix/-x` flow. The selected preview's host prefix
+is sent as the upload `previewHash`, together with the environment ID. Standalone
+`hx build --type static --env env_123 --preview my-branch ./dist` associates the
+build with the environment/preview name without creating or activating a preview.
+
+Both commands retain `--output json` for machine-readable results and errors.
+Build/deploy commands remain subject to the existing deployments feature toggle.
+
 ### `hyphen`
 The root command for the Hyphen CLI.
 
