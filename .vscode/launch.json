@@ -14,7 +14,7 @@
     "cwd": "${workspaceFolder}",
     "env": {
       "HYPHEN_DEV": "true",
-      //"HYPHEN_Local": "true"
+      //"HYPHEN_LOCAL": "true"
     },
     "args": [
      //"deploy", "Location-Staging", //"--no-build" //"--verbose" //, "--no-build"

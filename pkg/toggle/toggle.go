@@ -20,12 +20,17 @@ func getEnvironment() string {
 	return "production"
 }
 
-func init() {
-	provider, err := toggle.NewProvider(toggle.Config{
+func providerConfig() toggle.Config {
+	// hx feature flags always use the SDK's production Horizon endpoint.
+	return toggle.Config{
 		PublicKey:   "public_b3JnXzY2ODU3NWMwZTE2OWNkZTk3NGE1Yzc2YTpwcm9qXzY3MGQ1M2Q4M2ViZDdiZmJkN2YxZjUwMTplb3hJczd2RUlVT3FmRzdwUXJmMg==",
 		Application: "hx",
 		Environment: getEnvironment(),
-	})
+	}
+}
+
+func init() {
+	provider, err := toggle.NewProvider(providerConfig())
 	if err != nil {
 		// do something here...
 	}

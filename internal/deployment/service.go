@@ -16,21 +16,26 @@ import (
 
 type IDeploymentService interface {
 	SearchDeployments(organizationId, nameOrId string, pageSize, pageNum int, projectIds []string) ([]models.Deployment, error)
-	CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description string) (*models.Deployment, error)
+	CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description, siteIntegrationID string) (*models.Deployment, error)
 	GetDeployment(organizationId, deploymentId string) (*models.Deployment, error)
 }
 
 type createEnvironmentDeploymentRequest struct {
-	Name               string                             `json:"name"`
-	AlternateID        string                             `json:"alternateId"`
-	Description        string                             `json:"description"`
-	Project            models.ProjectReference            `json:"project"`
-	ProjectEnvironment models.ProjectEnvironmentReference `json:"projectEnvironment"`
-	Apps               []createDeploymentApp              `json:"apps"`
+	Name               string                `json:"name"`
+	AlternateID        string                `json:"alternateId"`
+	Description        string                `json:"description"`
+	Project            deploymentReference   `json:"project"`
+	ProjectEnvironment deploymentReference   `json:"projectEnvironment"`
+	Apps               []createDeploymentApp `json:"apps"`
+	Sites              []patchDeploymentSite `json:"sites,omitempty"`
 }
 
 type createDeploymentApp struct {
-	App models.AppReference `json:"app"`
+	App deploymentReference `json:"app"`
+}
+
+type deploymentReference struct {
+	ID string `json:"id"`
 }
 
 type DeploymentService struct {
@@ -367,19 +372,24 @@ func (ds *DeploymentService) AddAppsToDeployment(organizationId, deploymentId st
 	return ds.GetDeployment(organizationId, deploymentId)
 }
 
-func (ds *DeploymentService) CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description string) (*models.Deployment, error) {
+func (ds *DeploymentService) CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description, siteIntegrationID string) (*models.Deployment, error) {
 	url := fmt.Sprintf("%s/api/organizations/%s/deployments/", ds.baseUrl, organizationId)
 
-	requestBody, err := json.Marshal(createEnvironmentDeploymentRequest{
+	input := createEnvironmentDeploymentRequest{
 		Name:               name,
 		AlternateID:        alternateId,
 		Description:        description,
-		Project:            models.ProjectReference{ID: projectId},
-		ProjectEnvironment: models.ProjectEnvironmentReference{ID: projectEnvironmentId},
+		Project:            deploymentReference{ID: projectId},
+		ProjectEnvironment: deploymentReference{ID: projectEnvironmentId},
 		Apps: []createDeploymentApp{
-			{App: models.AppReference{ID: appId}},
+			{App: deploymentReference{ID: appId}},
 		},
-	})
+	}
+	if siteIntegrationID != "" {
+		input.Apps = []createDeploymentApp{}
+		input.Sites = []patchDeploymentSite{newDeploymentSite(appId, siteIntegrationID)}
+	}
+	requestBody, err := json.Marshal(input)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to marshal request body")
 	}

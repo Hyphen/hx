@@ -7,45 +7,49 @@ import (
 	"github.com/Hyphen/cli/pkg/flags"
 )
 
+func useLocalApix() bool {
+	return strings.EqualFold(os.Getenv("HYPHEN_LOCAL"), "true") || strings.EqualFold(os.Getenv("HYPHEN_LOCAL_APIX"), "true")
+}
+
 func GetBaseApixUrl() string {
+	if useLocalApix() {
+		return "http://localhost:4000"
+	}
 	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
 		return "https://dev-api.hyphen.ai"
-	}
-	if strings.ToLower(os.Getenv("HYPHEN_Local")) == "true" {
-		return "http://localhost:4000"
 	}
 	return "https://api.hyphen.ai"
 }
 
 func GetBaseHorizonUrl() string {
+	if strings.EqualFold(os.Getenv("HYPHEN_LOCAL"), "true") || strings.EqualFold(os.Getenv("HYPHEN_LOCAL_HORIZON"), "true") {
+		return "http://localhost:3333"
+	}
 	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
 		return "https://dev-horizon.hyphen.ai"
-	}
-	if strings.ToLower(os.Getenv("HYPHEN_Local")) == "true" {
-		return "http://localhost:3333"
 	}
 	return "https://toggle.hyphen.cloud"
 }
 
 func GetBaseAppUrl() string {
+	if useLocalApix() {
+		return "http://localhost:3000"
+	}
 	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
 		return "https://dev-app.hyphen.ai"
-	}
-	if strings.ToLower(os.Getenv("HYPHEN_Local")) == "true" {
-		return "http://localhost:3000"
 	}
 	return "https://app.hyphen.ai"
 }
 
 func GetBaseAuthUrl() string {
-	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
+	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" || useLocalApix() {
 		return "https://dev-auth.hyphen.ai"
 	}
 	return "https://auth.hyphen.ai"
 }
 
 func GetAuthClientID() string {
-	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
+	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" || useLocalApix() {
 		return "8d5fb36d-2886-4c53-ab70-e6203e781fbc"
 	}
 	return "e6315ab1-5847-4c75-a003-65b5ed374dd1"
@@ -60,11 +64,11 @@ func GetBaseVinzUrl() string {
 }
 
 func GetIOBaseUrl() string {
+	if useLocalApix() {
+		return "http://localhost:4100"
+	}
 	if flags.DevFlag || strings.ToLower(os.Getenv("HYPHEN_DEV")) == "true" {
 		return "https://dev-api.hyphen.ai"
-	}
-	if strings.ToLower(os.Getenv("HYPHEN_Local")) == "true" {
-		return "http://localhost:4000"
 	}
 	return "https://api.hyphen.ai"
 }

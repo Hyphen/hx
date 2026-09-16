@@ -7,6 +7,9 @@ import (
 )
 
 func TestBuildCmd(t *testing.T) {
+	t.Run("defaults_to_docker", func(t *testing.T) {
+		assert.Equal(t, "docker", BuildCmd.Flags().Lookup("type").DefValue)
+	})
 	t.Run("has_an_env_flag", func(t *testing.T) {
 		flag := BuildCmd.Flags().Lookup("env")
 
