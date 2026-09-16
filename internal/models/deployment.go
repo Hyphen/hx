@@ -20,12 +20,26 @@ type ReadinessIssue struct {
 	ProjectId string `json:"projectId"`
 }
 
+type DeploymentSite struct {
+	App                AppReference `json:"app"`
+	DeploymentSettings SiteSettings `json:"deploymentSettings"`
+}
+
+type SiteSettings struct {
+	Targets []SiteTarget `json:"targets"`
+}
+
+type SiteTarget struct {
+	ID string `json:"id"`
+}
+
 type Deployment struct {
 	ID                 string                      `json:"id"`
 	Name               string                      `json:"name"`
 	Description        string                      `json:"description"`
 	Organization       OrganizationReference       `json:"organization"`
 	Apps               []DeploymentApp             `json:"apps"`
+	Sites              []DeploymentSite            `json:"sites"`
 	IsReady            bool                        `json:"isReady"`
 	ReadinessIssues    []ReadinessIssue            `json:"readinessIssues"`
 	Previews           []DeploymentPreview         `json:"previews"`

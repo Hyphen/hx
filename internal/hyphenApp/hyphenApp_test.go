@@ -138,5 +138,6 @@ func resetAppUrlConfig(t *testing.T) {
 	flags.DevFlag = false
 	t.Cleanup(func() { flags.DevFlag = originalDevFlag })
 	t.Setenv("HYPHEN_DEV", "false")
-	t.Setenv("HYPHEN_Local", "false")
+	t.Setenv("HYPHEN_LOCAL", "false")
+	t.Setenv("HYPHEN_LOCAL_APIX", "false")
 }

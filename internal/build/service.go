@@ -46,6 +46,7 @@ type CreateBuildOptions struct {
 	DockerUris     []string
 	Ports          []int
 	Preview        string
+	Site           *models.StaticArtifact
 }
 
 func (bs *BuildService) CreateBuild(opts CreateBuildOptions) (*models.Build, error) {
@@ -66,12 +67,15 @@ func (bs *BuildService) CreateBuild(opts CreateBuildOptions) (*models.Build, err
 		artifacts = append(artifacts, models.Artifact{
 			Type:  "Docker",
 			Ports: ports,
-			Image: struct {
+			Image: &struct {
 				URI string `json:"uri"`
 			}{
 				URI: dockerUri,
 			},
 		})
+	}
+	if opts.Site != nil {
+		artifacts = append(artifacts, models.Artifact{Type: "Static", Target: "hyphenCloud", Site: opts.Site})
 	}
 
 	build := models.NewBuild{
@@ -156,7 +160,20 @@ func (bs *BuildService) FindRegistryConnections(organizationId, projectId string
 	return response, nil
 }
 
-func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, environmentId string, verbose bool, dockerfilePath string, preview string) (*models.Build, error) {
+type Options struct {
+	Type           string
+	Directory      string
+	EnvironmentID  string
+	Preview        string
+	PreviewHash    string
+	DockerfilePath string
+	Verbose        bool
+}
+
+func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, opts Options) (*models.Build, error) {
+	if err := ValidateInput(opts.Type, opts.Directory, opts.DockerfilePath); err != nil {
+		return nil, err
+	}
 	// grab the manifest to get app details
 	config, err := config.RestoreConfig()
 	if err != nil {
@@ -166,21 +183,50 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 	if config.IsMonorepoProject() {
 		return nil, fmt.Errorf("monorepo projects are not supported yet")
 	}
+	if config.ProjectId == nil || config.AppId == nil || config.AppAlternateId == nil {
+		return nil, fmt.Errorf("project and app must be set in .hx configuration")
+	}
+	metadata := sourceMetadata()
+	metadata.OrganizationId = config.OrganizationId
+	metadata.AppId = *config.AppId
+	metadata.EnvironmentId = opts.EnvironmentID
+	metadata.Preview = opts.Preview
+	if opts.Type == "static" {
+		site, err := bs.uploadStaticSite(cmd.Context(), printer, config.OrganizationId, *config.ProjectId, *config.AppId, opts)
+		if err != nil {
+			return nil, err
+		}
+		metadata.Site = site
+	} else {
+		uris, ports, err := bs.buildDocker(cmd, printer, config, opts, metadata.CommitSha)
+		if err != nil {
+			return nil, err
+		}
+		metadata.DockerUris, metadata.Ports = uris, ports
+	}
+	result, err := bs.CreateBuild(metadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to register build: %w", err)
+	}
+	return result, nil
+}
+
+func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter, config config.Config, opts Options, commitSha string) ([]string, []int, error) {
 
 	// Check for docker
 	printer.PrintVerbose("Checking for docker CLI")
 	isDockerAvailable := dockerutil.IsDockerAvailable()
 	if !isDockerAvailable {
-		return nil, fmt.Errorf("docker is not installed or not in PATH")
+		return nil, nil, fmt.Errorf("docker is not installed or not in PATH")
 	}
 
 	// Try to find a docker file to run
 	printer.PrintVerbose("Looking for Docker File")
 	var dockerfilePathOrDir string
-	if dockerfilePath != "" {
+	if opts.DockerfilePath != "" {
 		// Use the provided dockerfile path (file)
-		printer.PrintVerbose(fmt.Sprintf("Using provided dockerfile path: %s", dockerfilePath))
-		dockerfilePathOrDir = dockerfilePath
+		printer.PrintVerbose(fmt.Sprintf("Using provided dockerfile path: %s", opts.DockerfilePath))
+		dockerfilePathOrDir = opts.DockerfilePath
 	} else {
 		// Search for dockerfile automatically (returns directory)
 		dockerfileDir, err := dockerutil.FindDockerFile()
@@ -188,7 +234,7 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 			coder := code.NewService()
 			err = coder.GenerateDocker(printer, cmd)
 			if err != nil {
-				return nil, fmt.Errorf("failed to generate docker file: %w", err)
+				return nil, nil, fmt.Errorf("failed to generate docker file: %w", err)
 			}
 			dockerfileDir, _ = dockerutil.FindDockerFile()
 		}
@@ -196,64 +242,22 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 	}
 	printer.PrintVerbose(fmt.Sprintf("found docker file at %s", dockerfilePathOrDir))
 
-	if config.ProjectId == nil {
-		return nil, fmt.Errorf("project ID is not set in configuration")
-	}
 	containerRegistries, err := bs.FindRegistryConnections(config.OrganizationId, *config.ProjectId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find registry connections: %w", err)
-	}
-
-	// registerUrl := "deploydevelopmentregistry.azurecr.io"
-	fullCommitSha, err := gitutil.GetLastCommitHash()
-	if err != nil {
-		fullCommitSha = "00000000000000000000000000000000"
-	}
-	commitSha := fullCommitSha[:7]
-
-	var repoBaseUrl, commitShaHref, tag, tagHref string
-	remoteUrl, _ := gitutil.GetRemoteUrl()
-	provider := gitutil.DetectProvider(remoteUrl)
-	if remoteUrl != "" {
-		repoBaseUrl, _ = gitutil.ParseRepoBaseUrl(remoteUrl)
-		if repoBaseUrl != "" {
-			switch provider {
-			case "github":
-				commitShaHref = repoBaseUrl + "/commit/" + fullCommitSha
-			case "gitlab":
-				commitShaHref = repoBaseUrl + "/-/commit/" + fullCommitSha
-			case "azuredevops":
-				commitShaHref = repoBaseUrl + "/commit/" + fullCommitSha
-			case "bitbucket":
-				commitShaHref = repoBaseUrl + "/commits/" + fullCommitSha
-			}
-		}
-	}
-	tag, _ = gitutil.GetCurrentTag()
-	if tag != "" && repoBaseUrl != "" {
-		switch provider {
-		case "github":
-			tagHref = repoBaseUrl + "/releases/tag/" + tag
-		case "gitlab":
-			tagHref = repoBaseUrl + "/-/tags/" + tag
-		case "azuredevops":
-			tagHref = repoBaseUrl + "?version=GT" + tag
-		case "bitbucket":
-			tagHref = repoBaseUrl + "/src/" + tag
-		}
+		return nil, nil, fmt.Errorf("failed to find registry connections: %w", err)
 	}
 
 	// Run build on the docker file
 	printer.Print(fmt.Sprintf("Building %s", *config.AppAlternateId))
-	name, _, err := dockerutil.Build(dockerfilePathOrDir, *config.AppAlternateId, commitSha, verbose)
+	name, _, err := dockerutil.Build(dockerfilePathOrDir, *config.AppAlternateId, commitSha, opts.Verbose)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build docker image: %w", err)
+		return nil, nil, fmt.Errorf("failed to build docker image: %w", err)
 	}
 	printer.PrintVerbose("Docker image built successfully")
 
 	inspectData, err := dockerutil.Inspect(name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to inspect docker image: %w", err)
+		return nil, nil, fmt.Errorf("failed to inspect docker image: %w", err)
 	}
 
 	ports := make([]int, 0)
@@ -298,31 +302,42 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, e
 			return nil
 		}(containerRegistry)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-
 	if len(containerUrls) == 0 {
-		return nil, fmt.Errorf("no container registries available to publish the build")
+		return nil, nil, fmt.Errorf("no container registries available to publish the build")
 	}
+	return containerUrls, ports, nil
+}
 
-	// Tell Hyphen about the build
-	build, err := bs.CreateBuild(CreateBuildOptions{
-		OrganizationId: config.OrganizationId,
-		AppId:          *config.AppId,
-		EnvironmentId:  environmentId,
-		CommitSha:      commitSha,
-		CommitShaHref:  commitShaHref,
-		Tag:            tag,
-		TagHref:        tagHref,
-		DockerUris:     containerUrls,
-		Ports:          ports,
-		Preview:        preview,
-	})
-
+func sourceMetadata() CreateBuildOptions {
+	fullCommitSha, err := gitutil.GetLastCommitHash()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create build: %w", err)
+		fullCommitSha = "00000000000000000000000000000000"
 	}
-	return build, nil
-
+	opts := CreateBuildOptions{CommitSha: fullCommitSha[:7]}
+	opts.Tag, _ = gitutil.GetCurrentTag()
+	remoteURL, _ := gitutil.GetRemoteUrl()
+	baseURL, _ := gitutil.ParseRepoBaseUrl(remoteURL)
+	if baseURL != "" {
+		var commitPath, tagPath string
+		switch gitutil.DetectProvider(remoteURL) {
+		case "github":
+			commitPath, tagPath = "/commit/", "/releases/tag/"
+		case "gitlab":
+			commitPath, tagPath = "/-/commit/", "/-/tags/"
+		case "azuredevops":
+			commitPath, tagPath = "/commit/", "?version=GT"
+		case "bitbucket":
+			commitPath, tagPath = "/commits/", "/src/"
+		}
+		if commitPath != "" {
+			opts.CommitShaHref = baseURL + commitPath + fullCommitSha
+		}
+		if tagPath != "" && opts.Tag != "" {
+			opts.TagHref = baseURL + tagPath + opts.Tag
+		}
+	}
+	return opts
 }

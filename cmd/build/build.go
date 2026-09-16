@@ -15,23 +15,38 @@ import (
 var (
 	printer          *cprint.CPrinter
 	outputFormatFlag string
+	buildType        string
 )
 
 var BuildCmd = &cobra.Command{
-	Use:   "build ",
+	Use:   "build [flags] [site-directory]",
 	Short: "Run a build and post it to hyphen",
 	Long: `
 The build command runs a build and uploads it to hyphen without deploying.
 
 Usage:
-	hyphen build [flags]
+	hyphen build [flags] [site-directory]
 
 Examples:
 hyphen build
+hyphen build --type static ./dist
+
+--type defaults to docker. Static builds require a final directory argument
+containing an already-built website. Files are gzipped, uploaded directly with
+a short-lived SiteRegistry token, finalized, and registered as a static build.
 
 Use 'hyphen build --help' for more information about available flags.
 `,
-	Args: cobra.RangeArgs(0, 1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if err := cobra.RangeArgs(0, 1)(cmd, args); err != nil {
+			return err
+		}
+		directory := ""
+		if len(args) == 1 {
+			directory = args[0]
+		}
+		return build.ValidateInput(buildType, directory, flags.DockerfileFlag)
+	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return user.ErrorIfNotAuthenticated()
 	},
@@ -39,7 +54,7 @@ Use 'hyphen build --help' for more information about available flags.
 		printer = cprint.NewCPrinter(flags.VerboseFlag)
 		printer.SetFormat(outputFormatFlag)
 
-		result, runErr := runBuild(cmd)
+		result, runErr := runBuild(cmd, args)
 		if runErr != nil {
 			if printer.IsJSON() {
 				emitFailure(printer, map[string]any{}, runErr)
@@ -72,9 +87,16 @@ func emitFailure(p *cprint.CPrinter, partial map[string]any, err error) {
 // error. Keeping the body here (rather than inline in RunE) lets the RunE
 // wrapper uniformly translate any error into a JSON failure payload when
 // --output=json is set.
-func runBuild(cmd *cobra.Command) (map[string]any, error) {
+func runBuild(cmd *cobra.Command, args []string) (map[string]any, error) {
+	directory := ""
+	if len(args) > 0 {
+		directory = args[0]
+	}
 	service := build.NewService()
-	result, err := service.RunBuild(cmd, printer, flags.EnvironmentFlag, flags.VerboseFlag, flags.DockerfileFlag, flags.PreviewNameFlag)
+	result, err := service.RunBuild(cmd, printer, build.Options{
+		Type: buildType, Directory: directory, EnvironmentID: flags.EnvironmentFlag,
+		Verbose: flags.VerboseFlag, DockerfilePath: flags.DockerfileFlag, Preview: flags.PreviewNameFlag,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +115,7 @@ func runBuild(cmd *cobra.Command) (map[string]any, error) {
 }
 
 func init() {
+	BuildCmd.Flags().StringVar(&buildType, "type", "docker", "Build type: docker or static (requires a final site directory argument)")
 	BuildCmd.Flags().StringVarP(&flags.DockerfileFlag, "dockerfile", "f", "", "Path to Dockerfile (e.g., ./Dockerfile or ./docker/Dockerfile.prod)")
 	BuildCmd.Flags().StringVarP(&flags.EnvironmentFlag, "env", "e", "", "Environment ID for the build")
 	BuildCmd.Flags().StringVarP(&flags.PreviewNameFlag, "preview", "r", "", "Preview name to associate with this build")

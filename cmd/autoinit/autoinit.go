@@ -103,11 +103,14 @@ func NeedsLocalAppConfig(cmd *cobra.Command, args []string) bool {
 }
 
 func deployNeedsLocalAppConfig(cmd *cobra.Command, args []string) bool {
+	if stringFlag(cmd, "type") == "static" && !boolFlag(cmd, "no-build") {
+		return true
+	}
 	if len(args) == 0 {
 		return true
 	}
 
-	if stringFlag(cmd, "apps") != "" {
+	if stringFlag(cmd, "apps") != "" || stringFlag(cmd, "sites") != "" {
 		return false
 	}
 

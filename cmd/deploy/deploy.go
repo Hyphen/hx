@@ -28,12 +28,14 @@ var (
 	envFlag          string
 	projectFlag      string
 	appsFlag         string
+	sitesFlag        string
+	buildType        string
 	outputFormatFlag string
 	printer          *cprint.CPrinter
 )
 
 var DeployCmd = &cobra.Command{
-	Use:   "deploy [deploymentId]",
+	Use:   "deploy [deploymentId] [flags] [site-directory]",
 	Short: "Run a deployment",
 	Long: `
 Run a deployment by ID, or omit it to deploy the development environment.
@@ -43,15 +45,27 @@ find the development environment deployment. If it doesn't exist yet, it will
 be created automatically.
 
 Usage:
-  hyphen deploy [deploymentId] [flags]
+  hyphen deploy [deploymentId] [flags] [site-directory]
 
 Examples:
   hyphen deploy                  # deploys the dev environment (auto-detected)
   hyphen deploy depl_abc123      # deploys a specific deployment by ID
+  hyphen deploy --type static ./dist
+  hyphen deploy depl_abc123 --no-build --apps api:latest --sites website:abld_123
+
+--type selects the local build (docker by default). Static builds require the
+website directory as the final argument, unless --no-build is used. --apps and
+--sites select containers and static sites separately and may be combined.
 
 Use 'hyphen deploy --help' for more information about available flags.
 `,
-	Args: cobra.RangeArgs(0, 1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if _, _, err := deployArguments(args, buildType, noBuild, flags.DockerfileFlag); err != nil {
+			return err
+		}
+		_, err := parseSelections(appsFlag, sitesFlag)
+		return err
+	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return user.ErrorIfNotAuthenticated()
 	},
@@ -105,6 +119,14 @@ Use 'hyphen deploy --help' for more information about available flags.
 // RunE wrapper tags it with status=failed and reason on error.
 func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 	result := map[string]any{}
+	deploymentID, directory, err := deployArguments(args, buildType, noBuild, flags.DockerfileFlag)
+	if err != nil {
+		return result, err
+	}
+	selections, err := parseSelections(appsFlag, sitesFlag)
+	if err != nil {
+		return result, err
+	}
 
 	orgId, err := flags.GetOrganizationID()
 	if err != nil {
@@ -115,7 +137,7 @@ func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 
 	var selectedDeployment models.Deployment
 
-	if len(args) == 0 {
+	if deploymentID == "" {
 		cfg, err := config.RestoreLocalConfig()
 		if err != nil {
 			return result, fmt.Errorf("failed to restore config: %w", err)
@@ -161,7 +183,21 @@ func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 
 			name := deploymentNamePart(project.AlternateID, 25)
 
-			newDeployment, err := service.CreateEnvironmentDeployment(orgId, projectId, envId, *cfg.AppId, name, name, "")
+			siteIntegrationID := ""
+			initialKind := buildType
+			for _, selected := range selections {
+				if matchesHxApp(selected.ID, cfg) {
+					initialKind = selected.Kind
+				}
+			}
+			if initialKind == "static" {
+				registry, err := build.NewService().FindSiteRegistry(orgId, projectId)
+				if err != nil {
+					return result, err
+				}
+				siteIntegrationID = registry.OrganizationIntegration.Id
+			}
+			newDeployment, err := service.CreateEnvironmentDeployment(orgId, projectId, envId, *cfg.AppId, name, name, "", siteIntegrationID)
 			if err != nil {
 				return result, fmt.Errorf("failed to create deployment: %w", err)
 			}
@@ -170,7 +206,7 @@ func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 			selectedDeployment = deployment
 		}
 	} else {
-		deployment, err := service.GetDeployment(orgId, args[0])
+		deployment, err := service.GetDeployment(orgId, deploymentID)
 		if err != nil {
 			return result, fmt.Errorf("failed to get deployment: %w", err)
 		}
@@ -180,12 +216,32 @@ func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 
 	result["deploymentId"] = selectedDeployment.ID
 
-	if appsFlag == "" {
-		if updated, err := ensureLocalAppInDeployment(service, orgId, selectedDeployment); err != nil {
-			return result, err
-		} else if updated != nil {
-			selectedDeployment = *updated
+	cfg, cfgErr := config.RestoreLocalConfig()
+	if cfgErr != nil && !os.IsNotExist(cfgErr) {
+		return result, fmt.Errorf("failed to restore config: %w", cfgErr)
+	}
+	explicitSelection := len(selections) > 0
+	if !explicitSelection && cfg.AppId != nil {
+		kind := buildType
+		if noBuild {
+			if _, existingKind := deploymentMember(*cfg.AppId, selectedDeployment); existingKind != "" {
+				kind = existingKind
+			}
 		}
+		selections = []selection{{ID: *cfg.AppId, Kind: kind}}
+	}
+	if buildType == "static" && !noBuild && !selectsLocalBuild(selections, cfg, buildType) {
+		return result, fmt.Errorf("static build requires the configured .hx app to be selected without a build selector; use --no-build to deploy existing builds")
+	}
+	if !noBuild && selectsLocalBuild(selections, cfg, buildType) && (cfg.OrganizationId != orgId || cfg.ProjectId == nil || *cfg.ProjectId != selectedDeployment.Project.ID) {
+		return result, fmt.Errorf("local .hx app must belong to the deployment organization and project")
+	}
+	selectedDeployment, err = ensureSelections(service, orgId, selectedDeployment, selections)
+	if err != nil {
+		return result, err
+	}
+	if !explicitSelection {
+		selections = allSelections(selectedDeployment)
 	}
 
 	if !selectedDeployment.IsReady {
@@ -205,7 +261,7 @@ func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 	}
 
 	// Match preview if preview flag is provided
-	var previewId string
+	var previewId, previewHash string
 	if flags.PreviewNameFlag != "" {
 		matchedPreviews := []models.DeploymentPreview{}
 		for _, p := range selectedDeployment.Previews {
@@ -230,107 +286,32 @@ func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 				return result, fmt.Errorf("failed to create preview: %w", err)
 			}
 			previewId = newPreview.ID
+			previewHash = newPreview.HostPrefix
 		} else if len(matchedPreviews) > 1 {
 			return result, fmt.Errorf("multiple previews found with name '%s', please specify --prefix flag to disambiguate", flags.PreviewNameFlag)
 		} else {
 			previewId = matchedPreviews[0].ID
+			previewHash = matchedPreviews[0].HostPrefix
 		}
 	}
 
-	appSources := []Deployment.AppSources{}
-
-	if appsFlag != "" {
-		cfg, cfgErr := config.RestoreLocalConfig()
-		if cfgErr != nil && !os.IsNotExist(cfgErr) {
-			return result, fmt.Errorf("failed to restore config: %w", cfgErr)
-		}
-
-		parsedApps, err := parseAppsFlag(appsFlag)
+	appSources, err := deploymentSources(selectedDeployment, selections)
+	if err != nil {
+		return result, err
+	}
+	if !noBuild && (!explicitSelection || selectsLocalBuild(selections, cfg, buildType)) {
+		buildResult, err := build.NewService().RunBuild(cmd, printer, build.Options{
+			Type: buildType, Directory: directory, EnvironmentID: selectedDeployment.ProjectEnvironment.ID,
+			Preview: flags.PreviewNameFlag, PreviewHash: previewHash,
+			Verbose: flags.VerboseFlag, DockerfilePath: flags.DockerfileFlag,
+		})
 		if err != nil {
 			return result, err
 		}
-
-		var missingApps []string
-		for _, pa := range parsedApps {
-			if _, err := resolveDeploymentApp(pa.ID, selectedDeployment); err != nil {
-				missingApps = append(missingApps, pa.ID)
-			}
-		}
-		if len(missingApps) > 0 {
-			printer.Print(fmt.Sprintf("Adding app(s) %v to deployment with default settings", missingApps))
-			updated, addErr := service.AddAppsToDeployment(orgId, selectedDeployment.ID, missingApps)
-			if addErr != nil {
-				return result, fmt.Errorf("failed to add apps %v to deployment: %w", missingApps, addErr)
-			}
-			selectedDeployment = *updated
-		}
-
-		for _, pa := range parsedApps {
-			deployApp, err := resolveDeploymentApp(pa.ID, selectedDeployment)
-			if err != nil {
-				return result, fmt.Errorf("failed to resolve app %q after adding to deployment: %w", pa.ID, err)
-			}
-
-			if noBuild {
-				appSources = append(appSources, Deployment.AppSources{
-					AppId: deployApp.App.ID,
-					Build: "latest",
-				})
-				continue
-			}
-
-			if pa.BuildSpec == "" && matchesHxApp(pa.ID, cfg) {
-				buildSvc := build.NewService()
-				buildResult, err := buildSvc.RunBuild(cmd, printer, selectedDeployment.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag, flags.PreviewNameFlag)
-				if err != nil {
-					return result, err
-				}
-				appSources = append(appSources, Deployment.AppSources{
-					AppId:   buildResult.App.ID,
-					BuildId: buildResult.Id,
-				})
-			} else {
-				src := Deployment.AppSources{AppId: deployApp.App.ID}
-				switch pa.BuildSpec {
-				case "", "latest":
-					src.Build = "latest"
-				case "lastDeployed":
-					src.Build = "lastDeployed"
-				case "latestPreview":
-					src.Build = "latestPreview"
-				default:
-					if !strings.HasPrefix(pa.BuildSpec, "abld_") {
-						return result, fmt.Errorf("unknown build type %q: expected \"latest\", \"lastDeployed\", \"latestPreview\", or a build ID starting with \"abld_\"", pa.BuildSpec)
-					}
-					src.BuildId = pa.BuildSpec
-				}
-				appSources = append(appSources, src)
-			}
-		}
-	} else if noBuild {
-		for _, app := range selectedDeployment.Apps {
-			appSources = append(appSources, Deployment.AppSources{
-				AppId: app.App.ID,
-				Build: "latest",
-			})
-		}
-	} else {
-		buildSvc := build.NewService()
-		buildResult, err := buildSvc.RunBuild(cmd, printer, selectedDeployment.ProjectEnvironment.ID, flags.VerboseFlag, flags.DockerfileFlag, flags.PreviewNameFlag)
-		if err != nil {
-			return result, err
-		}
-		for _, app := range selectedDeployment.Apps {
-			if app.App.ID == buildResult.App.ID {
-				appSources = append(appSources, Deployment.AppSources{
-					AppId:   buildResult.App.ID,
-					BuildId: buildResult.Id,
-				})
-			} else {
-				appSources = append(appSources, Deployment.AppSources{
-					AppId: app.App.ID,
-					Build: "latest",
-				})
+		for i := range appSources {
+			if appSources[i].AppId == buildResult.App.ID {
+				appSources[i].Build = ""
+				appSources[i].BuildId = buildResult.Id
 			}
 		}
 	}
@@ -658,72 +639,6 @@ func deploymentNamePart(s string, maxLen int) string {
 	return s
 }
 
-type parsedApp struct {
-	ID        string
-	BuildSpec string
-}
-
-func parseAppsFlag(appsFlag string) ([]parsedApp, error) {
-	entries := strings.Split(appsFlag, ",")
-	result := make([]parsedApp, 0, len(entries))
-	for _, entry := range entries {
-		entry = strings.TrimSpace(entry)
-		if entry == "" {
-			continue
-		}
-		parts := strings.SplitN(entry, ":", 2)
-		appID := strings.TrimSpace(parts[0])
-		if appID == "" {
-			return nil, fmt.Errorf("invalid app entry %q: app ID is empty", entry)
-		}
-		pa := parsedApp{ID: appID}
-		if len(parts) == 2 {
-			pa.BuildSpec = strings.TrimSpace(parts[1])
-		}
-		result = append(result, pa)
-	}
-	if len(result) == 0 {
-		return nil, fmt.Errorf("--apps flag is empty")
-	}
-	return result, nil
-}
-
-// ensureLocalAppInDeployment makes sure the app referenced by the local .hx
-// config is part of the deployment. If the local config can't be read or
-// doesn't have an app id, it's a no-op. If the app is missing from the
-// deployment, it's added with default settings and the updated deployment is
-// returned. Returns (nil, nil) when no change was made.
-func ensureLocalAppInDeployment(service *Deployment.DeploymentService, orgId string, deployment models.Deployment) (*models.Deployment, error) {
-	cfg, err := config.RestoreLocalConfig()
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to restore config: %w", err)
-	}
-	if cfg.AppId == nil {
-		return nil, nil
-	}
-	if _, err := resolveDeploymentApp(*cfg.AppId, deployment); err == nil {
-		return nil, nil
-	}
-	printer.Print(fmt.Sprintf("Adding app %q to deployment with default settings", *cfg.AppId))
-	updated, err := service.AddAppsToDeployment(orgId, deployment.ID, []string{*cfg.AppId})
-	if err != nil {
-		return nil, fmt.Errorf("failed to add app %q to deployment: %w", *cfg.AppId, err)
-	}
-	return updated, nil
-}
-
-func resolveDeploymentApp(identifier string, deployment models.Deployment) (*models.DeploymentApp, error) {
-	for i, app := range deployment.Apps {
-		if app.App.ID == identifier || app.App.AlternateID == identifier {
-			return &deployment.Apps[i], nil
-		}
-	}
-	return nil, fmt.Errorf("app %q not found in deployment", identifier)
-}
-
 func matchesHxApp(identifier string, cfg config.Config) bool {
 	if cfg.AppId != nil && *cfg.AppId == identifier {
 		return true
@@ -735,7 +650,9 @@ func matchesHxApp(identifier string, cfg config.Config) bool {
 }
 
 func init() {
-	DeployCmd.Flags().BoolVar(&noBuild, "no-build", false, "Skip the build step and use the latest build")
+	DeployCmd.Flags().BoolVar(&noBuild, "no-build", false, "Skip local building; use selected builds (latest when unspecified)")
+	DeployCmd.Flags().StringVar(&buildType, "type", "docker", "Local build type: docker or static (requires a final site directory argument unless --no-build)")
+	DeployCmd.Flags().StringVar(&sitesFlag, "sites", "", "Comma-separated static sites to deploy, with the same build selectors as --apps")
 	DeployCmd.Flags().StringVarP(&flags.DockerfileFlag, "dockerfile", "f", "", "Path to Dockerfile (e.g., ./Dockerfile or ./docker/Dockerfile.prod)")
 	DeployCmd.Flags().StringVarP(&flags.PreviewNameFlag, "preview", "r", "", "Preview name to deploy to")
 	DeployCmd.Flags().StringVarP(&flags.PreviewPrefixFlag, "prefix", "x", "", "Host prefix for the preview deployment")

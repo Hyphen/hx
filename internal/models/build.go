@@ -2,10 +2,18 @@ package models
 
 type Artifact struct {
 	Type  string `json:"type"`
-	Image struct {
+	Image *struct {
 		URI string `json:"uri"`
-	} `json:"image"`
-	Ports []int `json:"ports"`
+	} `json:"image,omitempty"`
+	Ports  []int           `json:"ports,omitzero"`
+	Target string          `json:"target,omitempty"`
+	Site   *StaticArtifact `json:"site,omitempty"`
+}
+
+type StaticArtifact struct {
+	RegistryID string `json:"registryId"`
+	Revision   string `json:"revision"`
+	URI        string `json:"uri,omitempty"`
 }
 
 type Build struct {
