@@ -162,7 +162,7 @@ func TestStaticBuildFlow(t *testing.T) {
 					assert.Equal(t, "preview-name", r.URL.Query().Get("previewName"))
 					var payload map[string]any
 					assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-					assert.Equal(t, map[string]any{"type": "Static", "target": "hyphenCloud", "site": map[string]any{"registryId": "conn_registry", "revision": "abcd1234"}}, payload["artifact"])
+					assert.Equal(t, []any{map[string]any{"type": "Static", "target": "hyphenCloud", "site": map[string]any{"registryId": "conn_registry", "revision": "abcd1234"}}}, payload["artifacts"])
 					assert.NotEmpty(t, payload["commitSha"])
 					if failure == "register" {
 						http.Error(w, "registration failed", 503)
@@ -271,17 +271,19 @@ func TestDockerBuildArtifactUnchanged(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload models.NewBuild
 		assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		assert.Equal(t, "Docker", payload.Artifact.Type)
-		assert.Equal(t, "registry/image:tag", payload.Artifact.Image.URI)
-		assert.Equal(t, []int{8080}, payload.Artifact.Ports)
-		assert.Nil(t, payload.Artifact.Site)
-		assert.Empty(t, payload.Artifact.Target)
+		require.Len(t, payload.Artifacts, 1)
+		assert.Equal(t, "Docker", payload.Artifacts[0].Type)
+		require.NotNil(t, payload.Artifacts[0].Image)
+		assert.Equal(t, "registry/image:tag", payload.Artifacts[0].Image.URI)
+		assert.Equal(t, []int{8080}, payload.Artifacts[0].Ports)
+		assert.Nil(t, payload.Artifacts[0].Site)
+		assert.Empty(t, payload.Artifacts[0].Target)
 		w.WriteHeader(201)
 		fmt.Fprint(w, `{"id":"abld_docker"}`)
 	}))
 	defer server.Close()
 	service := BuildService{baseUrl: server.URL, httpClient: server.Client()}
-	_, err := service.CreateBuild(CreateBuildOptions{OrganizationId: "org", AppId: "app", DockerUri: "registry/image:tag", Ports: []int{8080}})
+	_, err := service.CreateBuild(CreateBuildOptions{OrganizationId: "org", AppId: "app", DockerUris: []string{"registry/image:tag"}, Ports: []int{8080}})
 	require.NoError(t, err)
 }
 

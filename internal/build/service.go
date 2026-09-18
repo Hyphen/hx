@@ -43,7 +43,7 @@ type CreateBuildOptions struct {
 	CommitShaHref  string
 	Tag            string
 	TagHref        string
-	DockerUri      string
+	DockerUris     []string
 	Ports          []int
 	Preview        string
 	Site           *models.StaticArtifact
@@ -61,24 +61,30 @@ func (bs *BuildService) CreateBuild(opts CreateBuildOptions) (*models.Build, err
 	}
 	url := fmt.Sprintf("%s/api/organizations/%s/apps/%s/builds?%s", bs.baseUrl, opts.OrganizationId, opts.AppId, queryParams.Encode())
 
+	artifacts := make([]models.Artifact, 0, len(opts.DockerUris))
+	for _, dockerUri := range opts.DockerUris {
+		ports := append([]int(nil), opts.Ports...)
+		artifacts = append(artifacts, models.Artifact{
+			Type:  "Docker",
+			Ports: ports,
+			Image: &struct {
+				URI string `json:"uri"`
+			}{
+				URI: dockerUri,
+			},
+		})
+	}
+	if opts.Site != nil {
+		artifacts = append(artifacts, models.Artifact{Type: "Static", Target: "hyphenCloud", Site: opts.Site})
+	}
+
 	build := models.NewBuild{
 		Tags:          []string{},
 		CommitSha:     opts.CommitSha,
 		CommitShaHref: opts.CommitShaHref,
 		Tag:           opts.Tag,
 		TagHref:       opts.TagHref,
-		Artifact: models.Artifact{
-			Type:  "Docker",
-			Ports: opts.Ports,
-			Image: &struct {
-				URI string `json:"uri"`
-			}{
-				URI: opts.DockerUri,
-			},
-		},
-	}
-	if opts.Site != nil {
-		build.Artifact = models.Artifact{Type: "Static", Target: "hyphenCloud", Site: opts.Site}
+		Artifacts:     artifacts,
 	}
 
 	buildJSON, err := json.Marshal(build)
@@ -192,11 +198,11 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, o
 		}
 		metadata.Site = site
 	} else {
-		uri, ports, err := bs.buildDocker(cmd, printer, config, opts, metadata.CommitSha)
+		uris, ports, err := bs.buildDocker(cmd, printer, config, opts, metadata.CommitSha)
 		if err != nil {
 			return nil, err
 		}
-		metadata.DockerUri, metadata.Ports = uri, ports
+		metadata.DockerUris, metadata.Ports = uris, ports
 	}
 	result, err := bs.CreateBuild(metadata)
 	if err != nil {
@@ -205,13 +211,13 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, o
 	return result, nil
 }
 
-func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter, config config.Config, opts Options, commitSha string) (string, []int, error) {
+func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter, config config.Config, opts Options, commitSha string) ([]string, []int, error) {
 
 	// Check for docker
 	printer.PrintVerbose("Checking for docker CLI")
 	isDockerAvailable := dockerutil.IsDockerAvailable()
 	if !isDockerAvailable {
-		return "", nil, fmt.Errorf("docker is not installed or not in PATH")
+		return nil, nil, fmt.Errorf("docker is not installed or not in PATH")
 	}
 
 	// Try to find a docker file to run
@@ -228,7 +234,7 @@ func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter
 			coder := code.NewService()
 			err = coder.GenerateDocker(printer, cmd)
 			if err != nil {
-				return "", nil, fmt.Errorf("failed to generate docker file: %w", err)
+				return nil, nil, fmt.Errorf("failed to generate docker file: %w", err)
 			}
 			dockerfileDir, _ = dockerutil.FindDockerFile()
 		}
@@ -238,20 +244,20 @@ func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter
 
 	containerRegistries, err := bs.FindRegistryConnections(config.OrganizationId, *config.ProjectId)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to find registry connections: %w", err)
+		return nil, nil, fmt.Errorf("failed to find registry connections: %w", err)
 	}
 
 	// Run build on the docker file
 	printer.Print(fmt.Sprintf("Building %s", *config.AppAlternateId))
 	name, _, err := dockerutil.Build(dockerfilePathOrDir, *config.AppAlternateId, commitSha, opts.Verbose)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to build docker image: %w", err)
+		return nil, nil, fmt.Errorf("failed to build docker image: %w", err)
 	}
 	printer.PrintVerbose("Docker image built successfully")
 
 	inspectData, err := dockerutil.Inspect(name)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to inspect docker image: %w", err)
+		return nil, nil, fmt.Errorf("failed to inspect docker image: %w", err)
 	}
 
 	ports := make([]int, 0)
@@ -266,7 +272,7 @@ func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter
 		}
 	}
 
-	var containerUrl string
+	containerUrls := make([]string, 0, len(containerRegistries))
 	for _, containerRegistry := range containerRegistries {
 		err := func(containerRegistry models.ContainerRegistry) error {
 			registryLabel := containerRegistry.Name
@@ -292,17 +298,17 @@ func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter
 				return fmt.Errorf("failed to push docker image to %s: %w", registryLabel, err)
 			}
 
-			// Register the first registry's URI with the build API
-			if containerUrl == "" {
-				containerUrl = pushedUrl
-			}
+			containerUrls = append(containerUrls, pushedUrl)
 			return nil
 		}(containerRegistry)
 		if err != nil {
-			return "", nil, err
+			return nil, nil, err
 		}
 	}
-	return containerUrl, ports, nil
+	if len(containerUrls) == 0 {
+		return nil, nil, fmt.Errorf("no container registries available to publish the build")
+	}
+	return containerUrls, ports, nil
 }
 
 func sourceMetadata() CreateBuildOptions {

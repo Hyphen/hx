@@ -102,7 +102,7 @@ func TestCreateBuild(t *testing.T) {
 			capturedURL = req.URL.String()
 		}).Return(&http.Response{
 			StatusCode: http.StatusCreated,
-			Body:       io.NopCloser(strings.NewReader(`{"id":"theBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"theEnvId","name":"anEnv"},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifact":{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"id":"theBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"theEnvId","name":"anEnv"},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifacts":[{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}]}`)),
 		}, nil)
 
 		build, err := service.CreateBuild(CreateBuildOptions{
@@ -110,7 +110,7 @@ func TestCreateBuild(t *testing.T) {
 			AppId:          "anAppId",
 			EnvironmentId:  "theEnvironmentId",
 			CommitSha:      "abc1234",
-			DockerUri:      "anImage",
+			DockerUris:     []string{"anImage"},
 			Ports:          []int{8080},
 		})
 
@@ -133,14 +133,14 @@ func TestCreateBuild(t *testing.T) {
 			capturedURL = req.URL.String()
 		}).Return(&http.Response{
 			StatusCode: http.StatusCreated,
-			Body:       io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifact":{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifacts":[{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}]}`)),
 		}, nil)
 
 		build, err := service.CreateBuild(CreateBuildOptions{
 			OrganizationId: "anOrgId",
 			AppId:          "anAppId",
 			CommitSha:      "abc1234",
-			DockerUri:      "anImage",
+			DockerUris:     []string{"anImage"},
 			Ports:          []int{8080},
 		})
 
@@ -165,7 +165,7 @@ func TestCreateBuild(t *testing.T) {
 			capturedBody = string(bodyBytes)
 		}).Return(&http.Response{
 			StatusCode: http.StatusCreated,
-			Body:       io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","commitShaHref":"https://github.com/owner/repo/commit/abc1234","tag":"v1.0.0","tagHref":"https://github.com/owner/repo/releases/tag/v1.0.0","artifact":{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","commitShaHref":"https://github.com/owner/repo/commit/abc1234","tag":"v1.0.0","tagHref":"https://github.com/owner/repo/releases/tag/v1.0.0","artifacts":[{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}]}`)),
 		}, nil)
 
 		build, err := service.CreateBuild(CreateBuildOptions{
@@ -175,7 +175,7 @@ func TestCreateBuild(t *testing.T) {
 			CommitShaHref:  "https://github.com/owner/repo/commit/abc1234",
 			Tag:            "v1.0.0",
 			TagHref:        "https://github.com/owner/repo/releases/tag/v1.0.0",
-			DockerUri:      "anImage",
+			DockerUris:     []string{"anImage"},
 			Ports:          []int{8080},
 		})
 
@@ -202,14 +202,14 @@ func TestCreateBuild(t *testing.T) {
 			capturedBody = string(bodyBytes)
 		}).Return(&http.Response{
 			StatusCode: http.StatusCreated,
-			Body:       io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifact":{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifacts":[{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}]}`)),
 		}, nil)
 
 		build, err := service.CreateBuild(CreateBuildOptions{
 			OrganizationId: "anOrgId",
 			AppId:          "anAppId",
 			CommitSha:      "abc1234",
-			DockerUri:      "anImage",
+			DockerUris:     []string{"anImage"},
 			Ports:          []int{8080},
 		})
 
@@ -218,6 +218,40 @@ func TestCreateBuild(t *testing.T) {
 		assert.NotContains(t, capturedBody, "commitShaHref")
 		assert.NotContains(t, capturedBody, `"tag"`)
 		assert.NotContains(t, capturedBody, "tagHref")
+		mockHTTPClient.AssertExpectations(t)
+	})
+
+	t.Run("maps_each_docker_uri_to_its_own_artifact_in_the_request_body", func(t *testing.T) {
+		mockHTTPClient := new(httputil.MockHTTPClient)
+		service := &BuildService{
+			baseUrl:    "https://api.example.com",
+			httpClient: mockHTTPClient,
+		}
+
+		var capturedBody string
+		mockHTTPClient.On("Do", mock.Anything).Run(func(args mock.Arguments) {
+			req := args.Get(0).(*http.Request)
+			bodyBytes, err := io.ReadAll(req.Body)
+			require.NoError(t, err)
+			capturedBody = string(bodyBytes)
+		}).Return(&http.Response{
+			StatusCode: http.StatusCreated,
+			Body: io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifacts":[{"type":"Docker","ports":[8080],"image":{"uri":"aws.dkr.ecr/web:1"}},{"type":"Docker","ports":[8080],"image":{"uri":"gcr.io/web:1"}}]}`)),
+		}, nil)
+
+		build, err := service.CreateBuild(CreateBuildOptions{
+			OrganizationId: "anOrgId",
+			AppId:          "anAppId",
+			CommitSha:      "abc1234",
+			DockerUris:     []string{"aws.dkr.ecr/web:1", "gcr.io/web:1"},
+			Ports:          []int{8080},
+		})
+
+		assert.NoError(t, err)
+		assert.NotNil(t, build)
+		assert.Contains(t, capturedBody, `"uri":"aws.dkr.ecr/web:1"`)
+		assert.Contains(t, capturedBody, `"uri":"gcr.io/web:1"`)
+		assert.Equal(t, 2, strings.Count(capturedBody, `"type":"Docker"`))
 		mockHTTPClient.AssertExpectations(t)
 	})
 
@@ -265,7 +299,7 @@ func TestCreateBuild(t *testing.T) {
 					capturedBody = string(bodyBytes)
 				}).Return(&http.Response{
 					StatusCode: http.StatusCreated,
-					Body:       io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifact":{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}}`)),
+					Body:       io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifacts":[{"type":"Docker","ports":[8080],"image":{"uri":"anImage"}}]}`)),
 				}, nil)
 
 				build, err := service.CreateBuild(CreateBuildOptions{
@@ -275,7 +309,7 @@ func TestCreateBuild(t *testing.T) {
 					CommitShaHref:  tt.commitShaHref,
 					Tag:            "v1.0.0",
 					TagHref:        tt.tagHref,
-					DockerUri:      "anImage",
+					DockerUris:     []string{"anImage"},
 					Ports:          []int{8080},
 				})
 
