@@ -36,6 +36,9 @@ type Config struct {
 	Project            *ConfigProject `json:"project,omitempty"`
 	AutoUpdateDisabled *bool          `json:"auto_update_disabled,omitempty"`
 	Database           interface{}    `json:"database,omitempty"`
+	// AppCloudAppId is the default AppCloud app used by `hx appcloud` when
+	// an <app-id> argument is omitted (set via `hx appcloud app <id>`).
+	AppCloudAppId *string `json:"appcloud_app_id,omitempty"`
 }
 
 func (c *Config) IsMonorepoProject() bool {

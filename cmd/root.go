@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/Hyphen/cli/cmd/app"
+	"github.com/Hyphen/cli/cmd/appcloud"
 	"github.com/Hyphen/cli/cmd/auth"
 	"github.com/Hyphen/cli/cmd/autoinit"
 	"github.com/Hyphen/cli/cmd/build"
@@ -93,6 +94,10 @@ func Execute() {
 	if canUseDeployments {
 		rootCmd.AddCommand(deploy.DeployCmd)
 		rootCmd.AddCommand(build.BuildCmd)
+	}
+	canUseAppcloud := toggle.GetBooleanValue("canUseAppcloud", false)
+	if canUseAppcloud {
+		rootCmd.AddCommand(appcloud.AppCloudCmd)
 	}
 	if err := rootCmd.Execute(); err != nil {
 		cprint.Error(rootCmd, err, flags.VerboseFlag)
