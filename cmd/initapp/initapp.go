@@ -139,12 +139,18 @@ func RunInitAppE(cmd *cobra.Command, args []string) error {
 		newApp = *existingApp
 	}
 
+	if newApp.Project.ID == "" {
+		return fmt.Errorf("app '%s' has no project ID", newApp.AlternateId)
+	}
+
 	mcl := config.Config{
-		ProjectId:      &projectID,
-		OrganizationId: orgID,
-		AppName:        &newApp.Name,
-		AppAlternateId: &newApp.AlternateId,
-		AppId:          &newApp.ID,
+		ProjectId:          &newApp.Project.ID,
+		ProjectName:        &newApp.Project.Name,
+		ProjectAlternateId: &newApp.Project.AlternateID,
+		OrganizationId:     orgID,
+		AppName:            &newApp.Name,
+		AppAlternateId:     &newApp.AlternateId,
+		AppId:              &newApp.ID,
 	}
 
 	err = config.InitializeConfig(mcl, config.ManifestConfigFile)
@@ -192,7 +198,7 @@ func RunInitAppE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	PrintInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID, projectID)
+	PrintInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID, newApp.Project.AlternateID)
 	return nil
 }
 
