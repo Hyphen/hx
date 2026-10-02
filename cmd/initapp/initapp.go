@@ -121,7 +121,7 @@ func RunInitAppE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	newApp, err := appService.CreateApp(orgID, projectID, appAlternateId, appName)
+	selectedApp, err := appService.CreateApp(orgID, projectID, appAlternateId, appName)
 	if err != nil {
 		if !errors.Is(err, errors.ErrConflict) {
 			return err
@@ -136,21 +136,21 @@ func RunInitAppE(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 
-		newApp = *existingApp
+		selectedApp = *existingApp
 	}
 
-	if newApp.Project.ID == "" {
-		return fmt.Errorf("app '%s' has no project ID", newApp.AlternateId)
+	if selectedApp.Project.ID == "" {
+		return fmt.Errorf("app '%s' has no project ID", selectedApp.AlternateId)
 	}
 
 	mcl := config.Config{
-		ProjectId:          &newApp.Project.ID,
-		ProjectName:        &newApp.Project.Name,
-		ProjectAlternateId: &newApp.Project.AlternateID,
+		ProjectId:          &selectedApp.Project.ID,
+		ProjectName:        &selectedApp.Project.Name,
+		ProjectAlternateId: &selectedApp.Project.AlternateID,
 		OrganizationId:     orgID,
-		AppName:            &newApp.Name,
-		AppAlternateId:     &newApp.AlternateId,
-		AppId:              &newApp.ID,
+		AppName:            &selectedApp.Name,
+		AppAlternateId:     &selectedApp.AlternateId,
+		AppId:              &selectedApp.ID,
 	}
 
 	err = config.InitializeConfig(mcl, config.ManifestConfigFile)
@@ -177,13 +177,13 @@ func RunInitAppE(cmd *cobra.Command, args []string) error {
 	for _, e := range environments {
 		envName := strings.ToLower(e.Name)
 		envID := e.ID
-		err = CreateAndPushEmptyEnvFile(cmd, envService, mcl, ms, orgID, newApp.ID, envID, envName)
+		err = CreateAndPushEmptyEnvFile(cmd, envService, mcl, ms, orgID, selectedApp.ID, envID, envName)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = CreateAndPushEmptyEnvFile(cmd, envService, mcl, ms, orgID, newApp.ID, "default", "default")
+	err = CreateAndPushEmptyEnvFile(cmd, envService, mcl, ms, orgID, selectedApp.ID, "default", "default")
 	if err != nil {
 		return err
 	}
@@ -198,7 +198,7 @@ func RunInitAppE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	PrintInitializationSummary(newApp.Name, newApp.AlternateId, newApp.ID, orgID, newApp.Project.AlternateID)
+	PrintInitializationSummary(selectedApp.Name, selectedApp.AlternateId, selectedApp.ID, orgID, selectedApp.Project.AlternateID)
 	return nil
 }
 
