@@ -251,6 +251,8 @@ func TestStaticBuildEnvironmentFailureStopsBeforeUploading(t *testing.T) {
 			cmd := &cobra.Command{}
 			cmd.SetContext(context.Background())
 			result, err := service.RunBuild(cmd, cprint.NewCPrinter(false), Options{Type: "static", Directory: t.TempDir(), EnvironmentID: "development"})
+			// Wait for the handler before reading its recorded requests.
+			api.Close()
 			require.ErrorContains(t, err, test.want)
 			assert.Nil(t, result)
 			assert.Equal(t, []string{"/api/organizations/org_test/projects/proj_test/environments/development/"}, requests)
