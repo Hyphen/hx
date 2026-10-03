@@ -61,6 +61,30 @@ type SiteRegistry struct {
 	OrganizationIntegration models.ConnectionOrganizationIntegration `json:"organizationIntegration"`
 }
 
+func (bs *BuildService) resolveSiteEnvironment(ctx context.Context, organizationID, projectID, environment string) (string, error) {
+	endpoint := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments/%s/", bs.baseUrl, url.PathEscape(organizationID), url.PathEscape(projectID), url.PathEscape(environment))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := bs.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("resolve static build environment: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("resolve static build environment %q: %w", environment, errors.HandleHTTPError(resp))
+	}
+	var resolved models.Environment
+	if err := json.NewDecoder(resp.Body).Decode(&resolved); err != nil {
+		return "", fmt.Errorf("decode static build environment: %w", err)
+	}
+	if resolved.ID == "" {
+		return "", fmt.Errorf("static build environment %q has no ID", environment)
+	}
+	return resolved.ID, nil
+}
+
 func (bs *BuildService) FindSiteRegistry(organizationID, projectID string) (*SiteRegistry, error) {
 	query := url.Values{"projectIds": {projectID}, "integrationTypes": {"hyphenCloud"}, "types": {"SiteRegistry"}, "pageSize": {"100"}}
 	var found *SiteRegistry

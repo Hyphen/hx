@@ -69,6 +69,9 @@ func TestRunDeployWithStaticSite(t *testing.T) {
 				switch req.URL.Path {
 				case "/api/organizations/org_test/deployments/dply_test":
 					body = `{"id":"dply_test","isReady":true,"project":{"id":"proj_test"},"projectEnvironment":{"id":"env_test"},"apps":[{"app":{"id":"app_api","alternateId":"api"}}],"sites":[{"app":{"id":"app_web","alternateId":"website"}}],"previews":[{"id":"prev_test","name":"branch","hostPrefix":"preview-hash"}]}`
+				case "/api/organizations/org_test/projects/proj_test/environments/env_test/":
+					assert.Equal(t, http.MethodGet, req.Method)
+					body = `{"id":"env_test","alternateId":"development"}`
 				case "/api/organizations/org_test/integrations/connections":
 					body = `{"data":[{"id":"conn_registry","type":"SiteRegistry","status":"Ready","organization":{"id":"org_test"},"project":{"id":"proj_test"},"entity":{"id":"proj_test","type":"Project"},"organizationIntegration":{"id":"oint_cloud","type":"hyphenCloud"}}]}`
 				case "/api/organizations/org_test/apps/app_web/builds/uploads":

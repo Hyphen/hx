@@ -186,6 +186,12 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, o
 	if config.ProjectId == nil || config.AppId == nil || config.AppAlternateId == nil {
 		return nil, fmt.Errorf("project and app must be set in .hx configuration")
 	}
+	if opts.Type == "static" && opts.EnvironmentID != "" {
+		opts.EnvironmentID, err = bs.resolveSiteEnvironment(cmd.Context(), config.OrganizationId, *config.ProjectId, opts.EnvironmentID)
+		if err != nil {
+			return nil, err
+		}
+	}
 	metadata := sourceMetadata()
 	metadata.OrganizationId = config.OrganizationId
 	metadata.AppId = *config.AppId
