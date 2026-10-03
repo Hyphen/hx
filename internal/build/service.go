@@ -2,6 +2,7 @@ package build
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -186,8 +187,8 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, o
 	if config.ProjectId == nil || config.AppId == nil || config.AppAlternateId == nil {
 		return nil, fmt.Errorf("project and app must be set in .hx configuration")
 	}
-	if opts.Type == "static" && opts.EnvironmentID != "" {
-		opts.EnvironmentID, err = bs.resolveSiteEnvironment(cmd.Context(), config.OrganizationId, *config.ProjectId, opts.EnvironmentID)
+	if opts.EnvironmentID != "" {
+		opts.EnvironmentID, err = bs.resolveEnvironment(cmd.Context(), config.OrganizationId, *config.ProjectId, opts.EnvironmentID)
 		if err != nil {
 			return nil, err
 		}
@@ -215,6 +216,30 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, o
 		return nil, fmt.Errorf("failed to register build: %w", err)
 	}
 	return result, nil
+}
+
+func (bs *BuildService) resolveEnvironment(ctx context.Context, organizationID, projectID, environment string) (string, error) {
+	endpoint := fmt.Sprintf("%s/api/organizations/%s/projects/%s/environments/%s/", bs.baseUrl, url.PathEscape(organizationID), url.PathEscape(projectID), url.PathEscape(environment))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := bs.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("resolve build environment: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("resolve build environment %q: %w", environment, errors.HandleHTTPError(resp))
+	}
+	var resolved models.Environment
+	if err := json.NewDecoder(resp.Body).Decode(&resolved); err != nil {
+		return "", fmt.Errorf("decode build environment: %w", err)
+	}
+	if resolved.ID == "" {
+		return "", fmt.Errorf("build environment %q has no ID", environment)
+	}
+	return resolved.ID, nil
 }
 
 func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter, config config.Config, opts Options, commitSha string) ([]string, []int, error) {

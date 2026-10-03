@@ -225,38 +225,44 @@ func TestStaticBuildFlow(t *testing.T) {
 	}
 }
 
-func TestStaticBuildEnvironmentFailureStopsBeforeUploading(t *testing.T) {
+func TestBuildEnvironmentFailureStopsBeforeBuilding(t *testing.T) {
 	for _, test := range []struct {
 		name, body, want string
 		status           int
 	}{
-		{"missing", `{"message":"not found"}`, "resolve static build environment", http.StatusNotFound},
-		{"forbidden", `{"message":"forbidden"}`, "resolve static build environment", http.StatusForbidden},
-		{"unavailable", `{"message":"unavailable"}`, "resolve static build environment", http.StatusServiceUnavailable},
-		{"malformed", `not json`, "decode static build environment", http.StatusOK},
+		{"missing", `{"message":"not found"}`, "resolve build environment", http.StatusNotFound},
+		{"forbidden", `{"message":"forbidden"}`, "resolve build environment", http.StatusForbidden},
+		{"unavailable", `{"message":"unavailable"}`, "resolve build environment", http.StatusServiceUnavailable},
+		{"malformed", `not json`, "decode build environment", http.StatusOK},
 		{"no-id", `{}`, "has no ID", http.StatusOK},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			var requests []string
-			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				requests = append(requests, r.URL.Path)
-				w.WriteHeader(test.status)
-				fmt.Fprint(w, test.body)
-			}))
-			defer api.Close()
-			oldFS := config.FS
-			config.FS = buildConfigFS{oldFS}
-			defer func() { config.FS = oldFS }()
-			service := BuildService{baseUrl: api.URL, httpClient: api.Client()}
-			cmd := &cobra.Command{}
-			cmd.SetContext(context.Background())
-			result, err := service.RunBuild(cmd, cprint.NewCPrinter(false), Options{Type: "static", Directory: t.TempDir(), EnvironmentID: "development"})
-			// Wait for the handler before reading its recorded requests.
-			api.Close()
-			require.ErrorContains(t, err, test.want)
-			assert.Nil(t, result)
-			assert.Equal(t, []string{"/api/organizations/org_test/projects/proj_test/environments/development/"}, requests)
-		})
+		for _, buildType := range []string{"static", "docker"} {
+			t.Run(buildType+"/"+test.name, func(t *testing.T) {
+				var requests []string
+				api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					requests = append(requests, r.URL.Path)
+					w.WriteHeader(test.status)
+					fmt.Fprint(w, test.body)
+				}))
+				defer api.Close()
+				oldFS := config.FS
+				config.FS = buildConfigFS{oldFS}
+				defer func() { config.FS = oldFS }()
+				service := BuildService{baseUrl: api.URL, httpClient: api.Client()}
+				cmd := &cobra.Command{}
+				cmd.SetContext(context.Background())
+				directory := ""
+				if buildType == "static" {
+					directory = t.TempDir()
+				}
+				result, err := service.RunBuild(cmd, cprint.NewCPrinter(false), Options{Type: buildType, Directory: directory, EnvironmentID: "development"})
+				// Wait for the handler before reading its recorded requests.
+				api.Close()
+				require.ErrorContains(t, err, test.want)
+				assert.Nil(t, result)
+				assert.Equal(t, []string{"/api/organizations/org_test/projects/proj_test/environments/development/"}, requests)
+			})
+		}
 	}
 }
 
