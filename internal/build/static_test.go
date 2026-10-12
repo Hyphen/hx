@@ -44,8 +44,24 @@ func (buildConfigFS) ReadFile(string) ([]byte, error) {
 const readyRegistry = `{"id":"conn_registry","type":"SiteRegistry","status":"Ready","organization":{"id":"org_test"},"project":{"id":"proj_test"},"entity":{"id":"proj_test","type":"Project"},"organizationIntegration":{"id":"oint_cloud","type":"hyphenCloud"}}`
 
 func TestStaticBuildFlow(t *testing.T) {
-	for _, failure := range []string{"", "upload", "expired", "finalize", "wrong-receipt", "redirect", "register"} {
-		t.Run(failure, func(t *testing.T) {
+	const environmentID = "pevr_0123456789abcdef01234567"
+	for _, test := range []struct{ name, failure, environment string }{
+		{"alternate-id", "", "development"},
+		{"canonical-id", "", environmentID},
+		{"all-environments", "", ""},
+		{"upload", "upload", "development"},
+		{"expired", "expired", "development"},
+		{"finalize", "finalize", "development"},
+		{"wrong-receipt", "wrong-receipt", "development"},
+		{"redirect", "redirect", "development"},
+		{"register", "register", "development"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			failure := test.failure
+			resolvedEnvironment := environmentID
+			if test.environment == "" {
+				resolvedEnvironment = ""
+			}
 			dir := t.TempDir()
 			require.NoError(t, os.Mkdir(filepath.Join(dir, "assets"), 0700))
 			contents := map[string][]byte{"index.html": []byte("<html>hello-world</html>"), "assets/script.js": []byte("console.log('hello')"), "assets/☀ light.css": []byte("body{}"), "empty.txt": {}}
@@ -136,6 +152,10 @@ func TestStaticBuildFlow(t *testing.T) {
 				assert.Empty(t, r.Header.Get("Authorization"))
 				events = append(events, r.Method+" "+r.URL.Path)
 				switch r.URL.Path {
+				case "/api/organizations/org_test/projects/proj_test/environments/" + test.environment + "/":
+					assert.NotEmpty(t, test.environment, "an unscoped build must not look up an environment")
+					assert.Equal(t, http.MethodGet, r.Method)
+					fmt.Fprintf(w, `{"id":%q,"alternateId":"development"}`, environmentID)
 				case "/api/organizations/org_test/integrations/connections":
 					assert.Equal(t, "proj_test", r.URL.Query().Get("projectIds"))
 					assert.Equal(t, "SiteRegistry", r.URL.Query().Get("types"))
@@ -150,7 +170,7 @@ func TestStaticBuildFlow(t *testing.T) {
 					}
 					assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 					assert.Equal(t, "conn_registry", payload.RegistryID)
-					assert.Equal(t, "env_test", payload.EnvironmentID)
+					assert.Equal(t, resolvedEnvironment, payload.EnvironmentID)
 					assert.Equal(t, "preview-hash", payload.PreviewHash)
 					manifest = payload.Files
 					// Later local edits must not change the already-hashed upload.
@@ -158,7 +178,8 @@ func TestStaticBuildFlow(t *testing.T) {
 					json.NewEncoder(w).Encode(map[string]any{"sessionId": "session", "revision": "abcd1234", "token": "capability-secret", "expiresAt": time.Now().Add(time.Minute), "uploadUrl": uploadBase + "/files", "finalizeUrl": uploadBase + "/complete", "abortUrl": uploadBase + "/abort", "limits": map[string]int{"maxFiles": 100, "maxBytes": 100000, "maxFileBytes": 10000}})
 				case "/api/organizations/org_test/apps/app_test/builds":
 					assert.Equal(t, "POST /complete", events[len(events)-2])
-					assert.Equal(t, "env_test", r.URL.Query().Get("environmentId"))
+					assert.Equal(t, resolvedEnvironment, r.URL.Query().Get("environmentId"))
+					assert.Equal(t, test.environment != "", r.URL.Query().Has("environmentId"))
 					assert.Equal(t, "preview-name", r.URL.Query().Get("previewName"))
 					var payload map[string]any
 					assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
@@ -182,7 +203,7 @@ func TestStaticBuildFlow(t *testing.T) {
 			service := &BuildService{baseUrl: api.URL, httpClient: apiAuthClient{api.Client()}}
 			cmd := &cobra.Command{}
 			cmd.SetContext(context.Background())
-			result, err := service.RunBuild(cmd, cprint.NewCPrinter(false), Options{Type: "static", Directory: dir, EnvironmentID: "env_test", Preview: "preview-name", PreviewHash: "preview-hash"})
+			result, err := service.RunBuild(cmd, cprint.NewCPrinter(false), Options{Type: "static", Directory: dir, EnvironmentID: test.environment, Preview: "preview-name", PreviewHash: "preview-hash"})
 			if failure == "" {
 				require.NoError(t, err)
 				assert.Equal(t, "abld_static", result.Id)
@@ -201,6 +222,47 @@ func TestStaticBuildFlow(t *testing.T) {
 			}
 			assert.Zero(t, escapedRequests)
 		})
+	}
+}
+
+func TestBuildEnvironmentFailureStopsBeforeBuilding(t *testing.T) {
+	for _, test := range []struct {
+		name, body, want string
+		status           int
+	}{
+		{"missing", `{"message":"not found"}`, "resolve build environment", http.StatusNotFound},
+		{"forbidden", `{"message":"forbidden"}`, "resolve build environment", http.StatusForbidden},
+		{"unavailable", `{"message":"unavailable"}`, "resolve build environment", http.StatusServiceUnavailable},
+		{"malformed", `not json`, "decode build environment", http.StatusOK},
+		{"no-id", `{}`, "has no ID", http.StatusOK},
+	} {
+		for _, buildType := range []string{"static", "docker"} {
+			t.Run(buildType+"/"+test.name, func(t *testing.T) {
+				var requests []string
+				api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					requests = append(requests, r.URL.Path)
+					w.WriteHeader(test.status)
+					fmt.Fprint(w, test.body)
+				}))
+				defer api.Close()
+				oldFS := config.FS
+				config.FS = buildConfigFS{oldFS}
+				defer func() { config.FS = oldFS }()
+				service := BuildService{baseUrl: api.URL, httpClient: api.Client()}
+				cmd := &cobra.Command{}
+				cmd.SetContext(context.Background())
+				directory := ""
+				if buildType == "static" {
+					directory = t.TempDir()
+				}
+				result, err := service.RunBuild(cmd, cprint.NewCPrinter(false), Options{Type: buildType, Directory: directory, EnvironmentID: "development"})
+				// Wait for the handler before reading its recorded requests.
+				api.Close()
+				require.ErrorContains(t, err, test.want)
+				assert.Nil(t, result)
+				assert.Equal(t, []string{"/api/organizations/org_test/projects/proj_test/environments/development/"}, requests)
+			})
+		}
 	}
 }
 

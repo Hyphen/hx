@@ -56,7 +56,6 @@ func init() {
 	rootCmd.AddCommand(setproject.SetProjectCmd)
 	rootCmd.AddCommand(pull.PullCmd)
 	rootCmd.AddCommand(push.PushCmd)
-	rootCmd.AddCommand(link.LinkCmd)
 	rootCmd.AddCommand(app.AppCmd)
 	rootCmd.AddCommand(project.ProjectCmd)
 	rootCmd.AddCommand(env.EnvCmd)
@@ -85,6 +84,16 @@ func init() {
 }
 
 func Execute() {
+	if err := execute(); err != nil {
+		cprint.Error(rootCmd, err, flags.VerboseFlag)
+		os.Exit(1)
+	}
+}
+
+func execute() error {
+	if toggle.GetBooleanValue("canUseLink", false) {
+		rootCmd.AddCommand(link.LinkCmd)
+	}
 	canUseAgent := toggle.GetBooleanValue("canUseAgent", false)
 	if canUseAgent {
 		rootCmd.AddCommand(code.CodeCmd)
@@ -94,8 +103,5 @@ func Execute() {
 		rootCmd.AddCommand(deploy.DeployCmd)
 		rootCmd.AddCommand(build.BuildCmd)
 	}
-	if err := rootCmd.Execute(); err != nil {
-		cprint.Error(rootCmd, err, flags.VerboseFlag)
-		os.Exit(1)
-	}
+	return rootCmd.Execute()
 }

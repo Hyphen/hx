@@ -266,6 +266,10 @@ hyphen version
 ```
 
 ## Link Command
+
+The Link command requires `canUseLink` to be enabled in the CLI feature flags.
+When the flag is false, missing, or cannot be evaluated, `link` is unavailable in help and direct invocation.
+
 ### `hyphen link`
 Shorten a URL and optionally generate a QR code.
 

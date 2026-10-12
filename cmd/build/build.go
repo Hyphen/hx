@@ -117,7 +117,7 @@ func runBuild(cmd *cobra.Command, args []string) (map[string]any, error) {
 func init() {
 	BuildCmd.Flags().StringVar(&buildType, "type", "docker", "Build type: docker or static (requires a final site directory argument)")
 	BuildCmd.Flags().StringVarP(&flags.DockerfileFlag, "dockerfile", "f", "", "Path to Dockerfile (e.g., ./Dockerfile or ./docker/Dockerfile.prod)")
-	BuildCmd.Flags().StringVarP(&flags.EnvironmentFlag, "env", "e", "", "Environment ID for the build")
+	BuildCmd.Flags().StringVarP(&flags.EnvironmentFlag, "env", "e", "", "Environment ID or alternate ID for the build (defaults to all environments)")
 	BuildCmd.Flags().StringVarP(&flags.PreviewNameFlag, "preview", "r", "", "Preview name to associate with this build")
 	BuildCmd.Flags().StringVar(&outputFormatFlag, "output", "", "Output format. Set to \"json\" to emit a JSON object with status, buildId, appId, projectId, organizationId, buildUrl, reason (on failure), and a messages array.")
 }
