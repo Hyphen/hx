@@ -11,6 +11,7 @@ type Artifact struct {
 }
 
 type StaticArtifact struct {
+	Provider   string `json:"-"`
 	RegistryID string `json:"registryId"`
 	Revision   string `json:"revision"`
 	URI        string `json:"uri,omitempty"`

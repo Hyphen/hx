@@ -139,7 +139,7 @@ func TestStaticBuildFlow(t *testing.T) {
 				case "/api/organizations/org_test/integrations/connections":
 					assert.Equal(t, "proj_test", r.URL.Query().Get("projectIds"))
 					assert.Equal(t, "SiteRegistry", r.URL.Query().Get("types"))
-					assert.Equal(t, "hyphenCloud", r.URL.Query().Get("integrationTypes"))
+					assert.Empty(t, r.URL.Query().Get("integrationTypes"))
 					fmt.Fprint(w, `{"data":[`+readyRegistry+`]}`)
 				case "/api/organizations/org_test/apps/app_test/builds/uploads":
 					var payload struct {
@@ -204,26 +204,42 @@ func TestStaticBuildFlow(t *testing.T) {
 	}
 }
 
-func TestFindSiteRegistry(t *testing.T) {
-	for _, test := range []struct{ name, data, want string }{
-		{"ready", readyRegistry, ""},
-		{"missing", "", "no ready"},
-		{"pending", strings.ReplaceAll(readyRegistry, `"Ready"`, `"Pending"`), "no ready"},
-		{"wrong-project", strings.ReplaceAll(readyRegistry, "proj_test", "proj_wrong"), "no ready"},
-		{"wrong-org", strings.ReplaceAll(readyRegistry, "org_test", "org_wrong"), "no ready"},
-		{"wrong-provider", strings.ReplaceAll(readyRegistry, "hyphenCloud", "azure"), "no ready"},
-		{"ambiguous", readyRegistry + "," + strings.ReplaceAll(readyRegistry, "conn_registry", "conn_other"), "multiple ready"},
+func TestFindSiteRegistries(t *testing.T) {
+	cloudflare := strings.ReplaceAll(strings.ReplaceAll(readyRegistry, "hyphenCloud", "cloudflare"), "conn_registry", "conn_cloudflare")
+	for _, test := range []struct {
+		name, data, want string
+		ids              []string
+	}{
+		{"hyphen-cloud", readyRegistry, "", []string{"conn_registry"}},
+		{"cloudflare-only", cloudflare, "", []string{"conn_cloudflare"}},
+		{"both-providers", readyRegistry + "," + cloudflare, "", []string{"conn_registry", "conn_cloudflare"}},
+		{"missing", "", "no ready", nil},
+		{"pending", strings.ReplaceAll(readyRegistry, `"Ready"`, `"Pending"`), "no ready", nil},
+		{"ready-cloudflare-with-pending-hyphen-cloud", cloudflare + "," + strings.ReplaceAll(readyRegistry, `"Ready"`, `"Pending"`), "", []string{"conn_cloudflare"}},
+		{"wrong-project", strings.ReplaceAll(readyRegistry, "proj_test", "proj_wrong"), "no ready", nil},
+		{"wrong-org", strings.ReplaceAll(readyRegistry, "org_test", "org_wrong"), "no ready", nil},
+		{"unsupported-provider", strings.ReplaceAll(readyRegistry, "hyphenCloud", "azure"), "unsupported site registry provider", nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `{"data":[`+test.data+`]}`) }))
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Empty(t, r.URL.Query().Get("integrationTypes"))
+				assert.Equal(t, "Ready", r.URL.Query().Get("statuses"))
+				assert.Equal(t, "SiteRegistry", r.URL.Query().Get("types"))
+				assert.Equal(t, "proj_test", r.URL.Query().Get("projectIds"))
+				fmt.Fprint(w, `{"data":[`+test.data+`]}`)
+			}))
 			defer server.Close()
 			service := BuildService{baseUrl: server.URL, httpClient: server.Client()}
-			registry, err := service.FindSiteRegistry("org_test", "proj_test")
+			registries, err := service.FindSiteRegistries("org_test", "proj_test")
 			if test.want != "" {
 				require.ErrorContains(t, err, test.want)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, "oint_cloud", registry.OrganizationIntegration.Id)
+				var ids []string
+				for _, registry := range registries {
+					ids = append(ids, registry.ID)
+				}
+				assert.Equal(t, test.ids, ids)
 			}
 		})
 	}
