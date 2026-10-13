@@ -34,6 +34,7 @@ func (transport deployTransport) RoundTrip(req *http.Request) (*http.Response, e
 }
 
 func TestRunDeployWithStaticSite(t *testing.T) {
+	const artifactURI = "https://uploads.test/v1/organizations/org_test/apps/app_web/hosting/revisions/abcd1234"
 	for _, skipBuild := range []bool{true, false} {
 		t.Run(fmt.Sprint(skipBuild), func(t *testing.T) {
 			oldFS, oldTransport, oldPrinter := config.FS, http.DefaultTransport, printer
@@ -79,7 +80,7 @@ func TestRunDeployWithStaticSite(t *testing.T) {
 					assert.NoError(t, json.NewDecoder(req.Body).Decode(&input))
 					assert.Equal(t, "env_test", input["environmentId"])
 					assert.Equal(t, "preview-hash", input["previewHash"])
-					body = fmt.Sprintf(`{"sessionId":"session","revision":"abcd1234","token":"capability","expiresAt":%q,"uploadUrl":"https://uploads.test/files","finalizeUrl":"https://uploads.test/complete","abortUrl":"https://uploads.test/abort","limits":{"maxFiles":100,"maxBytes":100000,"maxFileBytes":10000}}`, time.Now().Add(time.Minute).Format(time.RFC3339))
+					body = fmt.Sprintf(`{"sessionId":"session","revision":"abcd1234","uri":%q,"token":"capability","expiresAt":%q,"uploadUrl":"https://uploads.test/files","finalizeUrl":"https://uploads.test/complete","abortUrl":"https://uploads.test/abort","limits":{"maxFiles":100,"maxBytes":100000,"maxFileBytes":10000}}`, artifactURI, time.Now().Add(time.Minute).Format(time.RFC3339))
 				case "/files":
 					assert.Contains(t, req.Header.Get("Content-Type"), "multipart/form-data;")
 					_, err := io.Copy(io.Discard, req.Body)
@@ -88,6 +89,9 @@ func TestRunDeployWithStaticSite(t *testing.T) {
 					body = `{"state":"sealed","organizationId":"org_test","projectId":"proj_test","appId":"app_web","revision":"abcd1234"}`
 				case "/api/organizations/org_test/apps/app_web/builds":
 					assert.Equal(t, "POST /complete", calls[len(calls)-2])
+					var input map[string]json.RawMessage
+					assert.NoError(t, json.NewDecoder(req.Body).Decode(&input))
+					assert.JSONEq(t, fmt.Sprintf(`[{"type":"Static","target":"hyphenCloud","site":{"registryId":"conn_registry","uri":%q}}]`, artifactURI), string(input["artifacts"]))
 					code, body = 201, `{"id":"abld_new","app":{"id":"app_web"}}`
 				case "/api/organizations/org_test/deployments/dply_test/runs":
 					var input map[string]json.RawMessage
