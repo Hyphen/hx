@@ -129,11 +129,14 @@ func (capability uploadCapability) validateR2(appID, appName, registryID string,
 		byPath[key] = file
 		total += file.Size
 		if file.Size > capability.Limits.MaxFileBytes {
-			return nil, fmt.Errorf("site file exceeds upload limit")
+			return nil, fmt.Errorf("site file %q exceeds upload limit of %d bytes", file.Path, capability.Limits.MaxFileBytes)
 		}
 	}
-	if len(files) > capability.Limits.MaxFiles || total > capability.Limits.MaxBytes {
-		return nil, fmt.Errorf("site exceeds upload limits")
+	if len(files) > capability.Limits.MaxFiles {
+		return nil, fmt.Errorf("site exceeds registry file count limit (%d files)", capability.Limits.MaxFiles)
+	}
+	if total > capability.Limits.MaxBytes {
+		return nil, fmt.Errorf("site exceeds registry total byte limit (%d bytes)", capability.Limits.MaxBytes)
 	}
 	seen := make(map[string]bool, len(files))
 	for i, instruction := range capability.Uploads {

@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -27,7 +28,7 @@ type siteRoundTripper func(*http.Request) (*http.Response, error)
 func (f siteRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestCloudflareStaticBuildFlow(t *testing.T) {
-	for _, scenario := range []string{"uploaded", "wrong-app-name", "wrong-revision", "wrong-uri", "manifest-revision", "missing-checksum", "renew", "renew-revision", "manifest-failed", "scope-mismatch", "redirect", "storage-mismatch", "object-mismatch", "many-files", "all-registries", "second-upload-failed"} {
+	for _, scenario := range []string{"uploaded", "wrong-app-name", "wrong-revision", "wrong-uri", "manifest-revision", "missing-checksum", "renew", "renew-revision", "manifest-failed", "scope-mismatch", "redirect", "storage-mismatch", "object-mismatch", "many-files", "all-registries", "second-upload-failed", "file-size-limit", "file-count-limit", "total-size-limit", "credential-lifetime"} {
 		t.Run(scenario, func(t *testing.T) {
 			dir := t.TempDir()
 			require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("hello"), 0600))
@@ -189,6 +190,18 @@ func TestCloudflareStaticBuildFlow(t *testing.T) {
 						assert.Empty(t, payload.Revision)
 					}
 					result := capability()
+					switch scenario {
+					case "file-size-limit":
+						result["limits"].(map[string]int)["maxFileBytes"] = 4
+					case "file-count-limit":
+						result["limits"].(map[string]int)["maxFiles"] = 2
+					case "total-size-limit":
+						result["limits"].(map[string]int)["maxBytes"] = 10
+					case "credential-lifetime":
+						credentials := result["credentials"].(r2Credentials)
+						credentials.ExpiresAt = expiresAt.Add(time.Minute)
+						result["credentials"] = credentials
+					}
 					if scenario == "renew-revision" && renewed {
 						revision = strings.Repeat("b", 24)
 						result = capability()
@@ -256,6 +269,16 @@ func TestCloudflareStaticBuildFlow(t *testing.T) {
 				assert.Equal(t, "abld_static", result.Id)
 			} else {
 				require.Error(t, err)
+				switch scenario {
+				case "file-size-limit":
+					assert.EqualError(t, err, fmt.Sprintf("site file %q exceeds upload limit of 4 bytes", manifest[0].Path))
+				case "file-count-limit":
+					assert.EqualError(t, err, "site exceeds registry file count limit (2 files)")
+				case "total-size-limit":
+					assert.EqualError(t, err, "site exceeds registry total byte limit (10 bytes)")
+				case "credential-lifetime":
+					assert.EqualError(t, err, "invalid R2 temporary credentials")
+				}
 				assert.NotContains(t, err.Error(), "temporary-test-secret")
 				assert.NotContains(t, err.Error(), "test-session-token")
 				assert.NotContains(t, events, "POST /api/organizations/org_test/apps/app_test/builds")
