@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/Hyphen/cli/internal/models"
@@ -37,8 +38,9 @@ type r2Credentials struct {
 
 var r2UploadHost = regexp.MustCompile(`^[a-f0-9]{32}\.(?:(?:eu|us|fedramp)\.)?r2\.cloudflarestorage\.com$`)
 var r2BucketName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`)
-var r2ObjectKey = regexp.MustCompile(`^revisions/[A-Za-z0-9_-]+/revision_[a-f0-9]{64}/(?:files/[^\\?#%\x00-\x1f\x7f]+|manifest\.json)$`)
-var cloudflareRevision = regexp.MustCompile(`^[a-f0-9]{64}$`)
+var r2ObjectKey = regexp.MustCompile(`^revisions/[A-Za-z0-9_-]+/revision_[a-f0-9]{24}/(?:files/[^\\?#%\x00-\x1f\x7f]+|manifest\.json)$`)
+var cloudflareRevision = regexp.MustCompile(`^[a-f0-9]{24}$`)
+var siteChecksum = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 func validR2ObjectKey(key string) bool {
 	return len(key) <= 1024 && r2ObjectKey.MatchString(key) && path.Clean(key) == key
@@ -99,11 +101,13 @@ func (capability uploadCapability) validateR2(appID, appName, registryID string,
 		return nil, fmt.Errorf("invalid or expired Cloudflare revision upload")
 	}
 	prefix := "revisions/" + appName + "/revision_" + capability.Revision + "/"
-	if capability.Manifest.Key != prefix+"manifest.json" || !validR2ObjectKey(capability.Manifest.Key) || len(capability.Manifest.Content) == 0 || len(capability.Manifest.Content) > 4*1024*1024 {
+	if capability.URI != "r2://"+capability.BucketName+"/"+strings.TrimSuffix(prefix, "/") || capability.Manifest.Key != prefix+"manifest.json" || !validR2ObjectKey(capability.Manifest.Key) || len(capability.Manifest.Content) == 0 || len(capability.Manifest.Content) > 4*1024*1024 {
 		return nil, fmt.Errorf("invalid R2 revision manifest")
 	}
 	var manifest struct {
 		FormatVersion int    `json:"formatVersion"`
+		Revision      string `json:"revision"`
+		SHA256        string `json:"sha256"`
 		AppID         string `json:"appId"`
 		AppName       string `json:"appName"`
 		RegistryID    string `json:"registryId"`
@@ -112,7 +116,7 @@ func (capability uploadCapability) validateR2(appID, appName, registryID string,
 			ContentType string `json:"contentType"`
 		} `json:"files"`
 	}
-	if json.Unmarshal([]byte(capability.Manifest.Content), &manifest) != nil || manifest.FormatVersion != 3 || manifest.AppID != appID || manifest.AppName != appName || manifest.RegistryID != registryID || len(manifest.Files) != len(files) || len(capability.Uploads) != len(files) {
+	if json.Unmarshal([]byte(capability.Manifest.Content), &manifest) != nil || manifest.FormatVersion != 4 || manifest.Revision != capability.Revision || !siteChecksum.MatchString(manifest.SHA256) || manifest.AppID != appID || manifest.AppName != appName || manifest.RegistryID != registryID || len(manifest.Files) != len(files) || len(capability.Uploads) != len(files) {
 		return nil, fmt.Errorf("R2 revision manifest does not match the requested build")
 	}
 	byPath := make(map[string]uploadFile, len(files))
@@ -153,14 +157,14 @@ func (bs *BuildService) uploadR2Site(ctx context.Context, orgID, appID, appName,
 	client := &http.Client{Timeout: 5 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	original := capability
 	renew := func() error {
-		next, err := bs.requestSiteUpload(ctx, orgID, appID, map[string]any{"registryId": registryID, "files": files})
+		next, err := bs.requestSiteUpload(ctx, orgID, appID, map[string]any{"registryId": registryID, "revision": original.Revision, "files": files})
 		if err != nil {
 			return err
 		}
 		if _, err = next.validateR2(appID, appName, registryID, files); err != nil {
 			return err
 		}
-		if next.Endpoint != original.Endpoint || next.BucketName != original.BucketName || next.Revision != original.Revision || next.Manifest != original.Manifest {
+		if next.Endpoint != original.Endpoint || next.BucketName != original.BucketName || next.Revision != original.Revision || next.URI != original.URI || next.Manifest != original.Manifest {
 			return fmt.Errorf("renewed revision upload scope changed")
 		}
 		capability = next
@@ -197,5 +201,5 @@ func (bs *BuildService) uploadR2Site(ctx context.Context, orgID, appID, appName,
 	if err != nil {
 		return nil, err
 	}
-	return &models.StaticArtifact{Provider: "cloudflare", RegistryID: registryID, Revision: capability.Revision}, nil
+	return &models.StaticArtifact{Provider: "cloudflare", RegistryID: registryID, URI: capability.URI}, nil
 }

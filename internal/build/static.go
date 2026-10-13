@@ -127,6 +127,7 @@ type uploadCapability struct {
 	Credentials r2Credentials `json:"credentials"`
 	SessionID   string        `json:"sessionId"`
 	Revision    string        `json:"revision"`
+	URI         string        `json:"uri"`
 	Token       string        `json:"token"`
 	ExpiresAt   time.Time     `json:"expiresAt"`
 	UploadURL   string        `json:"uploadUrl"`
@@ -295,7 +296,7 @@ func (bs *BuildService) uploadStaticSite(ctx context.Context, printer *cprint.CP
 	if receipt.State != "sealed" || receipt.OrganizationID != orgID || receipt.ProjectID != projectID || receipt.AppID != appID || receipt.Revision != capability.Revision {
 		return nil, fmt.Errorf("finalized site receipt does not match the requested app and revision; build was not registered")
 	}
-	return &models.StaticArtifact{RegistryID: registry.ID, Revision: receipt.Revision}, nil
+	return &models.StaticArtifact{Provider: registry.OrganizationIntegration.Type, RegistryID: registry.ID, URI: capability.URI}, nil
 }
 
 func (capability uploadCapability) validate(files []uploadFile) error {
@@ -303,7 +304,7 @@ func (capability uploadCapability) validate(files []uploadFile) error {
 		return fmt.Errorf("missing or expired site upload capability; retry the build")
 	}
 	var origin string
-	for _, endpoint := range []string{capability.UploadURL, capability.FinalizeURL, capability.AbortURL} {
+	for _, endpoint := range []string{capability.UploadURL, capability.FinalizeURL, capability.AbortURL, capability.URI} {
 		u, err := url.Parse(endpoint)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 			return fmt.Errorf("invalid site upload capability URL")

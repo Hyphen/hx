@@ -76,11 +76,7 @@ func (bs *BuildService) CreateBuild(opts CreateBuildOptions) (*models.Build, err
 		})
 	}
 	for _, site := range opts.Sites {
-		provider := site.Provider
-		if provider == "" {
-			provider = "hyphenCloud"
-		}
-		artifacts = append(artifacts, models.Artifact{Type: "Static", Target: provider, Site: site})
+		artifacts = append(artifacts, models.Artifact{Type: "Static", Target: site.Provider, Site: site})
 	}
 
 	build := models.NewBuild{

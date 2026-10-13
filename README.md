@@ -63,20 +63,23 @@ or individual `.gz` file.
 An empty directory, symlinks within it, non-regular files, or paths containing
 `\\`, `%`, `?`, `#`, control characters, or invalid UTF-8 fail validation.
 
-The project must have exactly one ready HyphenCloud **SiteRegistry** connection.
-hx hashes the original files and stages a gzip copy of each in a temporary
-directory, then requests a short-lived upload capability through APIX. It sends
-each gzip file as multipart directly to the returned upload URL, finalizes the
-revision, validates the sealed receipt, and registers a `Static` build artifact.
-File bytes do not pass through APIX or nFabric. The upload uses only its
-capability bearer; APIX credentials are not sent to the upload host, and upload
-redirects are refused. Temporary gzip files are removed on completion or failure.
+hx uploads to every ready **SiteRegistry** returned for the project. It hashes
+and snapshots the original files once, then requests upload authorization for each
+registry through APIX. The registry determines its provider:
 
-The returned registry limits apply to file count, decompressed file sizes, and
-multipart request size. Failed uploads do not register a build. hx attempts to
-abort unfinished uploads; an expired/rejected capability requires rerunning the
-build. Once sealed, the revision is not aborted, including if build registration
-fails. No deployment runs until build registration succeeds.
+- Hyphen Cloud receives gzip multipart uploads, finalizes the revision, and returns
+  a sealed receipt. hx attempts to abort unfinished uploads; sealed revisions are
+  retained even if build registration fails.
+- Cloudflare receives raw files directly in the R2 revision folder, with original
+  filenames under `files/` and the canonical manifest uploaded last. Temporary
+  credentials only permit PUTs within that revision prefix and are renewed through
+  upload authorization when needed. There is no Cloudflare session/finalize step.
+
+After all registry uploads succeed, hx registers one `Static` build containing
+all provider artifacts. Failed uploads prevent build registration and deployment.
+File bytes do not pass through APIX or nFabric. Storage requests never receive APIX
+credentials, and redirects are refused. Temporary local snapshots are removed on
+completion or failure. The returned provider limits apply to each upload.
 
 ### Selecting apps and sites
 
@@ -439,3 +442,7 @@ When they exist, the files will be loaded and appended to the environment in thi
 - `.env.{environment}`
 
 So a variable defined in `.env` that is also defined in `.env.{environment}` will have the `.env.{environment}` value take precedence.
+
+Static build artifacts contain `site: { registryId, uri }`. Upload authorization
+returns the URI; hx records it after the upload succeeds. The build artifact does
+not repeat the revision ID stored in that URI.
