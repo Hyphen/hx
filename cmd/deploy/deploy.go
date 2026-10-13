@@ -183,7 +183,7 @@ func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 
 			name := deploymentNamePart(project.AlternateID, 25)
 
-			siteIntegrationID := ""
+			var siteIntegrationIDs []string
 			initialKind := buildType
 			for _, selected := range selections {
 				if matchesHxApp(selected.ID, cfg) {
@@ -191,13 +191,15 @@ func runDeployBody(cmd *cobra.Command, args []string) (map[string]any, error) {
 				}
 			}
 			if initialKind == "static" {
-				registry, err := build.NewService().FindSiteRegistry(orgId, projectId)
+				registries, err := build.NewService().FindSiteRegistries(orgId, projectId)
 				if err != nil {
 					return result, err
 				}
-				siteIntegrationID = registry.OrganizationIntegration.Id
+				for _, registry := range registries {
+					siteIntegrationIDs = append(siteIntegrationIDs, registry.OrganizationIntegration.Id)
+				}
 			}
-			newDeployment, err := service.CreateEnvironmentDeployment(orgId, projectId, envId, *cfg.AppId, name, name, "", siteIntegrationID)
+			newDeployment, err := service.CreateEnvironmentDeployment(orgId, projectId, envId, *cfg.AppId, name, name, "", siteIntegrationIDs...)
 			if err != nil {
 				return result, fmt.Errorf("failed to create deployment: %w", err)
 			}

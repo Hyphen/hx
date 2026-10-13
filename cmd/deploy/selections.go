@@ -96,13 +96,15 @@ func ensureSelections(service *Deployment.DeploymentService, orgID string, deplo
 	}
 	// Resolve the target before either PATCH so missing registry setup cannot
 	// leave an otherwise mixed selection partially updated.
-	integrationID := ""
+	var integrationIDs []string
 	if len(missingSites) > 0 {
-		registry, err := build.NewService().FindSiteRegistry(orgID, deployment.Project.ID)
+		registries, err := build.NewService().FindSiteRegistries(orgID, deployment.Project.ID)
 		if err != nil {
 			return deployment, err
 		}
-		integrationID = registry.OrganizationIntegration.Id
+		for _, registry := range registries {
+			integrationIDs = append(integrationIDs, registry.OrganizationIntegration.Id)
+		}
 	}
 	if len(missingApps) > 0 {
 		printer.Print(fmt.Sprintf("Adding apps %v with default settings", missingApps))
@@ -113,8 +115,8 @@ func ensureSelections(service *Deployment.DeploymentService, orgID string, deplo
 		deployment = *updated
 	}
 	if len(missingSites) > 0 {
-		printer.Print(fmt.Sprintf("Adding sites %v with HyphenCloud target", missingSites))
-		updated, err := service.AddSitesToDeployment(orgID, deployment.ID, missingSites, integrationID)
+		printer.Print(fmt.Sprintf("Adding sites %v with the selected hosting target", missingSites))
+		updated, err := service.AddSitesToDeployment(orgID, deployment.ID, missingSites, integrationIDs...)
 		if err != nil {
 			return deployment, err
 		}

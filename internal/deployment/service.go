@@ -16,7 +16,7 @@ import (
 
 type IDeploymentService interface {
 	SearchDeployments(organizationId, nameOrId string, pageSize, pageNum int, projectIds []string) ([]models.Deployment, error)
-	CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description, siteIntegrationID string) (*models.Deployment, error)
+	CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description string, siteIntegrationIDs ...string) (*models.Deployment, error)
 	GetDeployment(organizationId, deploymentId string) (*models.Deployment, error)
 }
 
@@ -372,7 +372,7 @@ func (ds *DeploymentService) AddAppsToDeployment(organizationId, deploymentId st
 	return ds.GetDeployment(organizationId, deploymentId)
 }
 
-func (ds *DeploymentService) CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description, siteIntegrationID string) (*models.Deployment, error) {
+func (ds *DeploymentService) CreateEnvironmentDeployment(organizationId, projectId, projectEnvironmentId, appId, name, alternateId, description string, siteIntegrationIDs ...string) (*models.Deployment, error) {
 	url := fmt.Sprintf("%s/api/organizations/%s/deployments/", ds.baseUrl, organizationId)
 
 	input := createEnvironmentDeploymentRequest{
@@ -385,9 +385,9 @@ func (ds *DeploymentService) CreateEnvironmentDeployment(organizationId, project
 			{App: deploymentReference{ID: appId}},
 		},
 	}
-	if siteIntegrationID != "" {
+	if len(siteIntegrationIDs) > 0 && siteIntegrationIDs[0] != "" {
 		input.Apps = []createDeploymentApp{}
-		input.Sites = []patchDeploymentSite{newDeploymentSite(appId, siteIntegrationID)}
+		input.Sites = []patchDeploymentSite{newDeploymentSite(appId, siteIntegrationIDs...)}
 	}
 	requestBody, err := json.Marshal(input)
 	if err != nil {

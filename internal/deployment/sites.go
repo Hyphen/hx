@@ -16,14 +16,16 @@ type patchDeploymentSite struct {
 	DeploymentSettings models.SiteSettings `json:"deploymentSettings"`
 }
 
-func newDeploymentSite(appID, integrationID string) patchDeploymentSite {
+func newDeploymentSite(appID string, integrationIDs ...string) patchDeploymentSite {
 	var site patchDeploymentSite
 	site.App.ID = appID
-	site.DeploymentSettings.Targets = []models.SiteTarget{{ID: integrationID}}
+	for _, id := range integrationIDs {
+		site.DeploymentSettings.Targets = append(site.DeploymentSettings.Targets, models.SiteTarget{ID: id})
+	}
 	return site
 }
 
-func (ds *DeploymentService) AddSitesToDeployment(organizationID, deploymentID string, appIDs []string, integrationID string) (*models.Deployment, error) {
+func (ds *DeploymentService) AddSitesToDeployment(organizationID, deploymentID string, appIDs []string, integrationIDs ...string) (*models.Deployment, error) {
 	current, err := ds.GetDeployment(organizationID, deploymentID)
 	if err != nil {
 		return nil, err
@@ -31,8 +33,8 @@ func (ds *DeploymentService) AddSitesToDeployment(organizationID, deploymentID s
 	if len(appIDs) == 0 {
 		return current, nil
 	}
-	if integrationID == "" {
-		return nil, fmt.Errorf("a HyphenCloud integration is required to add sites")
+	if len(integrationIDs) == 0 || integrationIDs[0] == "" {
+		return nil, fmt.Errorf("a static hosting integration is required to add sites")
 	}
 	sites := make([]patchDeploymentSite, 0, len(current.Sites)+len(appIDs))
 	for _, existing := range current.Sites {
@@ -42,7 +44,7 @@ func (ds *DeploymentService) AddSitesToDeployment(organizationID, deploymentID s
 		sites = append(sites, site)
 	}
 	for _, id := range appIDs {
-		sites = append(sites, newDeploymentSite(id, integrationID))
+		sites = append(sites, newDeploymentSite(id, integrationIDs...))
 	}
 	data, err := json.Marshal(map[string]any{"sites": sites})
 	if err != nil {

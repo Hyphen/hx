@@ -32,8 +32,8 @@ hyphen build
 hyphen build --type static ./dist
 
 --type defaults to docker. Static builds require a final directory argument
-containing an already-built website. Files are gzipped, uploaded directly with
-a short-lived SiteRegistry token, finalized, and registered as a static build.
+containing an already-built website. Files are uploaded to every ready SiteRegistry
+connected to the project and registered together as one static build.
 
 Use 'hyphen build --help' for more information about available flags.
 `,

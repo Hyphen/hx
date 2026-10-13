@@ -47,7 +47,7 @@ type CreateBuildOptions struct {
 	DockerUris     []string
 	Ports          []int
 	Preview        string
-	Site           *models.StaticArtifact
+	Sites          []*models.StaticArtifact
 }
 
 func (bs *BuildService) CreateBuild(opts CreateBuildOptions) (*models.Build, error) {
@@ -75,8 +75,8 @@ func (bs *BuildService) CreateBuild(opts CreateBuildOptions) (*models.Build, err
 			},
 		})
 	}
-	if opts.Site != nil {
-		artifacts = append(artifacts, models.Artifact{Type: "Static", Target: "hyphenCloud", Site: opts.Site})
+	for _, site := range opts.Sites {
+		artifacts = append(artifacts, models.Artifact{Type: "Static", Target: site.Provider, Site: site})
 	}
 
 	build := models.NewBuild{
@@ -199,11 +199,11 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, o
 	metadata.EnvironmentId = opts.EnvironmentID
 	metadata.Preview = opts.Preview
 	if opts.Type == "static" {
-		site, err := bs.uploadStaticSite(cmd.Context(), printer, config.OrganizationId, *config.ProjectId, *config.AppId, opts)
+		sites, err := bs.uploadStaticSites(cmd.Context(), printer, config.OrganizationId, *config.ProjectId, *config.AppId, *config.AppAlternateId, opts)
 		if err != nil {
 			return nil, err
 		}
-		metadata.Site = site
+		metadata.Sites = sites
 	} else {
 		uris, ports, err := bs.buildDocker(cmd, printer, config, opts, metadata.CommitSha)
 		if err != nil {

@@ -61,9 +61,9 @@ type SiteRegistry struct {
 	OrganizationIntegration models.ConnectionOrganizationIntegration `json:"organizationIntegration"`
 }
 
-func (bs *BuildService) FindSiteRegistry(organizationID, projectID string) (*SiteRegistry, error) {
-	query := url.Values{"projectIds": {projectID}, "integrationTypes": {"hyphenCloud"}, "types": {"SiteRegistry"}, "pageSize": {"100"}}
-	var found *SiteRegistry
+func (bs *BuildService) FindSiteRegistries(organizationID, projectID string) ([]*SiteRegistry, error) {
+	query := url.Values{"projectIds": {projectID}, "types": {"SiteRegistry"}, "statuses": {"Ready"}, "pageSize": {"100"}}
+	var registries []*SiteRegistry
 	for page := 1; ; page++ {
 		query.Set("pageNum", fmt.Sprint(page))
 		endpoint := fmt.Sprintf("%s/api/organizations/%s/integrations/connections?%s", bs.baseUrl, url.PathEscape(organizationID), query.Encode())
@@ -89,22 +89,22 @@ func (bs *BuildService) FindSiteRegistry(organizationID, projectID string) (*Sit
 			return nil, fmt.Errorf("find site registry: %w", err)
 		}
 		for _, registry := range result.Data {
-			if registry.Type != "SiteRegistry" || registry.Status != "Ready" || registry.Organization.ID != organizationID || registry.Project.ID != projectID || registry.Entity.Type != "Project" || registry.Entity.Id != projectID || registry.OrganizationIntegration.Type != "hyphenCloud" || registry.OrganizationIntegration.Id == "" || registry.ID == "" {
+			if registry.Type != "SiteRegistry" || registry.Status != "Ready" || registry.Organization.ID != organizationID || registry.Project.ID != projectID || registry.Entity.Type != "Project" || registry.Entity.Id != projectID || registry.OrganizationIntegration.Id == "" || registry.ID == "" {
 				continue
 			}
-			if found != nil {
-				return nil, fmt.Errorf("multiple ready HyphenCloud site registries found for project %s", projectID)
+			if registry.OrganizationIntegration.Type != "hyphenCloud" && registry.OrganizationIntegration.Type != "cloudflare" {
+				return nil, fmt.Errorf("unsupported site registry provider %q for registry %s", registry.OrganizationIntegration.Type, registry.ID)
 			}
-			found = &registry
+			registries = append(registries, &registry)
 		}
 		if len(result.Data) < 100 {
 			break
 		}
 	}
-	if found == nil {
-		return nil, fmt.Errorf("no ready HyphenCloud site registry found for project %s; check project integrations", projectID)
+	if len(registries) == 0 {
+		return nil, fmt.Errorf("no ready site registries found for project %s; check project integrations", projectID)
 	}
-	return found, nil
+	return registries, nil
 }
 
 type uploadFile struct {
@@ -115,13 +115,24 @@ type uploadFile struct {
 }
 
 type uploadCapability struct {
-	SessionID   string    `json:"sessionId"`
-	Revision    string    `json:"revision"`
-	Token       string    `json:"token"`
-	ExpiresAt   time.Time `json:"expiresAt"`
-	UploadURL   string    `json:"uploadUrl"`
-	FinalizeURL string    `json:"finalizeUrl"`
-	AbortURL    string    `json:"abortUrl"`
+	Provider   string     `json:"provider"`
+	AppID      string     `json:"appId"`
+	Uploads    []r2Upload `json:"uploads"`
+	Endpoint   string     `json:"endpoint"`
+	BucketName string     `json:"bucketName"`
+	Manifest   struct {
+		Key     string `json:"key"`
+		Content string `json:"content"`
+	} `json:"manifest"`
+	Credentials r2Credentials `json:"credentials"`
+	SessionID   string        `json:"sessionId"`
+	Revision    string        `json:"revision"`
+	URI         string        `json:"uri"`
+	Token       string        `json:"token"`
+	ExpiresAt   time.Time     `json:"expiresAt"`
+	UploadURL   string        `json:"uploadUrl"`
+	FinalizeURL string        `json:"finalizeUrl"`
+	AbortURL    string        `json:"abortUrl"`
 	Limits      struct {
 		MaxFiles     int   `json:"maxFiles"`
 		MaxBytes     int64 `json:"maxBytes"`
@@ -198,8 +209,8 @@ func prepareSite(directory, stagingDir string) ([]uploadFile, error) {
 	return files, nil
 }
 
-func (bs *BuildService) uploadStaticSite(ctx context.Context, printer *cprint.CPrinter, orgID, projectID, appID string, opts Options) (*models.StaticArtifact, error) {
-	registry, err := bs.FindSiteRegistry(orgID, projectID)
+func (bs *BuildService) uploadStaticSites(ctx context.Context, printer *cprint.CPrinter, orgID, projectID, appID, appName string, opts Options) ([]*models.StaticArtifact, error) {
+	registries, err := bs.FindSiteRegistries(orgID, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -217,35 +228,33 @@ func (bs *BuildService) uploadStaticSite(ctx context.Context, printer *cprint.CP
 	if err != nil {
 		return nil, fmt.Errorf("prepare static site: %w", err)
 	}
+	var sites []*models.StaticArtifact
+	for _, registry := range registries {
+		site, err := bs.uploadStaticSite(ctx, printer, orgID, projectID, appID, appName, registry, files, opts)
+		if err != nil {
+			return nil, err
+		}
+		sites = append(sites, site)
+	}
+	return sites, nil
+}
+
+func (bs *BuildService) uploadStaticSite(ctx context.Context, printer *cprint.CPrinter, orgID, projectID, appID, appName string, registry *SiteRegistry, files []uploadFile, opts Options) (*models.StaticArtifact, error) {
 	payload := struct {
 		RegistryID    string       `json:"registryId"`
 		Files         []uploadFile `json:"files"`
 		EnvironmentID string       `json:"environmentId,omitempty"`
 		PreviewHash   string       `json:"previewHash,omitempty"`
 	}{registry.ID, files, opts.EnvironmentID, opts.PreviewHash}
-	data, err := json.Marshal(payload)
+	capability, err := bs.requestSiteUpload(ctx, orgID, appID, payload)
 	if err != nil {
 		return nil, err
 	}
-	endpoint := fmt.Sprintf("%s/api/organizations/%s/apps/%s/builds/uploads", bs.baseUrl, url.PathEscape(orgID), url.PathEscape(appID))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(data))
-	if err != nil {
-		return nil, err
+	if registry.OrganizationIntegration.Type == "cloudflare" {
+		return bs.uploadR2Site(ctx, orgID, appID, appName, registry.ID, files, capability)
 	}
-	resp, err := bs.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	var capability uploadCapability
-	err = func() error {
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return errors.HandleHTTPError(resp)
-		}
-		return json.NewDecoder(resp.Body).Decode(&capability)
-	}()
-	if err != nil {
-		return nil, fmt.Errorf("request site upload: %w", err)
+	if capability.Provider == "cloudflare" {
+		return nil, fmt.Errorf("site upload provider does not match registry")
 	}
 	if err := capability.validate(files); err != nil {
 		return nil, err
@@ -287,7 +296,7 @@ func (bs *BuildService) uploadStaticSite(ctx context.Context, printer *cprint.CP
 	if receipt.State != "sealed" || receipt.OrganizationID != orgID || receipt.ProjectID != projectID || receipt.AppID != appID || receipt.Revision != capability.Revision {
 		return nil, fmt.Errorf("finalized site receipt does not match the requested app and revision; build was not registered")
 	}
-	return &models.StaticArtifact{RegistryID: registry.ID, Revision: receipt.Revision}, nil
+	return &models.StaticArtifact{Provider: registry.OrganizationIntegration.Type, RegistryID: registry.ID, URI: capability.URI}, nil
 }
 
 func (capability uploadCapability) validate(files []uploadFile) error {
@@ -295,7 +304,7 @@ func (capability uploadCapability) validate(files []uploadFile) error {
 		return fmt.Errorf("missing or expired site upload capability; retry the build")
 	}
 	var origin string
-	for _, endpoint := range []string{capability.UploadURL, capability.FinalizeURL, capability.AbortURL} {
+	for _, endpoint := range []string{capability.UploadURL, capability.FinalizeURL, capability.AbortURL, capability.URI} {
 		u, err := url.Parse(endpoint)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 			return fmt.Errorf("invalid site upload capability URL")
@@ -381,4 +390,29 @@ func (capability uploadCapability) request(ctx context.Context, client *http.Cli
 	}
 	_, err = io.Copy(io.Discard, resp.Body)
 	return err
+}
+
+func (bs *BuildService) requestSiteUpload(ctx context.Context, orgID, appID string, payload any) (uploadCapability, error) {
+	var capability uploadCapability
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return capability, err
+	}
+	endpoint := fmt.Sprintf("%s/api/organizations/%s/apps/%s/builds/uploads", bs.baseUrl, url.PathEscape(orgID), url.PathEscape(appID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(data))
+	if err != nil {
+		return capability, err
+	}
+	resp, err := bs.httpClient.Do(req)
+	if err != nil {
+		return capability, fmt.Errorf("site upload authorization unavailable")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return capability, errors.HandleHTTPError(resp)
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 12*1024*1024)).Decode(&capability); err != nil {
+		return capability, fmt.Errorf("invalid site upload authorization response")
+	}
+	return capability, nil
 }

@@ -159,7 +159,7 @@ func TestStaticBuildFlow(t *testing.T) {
 				case "/api/organizations/org_test/integrations/connections":
 					assert.Equal(t, "proj_test", r.URL.Query().Get("projectIds"))
 					assert.Equal(t, "SiteRegistry", r.URL.Query().Get("types"))
-					assert.Equal(t, "hyphenCloud", r.URL.Query().Get("integrationTypes"))
+					assert.Empty(t, r.URL.Query().Get("integrationTypes"))
 					fmt.Fprint(w, `{"data":[`+readyRegistry+`]}`)
 				case "/api/organizations/org_test/apps/app_test/builds/uploads":
 					var payload struct {
@@ -175,7 +175,7 @@ func TestStaticBuildFlow(t *testing.T) {
 					manifest = payload.Files
 					// Later local edits must not change the already-hashed upload.
 					assert.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("changed"), 0600))
-					json.NewEncoder(w).Encode(map[string]any{"sessionId": "session", "revision": "abcd1234", "token": "capability-secret", "expiresAt": time.Now().Add(time.Minute), "uploadUrl": uploadBase + "/files", "finalizeUrl": uploadBase + "/complete", "abortUrl": uploadBase + "/abort", "limits": map[string]int{"maxFiles": 100, "maxBytes": 100000, "maxFileBytes": 10000}})
+					json.NewEncoder(w).Encode(map[string]any{"sessionId": "session", "revision": "abcd1234", "uri": uploadBase + "/v1/organizations/org_test/apps/app_test/hosting/revisions/abcd1234", "token": "capability-secret", "expiresAt": time.Now().Add(time.Minute), "uploadUrl": uploadBase + "/files", "finalizeUrl": uploadBase + "/complete", "abortUrl": uploadBase + "/abort", "limits": map[string]int{"maxFiles": 100, "maxBytes": 100000, "maxFileBytes": 10000}})
 				case "/api/organizations/org_test/apps/app_test/builds":
 					assert.Equal(t, "POST /complete", events[len(events)-2])
 					assert.Equal(t, resolvedEnvironment, r.URL.Query().Get("environmentId"))
@@ -183,7 +183,7 @@ func TestStaticBuildFlow(t *testing.T) {
 					assert.Equal(t, "preview-name", r.URL.Query().Get("previewName"))
 					var payload map[string]any
 					assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-					assert.Equal(t, []any{map[string]any{"type": "Static", "target": "hyphenCloud", "site": map[string]any{"registryId": "conn_registry", "revision": "abcd1234"}}}, payload["artifacts"])
+					assert.Equal(t, []any{map[string]any{"type": "Static", "target": "hyphenCloud", "site": map[string]any{"registryId": "conn_registry", "uri": uploadBase + "/v1/organizations/org_test/apps/app_test/hosting/revisions/abcd1234"}}}, payload["artifacts"])
 					assert.NotEmpty(t, payload["commitSha"])
 					if failure == "register" {
 						http.Error(w, "registration failed", 503)
@@ -266,26 +266,42 @@ func TestBuildEnvironmentFailureStopsBeforeBuilding(t *testing.T) {
 	}
 }
 
-func TestFindSiteRegistry(t *testing.T) {
-	for _, test := range []struct{ name, data, want string }{
-		{"ready", readyRegistry, ""},
-		{"missing", "", "no ready"},
-		{"pending", strings.ReplaceAll(readyRegistry, `"Ready"`, `"Pending"`), "no ready"},
-		{"wrong-project", strings.ReplaceAll(readyRegistry, "proj_test", "proj_wrong"), "no ready"},
-		{"wrong-org", strings.ReplaceAll(readyRegistry, "org_test", "org_wrong"), "no ready"},
-		{"wrong-provider", strings.ReplaceAll(readyRegistry, "hyphenCloud", "azure"), "no ready"},
-		{"ambiguous", readyRegistry + "," + strings.ReplaceAll(readyRegistry, "conn_registry", "conn_other"), "multiple ready"},
+func TestFindSiteRegistries(t *testing.T) {
+	cloudflare := strings.ReplaceAll(strings.ReplaceAll(readyRegistry, "hyphenCloud", "cloudflare"), "conn_registry", "conn_cloudflare")
+	for _, test := range []struct {
+		name, data, want string
+		ids              []string
+	}{
+		{"hyphen-cloud", readyRegistry, "", []string{"conn_registry"}},
+		{"cloudflare-only", cloudflare, "", []string{"conn_cloudflare"}},
+		{"both-providers", readyRegistry + "," + cloudflare, "", []string{"conn_registry", "conn_cloudflare"}},
+		{"missing", "", "no ready", nil},
+		{"pending", strings.ReplaceAll(readyRegistry, `"Ready"`, `"Pending"`), "no ready", nil},
+		{"ready-cloudflare-with-pending-hyphen-cloud", cloudflare + "," + strings.ReplaceAll(readyRegistry, `"Ready"`, `"Pending"`), "", []string{"conn_cloudflare"}},
+		{"wrong-project", strings.ReplaceAll(readyRegistry, "proj_test", "proj_wrong"), "no ready", nil},
+		{"wrong-org", strings.ReplaceAll(readyRegistry, "org_test", "org_wrong"), "no ready", nil},
+		{"unsupported-provider", strings.ReplaceAll(readyRegistry, "hyphenCloud", "azure"), "unsupported site registry provider", nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `{"data":[`+test.data+`]}`) }))
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Empty(t, r.URL.Query().Get("integrationTypes"))
+				assert.Equal(t, "Ready", r.URL.Query().Get("statuses"))
+				assert.Equal(t, "SiteRegistry", r.URL.Query().Get("types"))
+				assert.Equal(t, "proj_test", r.URL.Query().Get("projectIds"))
+				fmt.Fprint(w, `{"data":[`+test.data+`]}`)
+			}))
 			defer server.Close()
 			service := BuildService{baseUrl: server.URL, httpClient: server.Client()}
-			registry, err := service.FindSiteRegistry("org_test", "proj_test")
+			registries, err := service.FindSiteRegistries("org_test", "proj_test")
 			if test.want != "" {
 				require.ErrorContains(t, err, test.want)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, "oint_cloud", registry.OrganizationIntegration.Id)
+				var ids []string
+				for _, registry := range registries {
+					ids = append(ids, registry.ID)
+				}
+				assert.Equal(t, test.ids, ids)
 			}
 		})
 	}
@@ -309,6 +325,7 @@ func TestPrepareSiteRejectsInvalidInput(t *testing.T) {
 func TestValidateCapability(t *testing.T) {
 	var valid uploadCapability
 	valid.Token, valid.SessionID, valid.Revision = "token", "session", "revision"
+	valid.URI = "https://uploads.test/v1/organizations/org_test/apps/app_test/hosting/revisions/abcd1234"
 	valid.ExpiresAt = time.Now().Add(time.Minute)
 	valid.UploadURL, valid.FinalizeURL, valid.AbortURL = "https://uploads.test/files", "https://uploads.test/complete", "https://uploads.test/abort"
 	valid.Limits.MaxFiles, valid.Limits.MaxBytes, valid.Limits.MaxFileBytes = 10, 100, 50
@@ -318,6 +335,8 @@ func TestValidateCapability(t *testing.T) {
 		files  []uploadFile
 	}{
 		{"expired", func(c *uploadCapability) { c.ExpiresAt = time.Now().Add(-time.Minute) }, nil},
+		{"missing-uri", func(c *uploadCapability) { c.URI = "" }, nil},
+		{"foreign-uri", func(c *uploadCapability) { c.URI = "https://other.test/revision" }, nil},
 		{"relative-url", func(c *uploadCapability) { c.UploadURL = "/files" }, nil},
 		{"cross-origin", func(c *uploadCapability) { c.FinalizeURL = "https://other.test/complete" }, nil},
 		{"too-many", func(c *uploadCapability) { c.Limits.MaxFiles = 0 }, []uploadFile{{Size: 1}}},
@@ -362,8 +381,10 @@ func TestArtifactPortsSerialization(t *testing.T) {
 	data, err := json.Marshal(models.Artifact{Type: "Docker", Ports: []int{}})
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"type":"Docker","ports":[]}`, string(data))
-	data, err = json.Marshal(models.Artifact{Type: "Static", Target: "hyphenCloud", Site: &models.StaticArtifact{RegistryID: "conn_registry", Revision: "abcd1234"}})
+	data, err = json.Marshal(models.Artifact{Type: "Static", Target: "hyphenCloud", Site: &models.StaticArtifact{RegistryID: "conn_registry", URI: "https://hyphencloud.test/v1/organizations/org_test/apps/app_test/hosting/revisions/abcd1234"}})
 	require.NoError(t, err)
 	assert.NotContains(t, string(data), "ports")
 	assert.NotContains(t, string(data), "image")
+	assert.NotContains(t, string(data), `"revision"`)
+	assert.Contains(t, string(data), `"uri"`)
 }
