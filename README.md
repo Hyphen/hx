@@ -65,15 +65,11 @@ An empty directory, symlinks within it, non-regular files, or paths containing
 
 hx uploads to every ready **SiteRegistry** returned for the project. It hashes
 and snapshots the original files once, then requests upload authorization for each
-registry through APIX. The registry determines its provider:
-
-- Hyphen Cloud receives gzip multipart uploads, finalizes the revision, and returns
-  a sealed receipt. hx attempts to abort unfinished uploads; sealed revisions are
-  retained even if build registration fails.
-- Cloudflare receives raw files directly in the R2 revision folder, with original
-  filenames under `files/` and the canonical manifest uploaded last. Temporary
-  credentials only permit PUTs within that revision prefix and are renewed through
-  upload authorization when needed. There is no Cloudflare session/finalize step.
+registry through APIX. Cloudflare is the supported static hosting provider.
+It receives raw files directly in the R2 revision folder, with original
+filenames under `files/` and the canonical manifest uploaded last. Temporary
+credentials only permit PUTs within that revision prefix and are renewed through
+upload authorization when needed.
 
 After all registry uploads succeed, hx registers one `Static` build containing
 all provider artifacts. Failed uploads prevent build registration and deployment.
@@ -103,7 +99,7 @@ When either selection flag is supplied, only those selected apps/sites are
 submitted to the run. When neither is supplied, all deployment apps and sites
 are submitted: the local app uses its new build unless `--no-build`, and other
 members use `latest`. Static auto-add/create writes the app under `sites` with
-the HyphenCloud **organization integration ID** in `deploymentSettings.targets`;
+the Cloudflare **organization integration ID** in `deploymentSettings.targets`;
 the registry connection ID is only used for artifacts/uploads. Existing app and
 site settings are preserved. An existing container app cannot silently be moved
 to `sites`, or vice versa; update deployment settings explicitly first.

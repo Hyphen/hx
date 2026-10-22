@@ -1,7 +1,6 @@
 package build
 
 import (
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -28,8 +27,17 @@ type siteRoundTripper func(*http.Request) (*http.Response, error)
 func (f siteRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestCloudflareStaticBuildFlow(t *testing.T) {
-	for _, scenario := range []string{"uploaded", "wrong-app-name", "wrong-revision", "wrong-uri", "manifest-revision", "missing-checksum", "renew", "renew-revision", "manifest-failed", "scope-mismatch", "redirect", "storage-mismatch", "object-mismatch", "many-files", "all-registries", "second-upload-failed", "file-size-limit", "file-count-limit", "total-size-limit", "credential-lifetime"} {
+	for _, scenario := range []string{"uploaded", "wrong-app-name", "wrong-revision", "wrong-uri", "manifest-revision", "missing-checksum", "renew", "renew-revision", "manifest-failed", "scope-mismatch", "redirect", "storage-mismatch", "object-mismatch", "many-files", "environment-alias", "environment-id", "register-failed", "wrong-provider", "file-size-limit", "file-count-limit", "total-size-limit", "credential-lifetime"} {
 		t.Run(scenario, func(t *testing.T) {
+			environment := ""
+			resolvedEnvironment := ""
+			if scenario == "environment-alias" || scenario == "environment-id" {
+				resolvedEnvironment = "pevr_0123456789abcdef01234567"
+				environment = resolvedEnvironment
+				if scenario == "environment-alias" {
+					environment = "development"
+				}
+			}
 			dir := t.TempDir()
 			require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("hello"), 0600))
 			require.NoError(t, os.WriteFile(filepath.Join(dir, "empty.txt"), nil, 0600))
@@ -48,7 +56,6 @@ func TestCloudflareStaticBuildFlow(t *testing.T) {
 			defer func() { http.DefaultTransport = originalTransport; config.FS = originalFS }()
 			var events []string
 			var manifest []uploadFile
-			multi := scenario == "all-registries" || scenario == "second-upload-failed"
 			registryID := "conn_registry"
 			var authorized []string
 			completed := 0
@@ -78,35 +85,6 @@ func TestCloudflareStaticBuildFlow(t *testing.T) {
 					bytes, err := json.Marshal(data)
 					require.NoError(t, err)
 					return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(string(bytes))), Request: r}, nil
-				}
-				if r.URL.Hostname() == "hyphen.test" {
-					assert.Empty(t, r.Header.Get("X-API-Key"))
-					assert.Equal(t, "Bearer hyphen-capability", r.Header.Get("Authorization"))
-					switch r.URL.Path {
-					case "/files":
-						if scenario == "second-upload-failed" {
-							return response(503, nil)
-						}
-						reader, err := r.MultipartReader()
-						require.NoError(t, err)
-						part, err := reader.NextPart()
-						require.NoError(t, err)
-						gz, err := gzip.NewReader(part)
-						require.NoError(t, err)
-						contents, err := io.ReadAll(gz)
-						require.NoError(t, err)
-						require.NoError(t, gz.Close())
-						assert.Contains(t, []string{"", "hello"}, string(contents))
-						return response(200, nil)
-					case "/complete":
-						completed++
-						return response(200, map[string]string{"state": "sealed", "organizationId": "org_test", "projectId": "proj_test", "appId": "app_test", "revision": "abcd1234"})
-					case "/abort":
-						assert.Equal(t, http.MethodDelete, r.Method)
-						return response(200, nil)
-					default:
-						t.Fatalf("unexpected Hyphen Cloud request %s", r.URL.Path)
-					}
 				}
 				if r.URL.Hostname() != "api.test" {
 					require.True(t, r2UploadHost.MatchString(r.URL.Hostname()), "unexpected external request")
@@ -162,35 +140,38 @@ func TestCloudflareStaticBuildFlow(t *testing.T) {
 				}
 				assert.Equal(t, "api-key-only-for-apix", r.Header.Get("X-API-Key"))
 				switch {
+				case r.URL.Path == "/api/organizations/org_test/projects/proj_test/environments/"+environment+"/":
+					assert.NotEmpty(t, environment)
+					return response(200, map[string]string{"id": resolvedEnvironment, "alternateId": "development"})
 				case r.URL.Path == "/api/organizations/org_test/integrations/connections":
 					assert.Empty(t, r.URL.Query().Get("integrationTypes"))
-					data := strings.ReplaceAll(readyRegistry, "hyphenCloud", "cloudflare")
-					if multi {
-						data += "," + strings.ReplaceAll(readyRegistry, "conn_registry", "conn_hyphen")
-					}
+					data := readyRegistry
 					return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"data":[` + data + `]}`)), Request: r}, nil
 				case strings.HasSuffix(r.URL.Path, "/builds/uploads"):
 					var payload struct {
-						Files      []uploadFile `json:"files"`
-						RegistryID string       `json:"registryId"`
-						Revision   string       `json:"revision"`
+						Files         []uploadFile `json:"files"`
+						RegistryID    string       `json:"registryId"`
+						Revision      string       `json:"revision"`
+						EnvironmentID string       `json:"environmentId"`
+						PreviewHash   string       `json:"previewHash"`
 					}
 					require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 					manifest = payload.Files
 					registryID = payload.RegistryID
 					authorized = append(authorized, registryID)
-					if registryID == "conn_hyphen" {
-						return response(200, map[string]any{"sessionId": "hyphen-session", "revision": "abcd1234", "uri": "https://hyphen.test/v1/organizations/org_test/apps/app_test/hosting/revisions/abcd1234", "token": "hyphen-capability", "expiresAt": expiresAt, "uploadUrl": "https://hyphen.test/files", "finalizeUrl": "https://hyphen.test/complete", "abortUrl": "https://hyphen.test/abort", "limits": map[string]int{"maxFiles": 100, "maxBytes": 10000, "maxFileBytes": 1000}})
-					}
 					require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("changed"), 0600))
 					if len(authorized) > 1 {
 						renewed = true
 						assert.Equal(t, revision, payload.Revision)
 					} else {
 						assert.Empty(t, payload.Revision)
+						assert.Equal(t, resolvedEnvironment, payload.EnvironmentID)
+						assert.Equal(t, "preview-hash", payload.PreviewHash)
 					}
 					result := capability()
 					switch scenario {
+					case "wrong-provider":
+						result["provider"] = "hyphenCloud"
 					case "file-size-limit":
 						result["limits"].(map[string]int)["maxFileBytes"] = 4
 					case "file-count-limit":
@@ -236,22 +217,17 @@ func TestCloudflareStaticBuildFlow(t *testing.T) {
 					}
 					return response(200, result)
 				case strings.HasSuffix(r.URL.Path, "/builds"):
-					if multi {
-						assert.Equal(t, "POST /complete", events[len(events)-2])
-					} else {
-						assert.Equal(t, "PUT /nf-sites-test/revisions/website/revision_"+revision+"/manifest.json", events[len(events)-2])
+					assert.Equal(t, resolvedEnvironment, r.URL.Query().Get("environmentId"))
+					assert.Equal(t, environment != "", r.URL.Query().Has("environmentId"))
+					assert.Equal(t, "preview-name", r.URL.Query().Get("previewName"))
+					if scenario == "register-failed" {
+						return response(503, map[string]string{"message": "unavailable"})
 					}
+					assert.Equal(t, "PUT /nf-sites-test/revisions/website/revision_"+revision+"/manifest.json", events[len(events)-2])
 					var payload models.NewBuild
 					require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-					if multi {
-						require.Len(t, payload.Artifacts, 2)
-						assert.Equal(t, 2, completed)
-						assert.Equal(t, []string{"conn_registry", "conn_hyphen"}, authorized)
-						assert.Equal(t, "hyphenCloud", payload.Artifacts[1].Target)
-						assert.Equal(t, "conn_hyphen", payload.Artifacts[1].Site.RegistryID)
-					} else {
-						require.Len(t, payload.Artifacts, 1)
-					}
+					require.Len(t, payload.Artifacts, 1)
+					assert.Equal(t, 1, completed)
 					assert.Equal(t, "cloudflare", payload.Artifacts[0].Target)
 					assert.Equal(t, "r2://nf-sites-test/revisions/website/revision_"+revision, payload.Artifacts[0].Site.URI)
 					return response(201, map[string]string{"id": "abld_static"})
@@ -263,8 +239,8 @@ func TestCloudflareStaticBuildFlow(t *testing.T) {
 			service := &BuildService{baseUrl: "https://api.test", httpClient: apiAuthClient{&http.Client{}}}
 			cmd := &cobra.Command{}
 			cmd.SetContext(context.Background())
-			result, err := service.RunBuild(cmd, cprint.NewCPrinter(false), Options{Type: "static", Directory: dir})
-			if scenario == "uploaded" || scenario == "renew" || scenario == "many-files" || scenario == "all-registries" {
+			result, err := service.RunBuild(cmd, cprint.NewCPrinter(false), Options{Type: "static", Directory: dir, EnvironmentID: environment, Preview: "preview-name", PreviewHash: "preview-hash"})
+			if scenario == "uploaded" || scenario == "renew" || scenario == "many-files" || scenario == "environment-alias" || scenario == "environment-id" {
 				require.NoError(t, err)
 				assert.Equal(t, "abld_static", result.Id)
 			} else {
@@ -281,14 +257,10 @@ func TestCloudflareStaticBuildFlow(t *testing.T) {
 				}
 				assert.NotContains(t, err.Error(), "temporary-test-secret")
 				assert.NotContains(t, err.Error(), "test-session-token")
-				assert.NotContains(t, events, "POST /api/organizations/org_test/apps/app_test/builds")
-				if scenario == "second-upload-failed" {
-					assert.Equal(t, 1, completed)
-					assert.Equal(t, []string{"conn_registry", "conn_hyphen"}, authorized)
-					assert.Contains(t, events, "DELETE /abort")
-				} else {
-					assert.NotContains(t, strings.Join(events, " "), "/builds/uploads/conn_registry/")
+				if scenario != "register-failed" {
+					assert.NotContains(t, events, "POST /api/organizations/org_test/apps/app_test/builds")
 				}
+				assert.NotContains(t, strings.Join(events, " "), "/builds/uploads/conn_registry/")
 			}
 			if scenario == "renew" {
 				assert.True(t, renewed)
@@ -306,20 +278,6 @@ func TestR2DestinationsRejectUntrustedURLs(t *testing.T) {
 		_, err := putR2Object(context.Background(), nil, uploadCapability{Endpoint: target}, "", "", nil, 0, "")
 		require.EqualError(t, err, "invalid R2 upload destination")
 	}
-}
-
-func TestStaticBuildRegistersAllProviders(t *testing.T) {
-	client := &http.Client{Transport: siteRoundTripper(func(r *http.Request) (*http.Response, error) {
-		var body models.NewBuild
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		require.Len(t, body.Artifacts, 2)
-		assert.Equal(t, "hyphenCloud", body.Artifacts[0].Target)
-		assert.Equal(t, "cloudflare", body.Artifacts[1].Target)
-		return &http.Response{StatusCode: 201, Body: io.NopCloser(strings.NewReader(`{"id":"build"}`))}, nil
-	})}
-	service := &BuildService{baseUrl: "https://api.test", httpClient: client}
-	_, err := service.CreateBuild(CreateBuildOptions{OrganizationId: "org", AppId: "app", Sites: []*models.StaticArtifact{{Provider: "hyphenCloud", RegistryID: "hc", URI: "https://hyphen.test/v1/organizations/org/apps/app/hosting/revisions/12345678"}, {Provider: "cloudflare", RegistryID: "cf", URI: "r2://nf-sites-test/revisions/website/revision_" + strings.Repeat("a", 24)}}})
-	require.NoError(t, err)
 }
 
 func TestR2ObjectKeysPreservePathsWithinRevision(t *testing.T) {
