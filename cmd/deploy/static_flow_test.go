@@ -34,7 +34,10 @@ func (transport deployTransport) RoundTrip(req *http.Request) (*http.Response, e
 }
 
 func TestRunDeployWithStaticSite(t *testing.T) {
-	const artifactURI = "https://uploads.test/v1/organizations/org_test/apps/app_web/hosting/revisions/abcd1234"
+	const revision = "aaaaaaaaaaaaaaaaaaaaaaaa"
+	const prefix = "revisions/website/revision_" + revision + "/"
+	const artifactURI = "r2://nf-sites-test/revisions/website/revision_" + revision
+	const storageHost = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.r2.cloudflarestorage.com"
 	for _, skipBuild := range []bool{true, false} {
 		t.Run(fmt.Sprint(skipBuild), func(t *testing.T) {
 			oldFS, oldTransport, oldPrinter := config.FS, http.DefaultTransport, printer
@@ -61,8 +64,8 @@ func TestRunDeployWithStaticSite(t *testing.T) {
 			http.DefaultTransport = deployTransport(func(req *http.Request) (*http.Response, error) {
 				calls = append(calls, req.Method+" "+req.URL.Path)
 				code, body := 200, `{}`
-				if req.URL.Host == "uploads.test" {
-					assert.Equal(t, "Bearer capability", req.Header.Get("Authorization"))
+				if req.URL.Host == storageHost {
+					assert.Contains(t, req.Header.Get("Authorization"), "AWS4-HMAC-SHA256")
 					assert.Empty(t, req.Header.Get("X-API-Key"))
 				} else {
 					assert.Equal(t, "apix-test-key", req.Header.Get("X-API-Key"))
@@ -74,24 +77,39 @@ func TestRunDeployWithStaticSite(t *testing.T) {
 					assert.Equal(t, http.MethodGet, req.Method)
 					body = `{"id":"env_test","alternateId":"development"}`
 				case "/api/organizations/org_test/integrations/connections":
-					body = `{"data":[{"id":"conn_registry","type":"SiteRegistry","status":"Ready","organization":{"id":"org_test"},"project":{"id":"proj_test"},"entity":{"id":"proj_test","type":"Project"},"organizationIntegration":{"id":"oint_cloud","type":"hyphenCloud"}}]}`
+					body = `{"data":[{"id":"conn_registry","type":"SiteRegistry","status":"Ready","organization":{"id":"org_test"},"project":{"id":"proj_test"},"entity":{"id":"proj_test","type":"Project"},"organizationIntegration":{"id":"oint_cloud","type":"cloudflare"}}]}`
 				case "/api/organizations/org_test/apps/app_web/builds/uploads":
 					var input map[string]any
 					assert.NoError(t, json.NewDecoder(req.Body).Decode(&input))
 					assert.Equal(t, "env_test", input["environmentId"])
 					assert.Equal(t, "preview-hash", input["previewHash"])
-					body = fmt.Sprintf(`{"sessionId":"session","revision":"abcd1234","uri":%q,"token":"capability","expiresAt":%q,"uploadUrl":"https://uploads.test/files","finalizeUrl":"https://uploads.test/complete","abortUrl":"https://uploads.test/abort","limits":{"maxFiles":100,"maxBytes":100000,"maxFileBytes":10000}}`, artifactURI, time.Now().Add(time.Minute).Format(time.RFC3339))
-				case "/files":
-					assert.Contains(t, req.Header.Get("Content-Type"), "multipart/form-data;")
+					uploads := []map[string]any{}
+					for _, value := range input["files"].([]any) {
+						file := value.(map[string]any)
+						file["contentType"] = "text/html"
+						uploads = append(uploads, map[string]any{"path": file["path"], "key": prefix + "files/" + file["path"].(string), "contentType": "text/html"})
+					}
+					manifest, err := json.Marshal(map[string]any{"formatVersion": 4, "revision": revision, "sha256": strings.Repeat("d", 64), "appId": "app_web", "appName": "website", "registryId": "conn_registry", "files": input["files"]})
+					require.NoError(t, err)
+					expiresAt := time.Now().Add(time.Minute)
+					capability, err := json.Marshal(map[string]any{
+						"provider": "cloudflare", "appId": "app_web", "revision": revision, "uri": artifactURI, "expiresAt": expiresAt,
+						"endpoint": "https://" + storageHost, "bucketName": "nf-sites-test",
+						"credentials": map[string]any{"accessKeyId": "test-key", "secretAccessKey": "test-secret", "sessionToken": "test-token", "expiresAt": expiresAt},
+						"uploads":     uploads, "manifest": map[string]any{"key": prefix + "manifest.json", "content": string(manifest)},
+						"limits": map[string]int{"maxFiles": 100, "maxBytes": 100000, "maxFileBytes": 10000},
+					})
+					require.NoError(t, err)
+					body = string(capability)
+				case "/nf-sites-test/" + prefix + "files/index.html", "/nf-sites-test/" + prefix + "manifest.json":
+					assert.Equal(t, http.MethodPut, req.Method)
 					_, err := io.Copy(io.Discard, req.Body)
 					assert.NoError(t, err)
-				case "/complete":
-					body = `{"state":"sealed","organizationId":"org_test","projectId":"proj_test","appId":"app_web","revision":"abcd1234"}`
 				case "/api/organizations/org_test/apps/app_web/builds":
-					assert.Equal(t, "POST /complete", calls[len(calls)-2])
+					assert.Equal(t, "PUT /nf-sites-test/"+prefix+"manifest.json", calls[len(calls)-2])
 					var input map[string]json.RawMessage
 					assert.NoError(t, json.NewDecoder(req.Body).Decode(&input))
-					assert.JSONEq(t, fmt.Sprintf(`[{"type":"Static","target":"hyphenCloud","site":{"registryId":"conn_registry","uri":%q}}]`, artifactURI), string(input["artifacts"]))
+					assert.JSONEq(t, fmt.Sprintf(`[{"type":"Static","target":"cloudflare","site":{"registryId":"conn_registry","uri":%q}}]`, artifactURI), string(input["artifacts"]))
 					code, body = 201, `{"id":"abld_new","app":{"id":"app_web"}}`
 				case "/api/organizations/org_test/deployments/dply_test/runs":
 					var input map[string]json.RawMessage
@@ -118,7 +136,7 @@ func TestRunDeployWithStaticSite(t *testing.T) {
 			if skipBuild {
 				assert.Len(t, calls, 2)
 			} else {
-				assert.Contains(t, calls, "POST /complete")
+				assert.Contains(t, calls, "PUT /nf-sites-test/"+prefix+"manifest.json")
 			}
 		})
 	}

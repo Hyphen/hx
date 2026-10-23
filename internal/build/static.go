@@ -9,9 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"mime/multipart"
 	"net/http"
-	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -92,7 +90,7 @@ func (bs *BuildService) FindSiteRegistries(organizationID, projectID string) ([]
 			if registry.Type != "SiteRegistry" || registry.Status != "Ready" || registry.Organization.ID != organizationID || registry.Project.ID != projectID || registry.Entity.Type != "Project" || registry.Entity.Id != projectID || registry.OrganizationIntegration.Id == "" || registry.ID == "" {
 				continue
 			}
-			if registry.OrganizationIntegration.Type != "hyphenCloud" && registry.OrganizationIntegration.Type != "cloudflare" {
+			if registry.OrganizationIntegration.Type != "cloudflare" {
 				return nil, fmt.Errorf("unsupported site registry provider %q for registry %s", registry.OrganizationIntegration.Type, registry.ID)
 			}
 			registries = append(registries, &registry)
@@ -125,14 +123,9 @@ type uploadCapability struct {
 		Content string `json:"content"`
 	} `json:"manifest"`
 	Credentials r2Credentials `json:"credentials"`
-	SessionID   string        `json:"sessionId"`
 	Revision    string        `json:"revision"`
 	URI         string        `json:"uri"`
-	Token       string        `json:"token"`
 	ExpiresAt   time.Time     `json:"expiresAt"`
-	UploadURL   string        `json:"uploadUrl"`
-	FinalizeURL string        `json:"finalizeUrl"`
-	AbortURL    string        `json:"abortUrl"`
 	Limits      struct {
 		MaxFiles     int   `json:"maxFiles"`
 		MaxBytes     int64 `json:"maxBytes"`
@@ -230,7 +223,7 @@ func (bs *BuildService) uploadStaticSites(ctx context.Context, printer *cprint.C
 	}
 	var sites []*models.StaticArtifact
 	for _, registry := range registries {
-		site, err := bs.uploadStaticSite(ctx, printer, orgID, projectID, appID, appName, registry, files, opts)
+		site, err := bs.uploadStaticSite(ctx, orgID, appID, appName, registry, files, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -239,7 +232,7 @@ func (bs *BuildService) uploadStaticSites(ctx context.Context, printer *cprint.C
 	return sites, nil
 }
 
-func (bs *BuildService) uploadStaticSite(ctx context.Context, printer *cprint.CPrinter, orgID, projectID, appID, appName string, registry *SiteRegistry, files []uploadFile, opts Options) (*models.StaticArtifact, error) {
+func (bs *BuildService) uploadStaticSite(ctx context.Context, orgID, appID, appName string, registry *SiteRegistry, files []uploadFile, opts Options) (*models.StaticArtifact, error) {
 	payload := struct {
 		RegistryID    string       `json:"registryId"`
 		Files         []uploadFile `json:"files"`
@@ -250,146 +243,7 @@ func (bs *BuildService) uploadStaticSite(ctx context.Context, printer *cprint.CP
 	if err != nil {
 		return nil, err
 	}
-	if registry.OrganizationIntegration.Type == "cloudflare" {
-		return bs.uploadR2Site(ctx, orgID, appID, appName, registry.ID, files, capability)
-	}
-	if capability.Provider == "cloudflare" {
-		return nil, fmt.Errorf("site upload provider does not match registry")
-	}
-	if err := capability.validate(files); err != nil {
-		return nil, err
-	}
-	// Capability requests must not use HyphenHTTPClient: it injects APIX auth
-	// and replaces multipart Content-Type. Redirects must not forward the token.
-	client := &http.Client{Timeout: 5 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	ctx, cancel := context.WithDeadline(ctx, capability.ExpiresAt)
-	defer cancel()
-	sealed := false
-	defer func() {
-		if sealed {
-			return
-		}
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := capability.request(cleanupCtx, client, http.MethodDelete, capability.AbortURL, nil, "", 0, nil); err != nil {
-			printer.Warning("Could not abort unfinished site upload: " + err.Error())
-		}
-	}()
-	for _, file := range files {
-		printer.PrintVerbose("Uploading " + file.Path)
-		if err := capability.upload(ctx, client, file); err != nil {
-			return nil, fmt.Errorf("upload %s: %w", file.Path, err)
-		}
-	}
-	printer.Print("Finalizing static site revision")
-	var receipt struct {
-		OrganizationID string `json:"organizationId"`
-		ProjectID      string `json:"projectId"`
-		AppID          string `json:"appId"`
-		Revision       string `json:"revision"`
-		State          string `json:"state"`
-	}
-	if err := capability.request(ctx, client, http.MethodPost, capability.FinalizeURL, nil, "", 0, &receipt); err != nil {
-		return nil, fmt.Errorf("finalize site upload: %w", err)
-	}
-	sealed = true
-	if receipt.State != "sealed" || receipt.OrganizationID != orgID || receipt.ProjectID != projectID || receipt.AppID != appID || receipt.Revision != capability.Revision {
-		return nil, fmt.Errorf("finalized site receipt does not match the requested app and revision; build was not registered")
-	}
-	return &models.StaticArtifact{Provider: registry.OrganizationIntegration.Type, RegistryID: registry.ID, URI: capability.URI}, nil
-}
-
-func (capability uploadCapability) validate(files []uploadFile) error {
-	if capability.Token == "" || capability.SessionID == "" || capability.Revision == "" || !capability.ExpiresAt.After(time.Now()) {
-		return fmt.Errorf("missing or expired site upload capability; retry the build")
-	}
-	var origin string
-	for _, endpoint := range []string{capability.UploadURL, capability.FinalizeURL, capability.AbortURL, capability.URI} {
-		u, err := url.Parse(endpoint)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-			return fmt.Errorf("invalid site upload capability URL")
-		}
-		if origin != "" && origin != u.Scheme+"://"+u.Host {
-			return fmt.Errorf("site upload capability URLs must share an origin")
-		}
-		origin = u.Scheme + "://" + u.Host
-	}
-	if len(files) > capability.Limits.MaxFiles {
-		return fmt.Errorf("site exceeds registry file count limit (%d)", capability.Limits.MaxFiles)
-	}
-	var size int64
-	for _, file := range files {
-		if file.Size > capability.Limits.MaxFileBytes {
-			return fmt.Errorf("site file %q exceeds registry file size limit", file.Path)
-		}
-		size += file.Size
-	}
-	if capability.Limits.MaxBytes <= 0 || size > capability.Limits.MaxBytes {
-		return fmt.Errorf("site exceeds registry total byte limit")
-	}
-	return nil
-}
-
-func (capability uploadCapability) upload(ctx context.Context, client *http.Client, file uploadFile) error {
-	compressed, err := os.Open(file.gzipPath)
-	if err != nil {
-		return err
-	}
-	defer compressed.Close()
-	info, err := compressed.Stat()
-	if err != nil {
-		return err
-	}
-	var framing bytes.Buffer
-	writer := multipart.NewWriter(&framing)
-	header := textproto.MIMEHeader{}
-	header.Set("Content-Disposition", `form-data; name="file"; filename="`+strings.ReplaceAll(file.Path, `"`, `\"`)+`"`)
-	header.Set("Content-Encoding", "gzip")
-	header.Set("Content-Type", "application/octet-stream")
-	if _, err := writer.CreatePart(header); err != nil {
-		return err
-	}
-	prefix := append([]byte(nil), framing.Bytes()...)
-	framing.Reset()
-	if err := writer.Close(); err != nil {
-		return err
-	}
-	length := int64(len(prefix)+framing.Len()) + info.Size()
-	if length > capability.Limits.MaxBytes {
-		return fmt.Errorf("compressed multipart file exceeds registry request byte limit")
-	}
-	body := io.MultiReader(bytes.NewReader(prefix), compressed, &framing)
-	return capability.request(ctx, client, http.MethodPost, capability.UploadURL, body, writer.FormDataContentType(), length, nil)
-}
-
-func (capability uploadCapability) request(ctx context.Context, client *http.Client, method, endpoint string, body io.Reader, contentType string, length int64, result any) error {
-	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
-	if err != nil {
-		return fmt.Errorf("invalid upload request")
-	}
-	req.Header.Set("Authorization", "Bearer "+capability.Token)
-	if contentType != "" {
-		req.Header.Set("Content-Type", contentType)
-	}
-	req.ContentLength = length
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("site upload request failed: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		message := strings.ReplaceAll(string(data), capability.Token, "[redacted]")
-		if resp.StatusCode == http.StatusUnauthorized {
-			return fmt.Errorf("site upload token rejected or expired; retry the build (HTTP 401)")
-		}
-		return fmt.Errorf("site upload returned HTTP %d: %s", resp.StatusCode, message)
-	}
-	if result != nil {
-		return json.NewDecoder(resp.Body).Decode(result)
-	}
-	_, err = io.Copy(io.Discard, resp.Body)
-	return err
+	return bs.uploadR2Site(ctx, orgID, appID, appName, registry.ID, files, capability)
 }
 
 func (bs *BuildService) requestSiteUpload(ctx context.Context, orgID, appID string, payload any) (uploadCapability, error) {
