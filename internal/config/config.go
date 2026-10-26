@@ -36,6 +36,8 @@ type Config struct {
 	Project            *ConfigProject `json:"project,omitempty"`
 	AutoUpdateDisabled *bool          `json:"auto_update_disabled,omitempty"`
 	Database           interface{}    `json:"database,omitempty"`
+
+	Static json.RawMessage `json:"static,omitempty"`
 }
 
 func (c *Config) IsMonorepoProject() bool {

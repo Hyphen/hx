@@ -43,8 +43,8 @@ powershell -c "irm https://cdn.hyphen.ai/install/install.ps1 | iex"
 
 ## Build and deploy
 
-`hx` and `hyphen` support the same commands. Run these from your app's `.hx`
-directory. `--type` selects the **local build**: `docker` (default) or `static`.
+`hx` and `hyphen` support the same commands. Run these from the directory
+containing your app's `.hx` file. `--type` selects the **local build**: `docker` (default) or `static`.
 Docker keeps the existing Dockerfile generation, build, registry push, and build
 registration flow. Use `--dockerfile/-f` to choose a Dockerfile.
 
@@ -76,6 +76,36 @@ all provider artifacts. Failed uploads prevent build registration and deployment
 File bytes do not pass through APIX or nFabric. Storage requests never receive APIX
 credentials, and redirects are refused. Temporary local snapshots are removed on
 completion or failure. The returned provider limits apply to each upload.
+
+### Static build settings
+
+Add a `static` object to the app's `.hx` JSON file alongside its existing IDs:
+
+```json
+{
+  "static": {
+    "headers": [{ "path": "/*", "set": { "X-Content-Type-Options": "nosniff" } }],
+    "redirects": [{ "source": "/old", "destination": "/new", "status": 301 }],
+    "spa": { "enabled": true, "fallback": "/index.html" },
+    "notFoundPage": "404.html"
+  }
+}
+```
+
+`hx build --type static ./dist` and `hx deploy --type static ./dist` attach these
+settings to each Static artifact as `site.options` when registering the build.
+The API validates and saves them with that build, so selecting an older build
+also selects its original settings. Docker builds do not send this object.
+Fallback files must exist in the uploaded directory. SPA fallback paths start
+with `/`; `notFoundPage` paths are relative to that directory.
+
+Deployment API options override individual build settings. Build settings
+then override the corresponding uploaded `_headers` / `_redirects` files or
+inferred fallback behavior. Omit a setting to inherit it; `headers: []` and
+`redirects: []` explicitly clear rules, `spa: { "enabled": false }` disables SPA
+fallback, and `notFoundPage: null` disables the custom 404 page. Arrays and the
+`spa` object are replaced as a whole, not merged with the lower-priority setting.
+Changing `.hx` affects new builds; it does not alter an existing build.
 
 ### Selecting apps and sites
 

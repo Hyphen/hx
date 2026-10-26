@@ -30,10 +30,17 @@ func (c apiAuthClient) Do(req *http.Request) (*http.Response, error) {
 	return c.client.Do(req)
 }
 
-type buildConfigFS struct{ fsutil.FileSystem }
+type buildConfigFS struct {
+	fsutil.FileSystem
+	staticOptions json.RawMessage
+}
 
-func (buildConfigFS) ReadFile(string) ([]byte, error) {
-	return []byte(`{"organization_id":"org_test","project_id":"proj_test","app_id":"app_test","app_alternate_id":"website"}`), nil
+func (f buildConfigFS) ReadFile(string) ([]byte, error) {
+	value := map[string]any{"organization_id": "org_test", "project_id": "proj_test", "app_id": "app_test", "app_alternate_id": "website"}
+	if f.staticOptions != nil {
+		value["static"] = f.staticOptions
+	}
+	return json.Marshal(value)
 }
 
 const readyRegistry = `{"id":"conn_registry","type":"SiteRegistry","status":"Ready","organization":{"id":"org_test"},"project":{"id":"proj_test"},"entity":{"id":"proj_test","type":"Project"},"organizationIntegration":{"id":"oint_cloud","type":"cloudflare"}}`
@@ -59,7 +66,7 @@ func TestBuildEnvironmentFailureStopsBeforeBuilding(t *testing.T) {
 				}))
 				defer api.Close()
 				oldFS := config.FS
-				config.FS = buildConfigFS{oldFS}
+				config.FS = buildConfigFS{FileSystem: oldFS}
 				defer func() { config.FS = oldFS }()
 				service := BuildService{baseUrl: api.URL, httpClient: api.Client()}
 				cmd := &cobra.Command{}

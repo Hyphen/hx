@@ -27,7 +27,7 @@ type siteRoundTripper func(*http.Request) (*http.Response, error)
 func (f siteRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestCloudflareStaticBuildFlow(t *testing.T) {
-	for _, scenario := range []string{"uploaded", "wrong-app-name", "wrong-revision", "wrong-uri", "manifest-revision", "missing-checksum", "renew", "renew-revision", "manifest-failed", "scope-mismatch", "redirect", "storage-mismatch", "object-mismatch", "many-files", "environment-alias", "environment-id", "register-failed", "wrong-provider", "file-size-limit", "file-count-limit", "total-size-limit", "credential-lifetime"} {
+	for _, scenario := range []string{"static-options", "empty-options", "cleared-options", "uploaded", "wrong-app-name", "wrong-revision", "wrong-uri", "manifest-revision", "missing-checksum", "renew", "renew-revision", "manifest-failed", "scope-mismatch", "redirect", "storage-mismatch", "object-mismatch", "many-files", "environment-alias", "environment-id", "register-failed", "wrong-provider", "file-size-limit", "file-count-limit", "total-size-limit", "credential-lifetime"} {
 		t.Run(scenario, func(t *testing.T) {
 			environment := ""
 			resolvedEnvironment := ""
@@ -52,7 +52,16 @@ func TestCloudflareStaticBuildFlow(t *testing.T) {
 			}
 			originalTransport := http.DefaultTransport
 			originalFS := config.FS
-			config.FS = buildConfigFS{originalFS}
+			var staticOptions json.RawMessage
+			switch scenario {
+			case "static-options":
+				staticOptions = json.RawMessage(`{"headers":[{"path":"/*","set":{"X-Content-Type-Options":"nosniff"},"remove":["X-Powered-By"]}],"redirects":[{"source":"/old","destination":"/new","status":301}],"spa":{"enabled":true,"fallback":"/index.html"},"notFoundPage":"404.html"}`)
+			case "empty-options":
+				staticOptions = json.RawMessage(`{}`)
+			case "cleared-options":
+				staticOptions = json.RawMessage(`{"headers":[],"redirects":[],"spa":{"enabled":false},"notFoundPage":null}`)
+			}
+			config.FS = buildConfigFS{FileSystem: originalFS, staticOptions: staticOptions}
 			defer func() { http.DefaultTransport = originalTransport; config.FS = originalFS }()
 			var events []string
 			var manifest []uploadFile
@@ -229,6 +238,11 @@ func TestCloudflareStaticBuildFlow(t *testing.T) {
 					require.Len(t, payload.Artifacts, 1)
 					assert.Equal(t, 1, completed)
 					assert.Equal(t, "cloudflare", payload.Artifacts[0].Target)
+					if staticOptions == nil {
+						assert.Nil(t, payload.Artifacts[0].Site.Options)
+					} else {
+						assert.JSONEq(t, string(staticOptions), string(payload.Artifacts[0].Site.Options))
+					}
 					assert.Equal(t, "r2://nf-sites-test/revisions/website/revision_"+revision, payload.Artifacts[0].Site.URI)
 					return response(201, map[string]string{"id": "abld_static"})
 				default:
@@ -240,7 +254,7 @@ func TestCloudflareStaticBuildFlow(t *testing.T) {
 			cmd := &cobra.Command{}
 			cmd.SetContext(context.Background())
 			result, err := service.RunBuild(cmd, cprint.NewCPrinter(false), Options{Type: "static", Directory: dir, EnvironmentID: environment, Preview: "preview-name", PreviewHash: "preview-hash"})
-			if scenario == "uploaded" || scenario == "renew" || scenario == "many-files" || scenario == "environment-alias" || scenario == "environment-id" {
+			if scenario == "static-options" || scenario == "empty-options" || scenario == "cleared-options" || scenario == "uploaded" || scenario == "renew" || scenario == "many-files" || scenario == "environment-alias" || scenario == "environment-id" {
 				require.NoError(t, err)
 				assert.Equal(t, "abld_static", result.Id)
 			} else {
