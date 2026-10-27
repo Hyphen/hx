@@ -203,6 +203,9 @@ func (bs *BuildService) RunBuild(cmd *cobra.Command, printer *cprint.CPrinter, o
 		if err != nil {
 			return nil, err
 		}
+		for _, site := range sites {
+			site.Options = config.Static
+		}
 		metadata.Sites = sites
 	} else {
 		uris, ports, err := bs.buildDocker(cmd, printer, config, opts, metadata.CommitSha)

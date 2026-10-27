@@ -1,5 +1,7 @@
 package models
 
+import "encoding/json"
+
 type Artifact struct {
 	Type  string `json:"type"`
 	Image *struct {
@@ -14,6 +16,8 @@ type StaticArtifact struct {
 	Provider   string `json:"-"`
 	RegistryID string `json:"registryId"`
 	URI        string `json:"uri"`
+
+	Options json.RawMessage `json:"options,omitempty"`
 }
 
 type Build struct {

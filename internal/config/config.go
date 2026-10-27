@@ -36,6 +36,8 @@ type Config struct {
 	Project            *ConfigProject `json:"project,omitempty"`
 	AutoUpdateDisabled *bool          `json:"auto_update_disabled,omitempty"`
 	Database           interface{}    `json:"database,omitempty"`
+
+	Static json.RawMessage `json:"static,omitempty"`
 }
 
 func (c *Config) IsMonorepoProject() bool {
@@ -210,7 +212,19 @@ func readAndUnmarshalConfigJSON[T any](filename string) (T, error) {
 
 	err = json.Unmarshal(jsonData, &result)
 	if err != nil {
-		return result, errors.Wrapf(err, "Error decoding JSON file: %s, error: %v", filename, err)
+		// Decode errors can include credential values (for example, an invalid number).
+		// Report the location and expected type without retaining the raw error.
+		switch decodeErr := err.(type) {
+		case *json.SyntaxError:
+			return result, errors.New(fmt.Sprintf("Invalid JSON in %q at byte %d. Check for missing commas, trailing commas, and double-quoted keys and strings.", filename, decodeErr.Offset))
+		case *json.UnmarshalTypeError:
+			if decodeErr.Field != "" {
+				return result, errors.New(fmt.Sprintf("Invalid value for %q in %q at byte %d: expected %s.", decodeErr.Field, filename, decodeErr.Offset, decodeErr.Type))
+			}
+			return result, errors.New(fmt.Sprintf("Invalid value in %q at byte %d: expected %s.", filename, decodeErr.Offset, decodeErr.Type))
+		default:
+			return result, errors.New(fmt.Sprintf("Could not decode JSON in %q. Check the configuration format.", filename))
+		}
 	}
 
 	return result, nil
