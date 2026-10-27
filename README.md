@@ -99,10 +99,10 @@ also selects its original settings. Docker builds do not send this object.
 Fallback files must exist in the uploaded directory. SPA fallback paths start
 with `/`; `notFoundPage` paths are relative to that directory.
 
-Deployment API options override individual build settings. Build settings
-then override the corresponding uploaded `_headers` / `_redirects` files or
-inferred fallback behavior. Omit a setting to inherit it; `headers: []` and
-`redirects: []` explicitly clear rules, `spa: { "enabled": false }` disables SPA
+Build settings override individual deployment API options. Settings omitted
+from the build inherit deployment options, then the corresponding uploaded
+`_headers` / `_redirects` files or inferred fallback behavior. Omit a setting to
+inherit it; `headers: []` and `redirects: []` explicitly clear rules, `spa: { "enabled": false }` disables SPA
 fallback, and `notFoundPage: null` disables the custom 404 page. Arrays and the
 `spa` object are replaced as a whole, not merged with the lower-priority setting.
 Changing `.hx` affects new builds; it does not alter an existing build.

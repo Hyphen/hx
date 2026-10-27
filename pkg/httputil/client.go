@@ -1,6 +1,7 @@
 package httputil
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -45,7 +46,7 @@ func (hc *HyphenClient) Do(req *http.Request) (*http.Response, error) {
 
 	config, err := config.RestoreConfig()
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to load .hx")
+		return nil, fmt.Errorf("Failed to load .hx: %w", err)
 	}
 
 	if config.HyphenAPIKey != nil {
