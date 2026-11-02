@@ -10,9 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Hyphen/cli/internal/run"
 	"github.com/Hyphen/cli/pkg/errors"
-	"github.com/Hyphen/cli/pkg/fsutil"
 )
 
 const gitDirPath = ".git"
@@ -376,42 +374,4 @@ func ParseRepoBaseUrl(remoteUrl string) (string, error) {
 	}
 
 	return "", fmt.Errorf("unrecognized git remote URL format: %s", remoteUrl)
-}
-
-func ApplyDiffs(diffs []run.DiffResult) {
-	fs := fsutil.NewFileSystem()
-	// Get the current working directory
-	currentDir, err := os.Getwd()
-	if err != nil {
-		fmt.Printf("Error getting current directory: %v\n", err)
-		return
-	}
-
-	// iterate over diffs
-	for _, diff := range diffs {
-		// This is a delete
-		if diff.To == "" {
-			fullPath := filepath.Join(currentDir, diff.From)
-			err := fs.Remove(fullPath)
-			if err != nil {
-				fmt.Printf("Error removing file %s: %v\n", fullPath, err)
-			}
-			continue
-		}
-
-		// This is a create or modify
-		var contents []byte
-		for _, chunk := range diff.Chunks {
-			// TODO: handle deletes to files
-			if chunk.Type != "delete" {
-				contents = append(contents, []byte(chunk.Content)...)
-			}
-		}
-		fullPath := filepath.Join(currentDir, diff.To)
-
-		err := fs.WriteFile(fullPath, contents, 0o644)
-		if err != nil {
-			fmt.Printf("Error writing file %s: %v\n", fullPath, err)
-		}
-	}
 }
