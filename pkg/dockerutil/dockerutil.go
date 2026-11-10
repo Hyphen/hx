@@ -1,7 +1,9 @@
 package dockerutil
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,7 +37,8 @@ func FindDockerFile() (string, error) {
 }
 
 func Login(registryUrl, username, password string) error {
-	cmd := exec.Command("docker", "login", registryUrl, "-u", username, "-p", password)
+	cmd := exec.Command("docker", "login", registryUrl, "-u", username, "--password-stdin")
+	cmd.Stdin = strings.NewReader(password)
 
 	err := cmd.Run()
 	if err != nil {
@@ -220,4 +223,40 @@ type DockerInspectResult struct {
 		Digest    string `json:"digest"`
 		Size      int64  `json:"size"`
 	} `json:"Descriptor"`
+}
+
+// ErrRegistryAuthentication allows a caller to renew short-lived credentials once.
+var ErrRegistryAuthentication = errors.New("container registry authentication expired or rejected")
+
+func PushAuthorized(ctx context.Context, image, destination, server, username, password string) error {
+	directory, err := os.MkdirTemp("", "hx-docker-")
+	if err != nil {
+		return errors.New("could not create isolated Docker configuration")
+	}
+	defer os.RemoveAll(directory)
+	run := func(input string, args ...string) error {
+		command := exec.CommandContext(ctx, "docker", append([]string{"--config", directory}, args...)...)
+		if input != "" {
+			command.Stdin = strings.NewReader(input)
+		}
+		output, err := command.CombinedOutput()
+		if err == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		message := strings.ToLower(string(output))
+		if strings.Contains(message, "unauthorized") || strings.Contains(message, "authentication required") || strings.Contains(message, "token expired") {
+			return ErrRegistryAuthentication
+		}
+		return errors.New("Docker registry operation failed")
+	}
+	if err := run(password, "login", server, "--username", username, "--password-stdin"); err != nil {
+		return err
+	}
+	if err := run("", "tag", image, destination); err != nil {
+		return err
+	}
+	return run("", "push", destination)
 }

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -121,37 +122,37 @@ func (bs *BuildService) CreateBuild(opts CreateBuildOptions) (*models.Build, err
 	return &NewBuild, nil
 }
 
-func (bs *BuildService) FindRegistryConnections(organizationId, projectId string) ([]models.ContainerRegistry, error) {
+func (bs *BuildService) FindRegistryConnections(ctx context.Context, organizationId, projectId string) ([]models.ContainerRegistry, error) {
 	///api/organizations/{organizationId}/deployments/containerRegistries
 	queryParams := url.Values{}
 	queryParams.Add("projectId", projectId)
 
 	hyphenUrl := fmt.Sprintf("%s/api/organizations/%s/deployments/containerRegistries?%s", bs.baseUrl, organizationId, queryParams.Encode())
 
-	req, err := http.NewRequest("GET", hyphenUrl, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", hyphenUrl, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("container registry request failed")
 	}
 
 	resp, err := bs.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("container registry request failed")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return nil, errors.HandleHTTPError(resp)
+		return nil, fmt.Errorf("container registry credentials unavailable (HTTP %d)", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to read response body")
+		return nil, fmt.Errorf("container registry response unavailable")
 	}
 
 	var response []models.ContainerRegistry
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to parse JSON response")
+		return nil, fmt.Errorf("invalid container registry response")
 	}
 
 	if len(response) == 0 {
@@ -276,7 +277,7 @@ func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter
 	}
 	printer.PrintVerbose(fmt.Sprintf("found docker file at %s", dockerfilePathOrDir))
 
-	containerRegistries, err := bs.FindRegistryConnections(config.OrganizationId, *config.ProjectId)
+	containerRegistries, err := bs.FindRegistryConnections(cmd.Context(), config.OrganizationId, *config.ProjectId)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to find registry connections: %w", err)
 	}
@@ -294,8 +295,17 @@ func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter
 		return nil, nil, fmt.Errorf("failed to inspect docker image: %w", err)
 	}
 
+	hasCloudflare := false
+	for _, registry := range containerRegistries {
+		if isCloudflareRegistry(registry.Url) {
+			hasCloudflare = true
+		}
+	}
 	ports := make([]int, 0)
 	for port := range inspectData.Config.ExposedPorts {
+		if hasCloudflare && strings.HasSuffix(port, "/udp") {
+			continue
+		}
 		// Remove "/tcp" or "/udp" suffix if present
 		portStr := port
 		if idx := strings.Index(port, "/"); idx != -1 {
@@ -306,6 +316,10 @@ func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter
 		}
 	}
 
+	sort.Ints(ports)
+	if hasCloudflare && len(inspectData.Config.ExposedPorts) > 0 && len(ports) == 0 {
+		return nil, nil, fmt.Errorf("Cloudflare HTTP containers require an exposed TCP port")
+	}
 	containerUrls := make([]string, 0, len(containerRegistries))
 	for _, containerRegistry := range containerRegistries {
 		err := func(containerRegistry models.ContainerRegistry) error {
@@ -314,6 +328,15 @@ func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter
 				registryLabel = containerRegistry.Url
 			}
 
+			if isCloudflareRegistry(containerRegistry.Url) {
+				printer.Print(fmt.Sprintf("Uploading artifact to %s", registryLabel))
+				uri, err := bs.pushCloudflare(cmd.Context(), config, containerRegistry, name, commitSha)
+				if err != nil {
+					return err
+				}
+				containerUrls = append(containerUrls, uri)
+				return nil
+			}
 			// check to see if we need to login into the registry so we don't stomp creds
 			needsLogin := !dockerutil.IsLoggedIn(containerRegistry.Auth.Server)
 			if needsLogin {

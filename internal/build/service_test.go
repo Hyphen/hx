@@ -1,6 +1,7 @@
 package build
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,7 +34,7 @@ func TestFindRegistryConnections(t *testing.T) {
 			]`)),
 		}, nil)
 
-		registries, err := service.FindRegistryConnections("anOrgId", "aProjectId")
+		registries, err := service.FindRegistryConnections(context.Background(), "anOrgId", "aProjectId")
 
 		assert.NoError(t, err)
 		require.Len(t, registries, 2)
@@ -58,7 +59,7 @@ func TestFindRegistryConnections(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(`[]`)),
 		}, nil)
 
-		registries, err := service.FindRegistryConnections("anOrgId", "aProjectId")
+		registries, err := service.FindRegistryConnections(context.Background(), "anOrgId", "aProjectId")
 
 		assert.Nil(t, registries)
 		assert.EqualError(t, err, "no registry connections found")
@@ -79,7 +80,7 @@ func TestFindRegistryConnections(t *testing.T) {
 			]`)),
 		}, nil)
 
-		registries, err := service.FindRegistryConnections("anOrgId", "aProjectId")
+		registries, err := service.FindRegistryConnections(context.Background(), "anOrgId", "aProjectId")
 
 		assert.NoError(t, err)
 		require.Len(t, registries, 1)
@@ -236,7 +237,7 @@ func TestCreateBuild(t *testing.T) {
 			capturedBody = string(bodyBytes)
 		}).Return(&http.Response{
 			StatusCode: http.StatusCreated,
-			Body: io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifacts":[{"type":"Docker","ports":[8080],"image":{"uri":"aws.dkr.ecr/web:1"}},{"type":"Docker","ports":[8080],"image":{"uri":"gcr.io/web:1"}}]}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"id":"aBuildId","organization":{"id":"anOrgId","name":"anOrg"},"project":{"id":"aProjectId","name":"aProject","alternateId":"aProject"},"projectEnvironment":{"id":"","name":""},"app":{"id":"anAppId","name":"anApp","alternateId":"anApp"},"tags":[],"commitSha":"abc1234","artifacts":[{"type":"Docker","ports":[8080],"image":{"uri":"aws.dkr.ecr/web:1"}},{"type":"Docker","ports":[8080],"image":{"uri":"gcr.io/web:1"}}]}`)),
 		}, nil)
 
 		build, err := service.CreateBuild(CreateBuildOptions{
