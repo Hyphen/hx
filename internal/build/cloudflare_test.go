@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/Hyphen/cli/internal/config"
 	"github.com/Hyphen/cli/internal/models"
 	"github.com/Hyphen/cli/pkg/cprint"
+	"github.com/Hyphen/cli/pkg/dockerutil"
 	"github.com/Hyphen/cli/pkg/httputil"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -221,6 +223,111 @@ fi
 			require.NoError(t, err)
 			assert.Contains(t, string(logins), "credential-2")
 			assert.NotContains(t, string(logins), "credential-1")
+		})
+	}
+}
+
+func TestCloudflareDigestUsesResponseMediaType(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, contentType string
+		valid                   bool
+	}{
+		{"oci", `{"schemaVersion":2}`, "application/vnd.oci.image.manifest.v1+json; charset=utf-8", true},
+		{"docker", `{"schemaVersion":2,"mediaType":""}`, "application/vnd.docker.distribution.manifest.v2+json", true},
+		{"missing", `{"schemaVersion":2}`, "", false},
+		{"unknown-header", `{"schemaVersion":2}`, "application/json", false},
+		{"explicit-unknown", `{"schemaVersion":2,"mediaType":"unsupported"}`, "application/vnd.oci.image.manifest.v1+json", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := new(httputil.MockHTTPClient)
+			client.On("Do", mock.Anything).Return(&http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": {tc.contentType}},
+				Body:       io.NopCloser(strings.NewReader(tc.body)),
+			}, nil).Once()
+			registry := registryFixture()
+			uri, err := resolveCloudflareDigest(context.Background(), client, registry.Url+"/shop/api:build", registry)
+			if tc.valid {
+				require.NoError(t, err)
+				sum := sha256.Sum256([]byte(tc.body))
+				assert.Equal(t, registry.Url+"/shop/api@sha256:"+hex.EncodeToString(sum[:]), uri)
+			} else {
+				require.ErrorContains(t, err, "unsupported Cloudflare image manifest")
+			}
+			client.AssertExpectations(t)
+		})
+	}
+}
+
+func TestCloudflareIndexUsesResponseMediaType(t *testing.T) {
+	manifest := `{"schemaVersion":2}`
+	sum := sha256.Sum256([]byte(manifest))
+	digest := "sha256:" + hex.EncodeToString(sum[:])
+	index := fmt.Sprintf(`{"schemaVersion":2,"manifests":[{"digest":%q,"platform":{"os":"linux","architecture":"amd64"}}]}`, digest)
+	for _, mismatch := range []bool{false, true} {
+		t.Run(fmt.Sprint(mismatch), func(t *testing.T) {
+			client := new(httputil.MockHTTPClient)
+			client.On("Do", mock.Anything).Return(&http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": {"application/vnd.oci.image.index.v1+json"}},
+				Body:       io.NopCloser(strings.NewReader(index)),
+			}, nil).Once()
+			body := manifest
+			if mismatch {
+				body += " "
+			}
+			client.On("Do", mock.Anything).Run(func(args mock.Arguments) {
+				assert.True(t, strings.HasSuffix(args.Get(0).(*http.Request).URL.Path, "/manifests/"+digest))
+			}).Return(&http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": {"application/vnd.oci.image.manifest.v1+json"}},
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil).Once()
+			registry := registryFixture()
+			uri, err := resolveCloudflareDigest(context.Background(), client, registry.Url+"/shop/api:build", registry)
+			if mismatch {
+				require.ErrorContains(t, err, "manifest digest mismatch")
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, registry.Url+"/shop/api@"+digest, uri)
+			}
+			client.AssertExpectations(t)
+		})
+	}
+}
+
+type manifestErrorBody struct {
+	read, closed bool
+}
+
+func (b *manifestErrorBody) Read([]byte) (int, error) {
+	b.read = true
+	return 0, errors.New("credential-sentinel")
+}
+
+func (b *manifestErrorBody) Close() error {
+	b.closed = true
+	return nil
+}
+
+func TestCloudflareDigestClosesErrorResponsesWithoutReading(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			body := &manifestErrorBody{}
+			client := new(httputil.MockHTTPClient)
+			client.On("Do", mock.Anything).Return(&http.Response{StatusCode: status, Body: body}, nil).Once()
+			registry := registryFixture()
+			_, err := resolveCloudflareDigest(context.Background(), client, registry.Url+"/shop/api:build", registry)
+			require.Error(t, err)
+			if status == http.StatusUnauthorized {
+				assert.ErrorIs(t, err, dockerutil.ErrRegistryAuthentication)
+			} else {
+				assert.ErrorContains(t, err, "Cloudflare manifest is unavailable")
+			}
+			assert.NotContains(t, err.Error(), "credential-sentinel")
+			assert.False(t, body.read)
+			assert.True(t, body.closed)
+			client.AssertExpectations(t)
 		})
 	}
 }

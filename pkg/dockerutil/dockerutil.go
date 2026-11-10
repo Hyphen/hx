@@ -243,6 +243,9 @@ func PushAuthorized(ctx context.Context, image, destination, server, username, p
 		if err == nil {
 			return nil
 		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		message := strings.ToLower(string(output))
 		if strings.Contains(message, "unauthorized") || strings.Contains(message, "authentication required") || strings.Contains(message, "token expired") {
 			return ErrRegistryAuthentication

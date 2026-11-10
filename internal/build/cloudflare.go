@@ -101,12 +101,16 @@ func resolveCloudflareDigest(ctx context.Context, client interface {
 		if err != nil {
 			return "", errors.New("Cloudflare manifest lookup failed")
 		}
+		if response.StatusCode != http.StatusOK {
+			response.Body.Close()
+			if response.StatusCode == http.StatusUnauthorized {
+				return "", dockerutil.ErrRegistryAuthentication
+			}
+			return "", errors.New("Cloudflare manifest is unavailable")
+		}
 		content, readErr := io.ReadAll(io.LimitReader(response.Body, 4*1024*1024+1))
 		response.Body.Close()
-		if response.StatusCode == http.StatusUnauthorized {
-			return "", dockerutil.ErrRegistryAuthentication
-		}
-		if response.StatusCode != http.StatusOK || readErr != nil || len(content) > 4*1024*1024 {
+		if readErr != nil || len(content) > 4*1024*1024 {
 			return "", errors.New("Cloudflare manifest is unavailable")
 		}
 		hash := sha256.Sum256(content)
@@ -128,7 +132,11 @@ func resolveCloudflareDigest(ctx context.Context, client interface {
 		if json.Unmarshal(content, &manifest) != nil || manifest.SchemaVersion != 2 {
 			return "", errors.New("invalid Cloudflare image manifest")
 		}
-		switch manifest.MediaType {
+		mediaType := manifest.MediaType
+		if mediaType == "" {
+			mediaType = strings.TrimSpace(strings.SplitN(response.Header.Get("Content-Type"), ";", 2)[0])
+		}
+		switch mediaType {
 		case "application/vnd.oci.image.manifest.v1+json", "application/vnd.docker.distribution.manifest.v2+json":
 			return "registry.cloudflare.com/" + reference[1] + "@" + digest, nil
 		case "application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json":
