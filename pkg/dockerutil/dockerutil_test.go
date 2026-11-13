@@ -68,3 +68,13 @@ func TestPushAuthorizedPreservesContextErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestPushAuthorizedDigest(t *testing.T) {
+	directory := t.TempDir()
+	script := "#!/bin/sh\nif [ \"$3\" = push ]; then echo 'build: digest: sha256:" + strings.Repeat("a", 64) + " size: 123'; fi\n"
+	require.NoError(t, os.WriteFile(filepath.Join(directory, "docker"), []byte(script), 0700))
+	t.Setenv("PATH", directory)
+	digest, err := PushAuthorizedDigest(context.Background(), "local:build", "registry.test/app:build", "registry.test", "user", "credential-sentinel")
+	require.NoError(t, err)
+	require.Equal(t, "sha256:"+strings.Repeat("a", 64), digest)
+}
