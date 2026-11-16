@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -229,34 +230,53 @@ type DockerInspectResult struct {
 var ErrRegistryAuthentication = errors.New("container registry authentication expired or rejected")
 
 func PushAuthorized(ctx context.Context, image, destination, server, username, password string) error {
+	_, err := pushAuthorized(ctx, image, destination, server, username, password)
+	return err
+}
+
+var pushedDigest = regexp.MustCompile(`(?m)^[^\r\n]+: digest: (sha256:[a-f0-9]{64}) size: [0-9]+\r?$`)
+
+func PushAuthorizedDigest(ctx context.Context, image, destination, server, username, password string) (string, error) {
+	output, err := pushAuthorized(ctx, image, destination, server, username, password)
+	if err != nil {
+		return "", err
+	}
+	matches := pushedDigest.FindAllStringSubmatch(output, -1)
+	if len(matches) != 1 {
+		return "", errors.New("Docker did not report an unambiguous pushed image digest")
+	}
+	return matches[0][1], nil
+}
+
+func pushAuthorized(ctx context.Context, image, destination, server, username, password string) (string, error) {
 	directory, err := os.MkdirTemp("", "hx-docker-")
 	if err != nil {
-		return errors.New("could not create isolated Docker configuration")
+		return "", errors.New("could not create isolated Docker configuration")
 	}
 	defer os.RemoveAll(directory)
-	run := func(input string, args ...string) error {
+	run := func(input string, args ...string) (string, error) {
 		command := exec.CommandContext(ctx, "docker", append([]string{"--config", directory}, args...)...)
 		if input != "" {
 			command.Stdin = strings.NewReader(input)
 		}
 		output, err := command.CombinedOutput()
 		if err == nil {
-			return nil
+			return string(output), nil
 		}
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return "", ctx.Err()
 		}
 		message := strings.ToLower(string(output))
 		if strings.Contains(message, "unauthorized") || strings.Contains(message, "authentication required") || strings.Contains(message, "token expired") {
-			return ErrRegistryAuthentication
+			return "", ErrRegistryAuthentication
 		}
-		return errors.New("Docker registry operation failed")
+		return "", errors.New("Docker registry operation failed")
 	}
-	if err := run(password, "login", server, "--username", username, "--password-stdin"); err != nil {
-		return err
+	if _, err := run(password, "login", server, "--username", username, "--password-stdin"); err != nil {
+		return "", err
 	}
-	if err := run("", "tag", image, destination); err != nil {
-		return err
+	if _, err := run("", "tag", image, destination); err != nil {
+		return "", err
 	}
 	return run("", "push", destination)
 }

@@ -296,14 +296,21 @@ func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter
 	}
 
 	hasCloudflare := false
+	hasDigitalOcean := false
 	for _, registry := range containerRegistries {
+		if isDigitalOceanRegistry(registry.Url) {
+			hasDigitalOcean = true
+		}
 		if isCloudflareRegistry(registry.Url) {
 			hasCloudflare = true
 		}
 	}
+	if hasDigitalOcean && (inspectData.Os != "linux" || inspectData.Architecture != "amd64") {
+		return nil, nil, fmt.Errorf("DigitalOcean App Platform requires linux/amd64 containers")
+	}
 	ports := make([]int, 0)
 	for port := range inspectData.Config.ExposedPorts {
-		if hasCloudflare && strings.HasSuffix(port, "/udp") {
+		if (hasCloudflare || hasDigitalOcean) && strings.HasSuffix(port, "/udp") {
 			continue
 		}
 		// Remove "/tcp" or "/udp" suffix if present
@@ -317,6 +324,12 @@ func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter
 	}
 
 	sort.Ints(ports)
+	if hasDigitalOcean && len(ports) > 1 {
+		return nil, nil, fmt.Errorf("DigitalOcean web services support one exposed HTTP port")
+	}
+	if hasDigitalOcean && len(inspectData.Config.ExposedPorts) > 0 && len(ports) == 0 {
+		return nil, nil, fmt.Errorf("DigitalOcean web services require an exposed TCP port")
+	}
 	if hasCloudflare && len(inspectData.Config.ExposedPorts) > 0 && len(ports) == 0 {
 		return nil, nil, fmt.Errorf("Cloudflare HTTP containers require an exposed TCP port")
 	}
@@ -328,6 +341,15 @@ func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter
 				registryLabel = containerRegistry.Url
 			}
 
+			if isDigitalOceanRegistry(containerRegistry.Url) {
+				printer.Print(fmt.Sprintf("Uploading artifact to %s", registryLabel))
+				uri, err := bs.pushDigitalOcean(cmd.Context(), config, containerRegistry, name, commitSha)
+				if err != nil {
+					return err
+				}
+				containerUrls = append(containerUrls, uri)
+				return nil
+			}
 			if isCloudflareRegistry(containerRegistry.Url) {
 				printer.Print(fmt.Sprintf("Uploading artifact to %s", registryLabel))
 				uri, err := bs.pushCloudflare(cmd.Context(), config, containerRegistry, name, commitSha)
