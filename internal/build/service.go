@@ -248,11 +248,9 @@ func (bs *BuildService) resolveEnvironment(ctx context.Context, organizationID, 
 
 func (bs *BuildService) buildDocker(cmd *cobra.Command, printer *cprint.CPrinter, config config.Config, opts Options, commitSha string) ([]string, []int, error) {
 
-	// Check for docker
-	printer.PrintVerbose("Checking for docker CLI")
-	isDockerAvailable := dockerutil.IsDockerAvailable()
-	if !isDockerAvailable {
-		return nil, nil, fmt.Errorf("docker is not installed or not in PATH")
+	printer.PrintVerbose("Checking Docker CLI and engine")
+	if err := dockerutil.CheckDocker(cmd.Context()); err != nil {
+		return nil, nil, err
 	}
 
 	// Try to find a docker file to run

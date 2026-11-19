@@ -90,7 +90,7 @@ func (bs *BuildService) FindSiteRegistries(organizationID, projectID string) ([]
 			if registry.Type != "SiteRegistry" || registry.Status != "Ready" || registry.Organization.ID != organizationID || registry.Project.ID != projectID || registry.Entity.Type != "Project" || registry.Entity.Id != projectID || registry.OrganizationIntegration.Id == "" || registry.ID == "" {
 				continue
 			}
-			if registry.OrganizationIntegration.Type != "cloudflare" {
+			if registry.OrganizationIntegration.Type != "cloudflare" && registry.OrganizationIntegration.Type != "digitalOcean" {
 				return nil, fmt.Errorf("unsupported site registry provider %q for registry %s", registry.OrganizationIntegration.Type, registry.ID)
 			}
 			registries = append(registries, &registry)
@@ -113,11 +113,12 @@ type uploadFile struct {
 }
 
 type uploadCapability struct {
-	Provider   string     `json:"provider"`
-	AppID      string     `json:"appId"`
-	Uploads    []r2Upload `json:"uploads"`
-	Endpoint   string     `json:"endpoint"`
-	BucketName string     `json:"bucketName"`
+	Provider   string                   `json:"provider"`
+	AppID      string                   `json:"appId"`
+	Uploads    []r2Upload               `json:"uploads"`
+	Endpoint   string                   `json:"endpoint"`
+	BucketName string                   `json:"bucketName"`
+	Registry   models.ContainerRegistry `json:"registry"`
 	Manifest   struct {
 		Key     string `json:"key"`
 		Content string `json:"content"`
@@ -223,6 +224,9 @@ func (bs *BuildService) uploadStaticSites(ctx context.Context, printer *cprint.C
 	}
 	var sites []*models.StaticArtifact
 	for _, registry := range registries {
+		if registry.OrganizationIntegration.Type == "digitalOcean" {
+			printer.Print("Building and pushing static image to DigitalOcean")
+		}
 		site, err := bs.uploadStaticSite(ctx, orgID, appID, appName, registry, files, opts)
 		if err != nil {
 			return nil, err
@@ -242,6 +246,12 @@ func (bs *BuildService) uploadStaticSite(ctx context.Context, orgID, appID, appN
 	capability, err := bs.requestSiteUpload(ctx, orgID, appID, payload)
 	if err != nil {
 		return nil, err
+	}
+	if capability.Provider != registry.OrganizationIntegration.Type {
+		return nil, fmt.Errorf("site upload provider changed")
+	}
+	if capability.Provider == "digitalOcean" {
+		return bs.uploadDigitalOceanSite(ctx, orgID, appID, appName, registry.ID, files, capability, opts)
 	}
 	return bs.uploadR2Site(ctx, orgID, appID, appName, registry.ID, files, capability)
 }
@@ -265,7 +275,7 @@ func (bs *BuildService) requestSiteUpload(ctx context.Context, orgID, appID stri
 	if resp.StatusCode != http.StatusOK {
 		return capability, errors.HandleHTTPError(resp)
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 12*1024*1024)).Decode(&capability); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64*1024*1024)).Decode(&capability); err != nil {
 		return capability, fmt.Errorf("invalid site upload authorization response")
 	}
 	return capability, nil

@@ -47,6 +47,10 @@ powershell -c "irm https://cdn.hyphen.ai/install/install.ps1 | iex"
 containing your app's `.hx` file. `--type` selects the **local build**: `docker` (default) or `static`.
 Docker keeps the existing Dockerfile generation, build, registry push, and build
 registration flow. Use `--dockerfile/-f` to choose a Dockerfile.
+Docker image builds, including DigitalOcean static images, check the Docker CLI
+and engine before building. Start Docker Desktop or another Docker-compatible
+engine if it is unavailable; use `docker info` to check the active Docker context
+and permissions. Cloudflare static uploads do not require Docker.
 
 ```sh
 hx build
@@ -57,25 +61,31 @@ hx deploy dply_123 --type static ./dist
 ```
 
 For static builds, the final positional argument is a **required directory**
-containing the already-built website. hx does not run a frontend build tool or
-Docker. Build your frontend first. Supply a directory, not an archive, symlink,
+containing the already-built website. hx does not run a frontend build tool. Build your frontend first. Supply a directory, not an archive, symlink,
 or individual `.gz` file.
 An empty directory, symlinks within it, non-regular files, or paths containing
 `\\`, `%`, `?`, `#`, control characters, or invalid UTF-8 fail validation.
 
-hx uploads to every ready **SiteRegistry** returned for the project. It hashes
-and snapshots the original files once, then requests upload authorization for each
-registry through APIX. Cloudflare is the supported static hosting provider.
-It receives raw files directly in the R2 revision folder, with original
-filenames under `files/` and the canonical manifest uploaded last. Temporary
-credentials only permit PUTs within that revision prefix and are renewed through
-upload authorization when needed.
+hx publishes to every ready **SiteRegistry** returned for the project. It hashes
+and snapshots the original files once, then requests authorization through APIX.
+Cloudflare uploads raw files to R2 and the canonical manifest last, using
+revision-scoped temporary credentials. Its artifact remains an R2 revision URI.
+
+DigitalOcean requires the Docker CLI and a running engine. hx builds a minimal
+Linux/AMD64 scratch image containing the snapshot at `/site` and pushes directly
+to `registry.digitalocean.com/<registry>/static-<project>/<app>`. SiteRegistry reuses an existing DO registry selection or creates a registry when
+none exists. SiteRegistry and ContainerRegistry can share the physical registry;
+neither creates or requires the other connection. hx refreshes short-lived DOCR credentials before pushing, uses an
+isolated Docker configuration and password stdin, and retries authentication
+once. The artifact's `site.uri` records the digest reported by the successful
+push. nFabric deploys that image through native App Platform static hosting;
+it does not download files, build an image, or publish to DOCR.
 
 After all registry uploads succeed, hx registers one `Static` build containing
 all provider artifacts. Failed uploads prevent build registration and deployment.
-File bytes do not pass through APIX or nFabric. Storage requests never receive APIX
-credentials, and redirects are refused. Temporary local snapshots are removed on
-completion or failure. The returned provider limits apply to each upload.
+File bytes do not pass through APIX or nFabric. Temporary local file snapshots
+and Docker credentials are removed on completion or failure. The built image
+remains in the local Docker cache, as with normal Docker builds.
 
 ### Static build settings
 
@@ -96,7 +106,7 @@ Add a `static` object to the app's `.hx` JSON file alongside its existing IDs:
 settings to each Static artifact as `site.options` when registering the build.
 The API validates and saves them with that build, so selecting an older build
 also selects its original settings. Docker builds do not send this object.
-Fallback files must exist in the uploaded directory. SPA fallback paths start
+Fallback files must exist in the published directory. SPA fallback paths start
 with `/`; `notFoundPage` paths are relative to that directory.
 
 Build settings override individual deployment API options. Settings omitted
@@ -106,6 +116,14 @@ inherit it; `headers: []` and `redirects: []` explicitly clear rules, `spa: { "e
 fallback, and `notFoundPage: null` disables the custom 404 page. Arrays and the
 `spa` object are replaced as a whole, not merged with the lower-priority setting.
 Changing `.hx` affects new builds; it does not alter an existing build.
+
+DigitalOcean defaults to native `index.html` / `404.html` handling. Enable `spa`
+explicitly for a catchall (default `/index.html`). nFabric does not inspect image
+contents to infer SPA behavior or validate fallback file existence. It rejects
+custom headers, redirects, provider control files and server functions; explicit
+SPA fallback and a custom error document cannot be combined. The header and
+redirect settings above are Cloudflare features. If the project uploads to both
+providers, use options supported by both for a deployable multi-provider build.
 
 ### Selecting apps and sites
 
@@ -129,7 +147,7 @@ When either selection flag is supplied, only those selected apps/sites are
 submitted to the run. When neither is supplied, all deployment apps and sites
 are submitted: the local app uses its new build unless `--no-build`, and other
 members use `latest`. Static auto-add/create writes the app under `sites` with
-the Cloudflare **organization integration ID** in `deploymentSettings.targets`;
+the selected hosting provider's **organization integration ID** in `deploymentSettings.targets`;
 the registry connection ID is only used for artifacts/uploads. Existing app and
 site settings are preserved. An existing container app cannot silently be moved
 to `sites`, or vice versa; update deployment settings explicitly first.

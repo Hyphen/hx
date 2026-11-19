@@ -9,13 +9,25 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
-func IsDockerAvailable() bool {
-	if _, err := exec.LookPath("docker"); err != nil {
-		return false
+func CheckDocker(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	return true
+	if _, err := exec.LookPath("docker"); err != nil {
+		return errors.New("this build requires the Docker CLI and a running Docker engine; install Docker and make sure 'docker' is on your PATH")
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := exec.CommandContext(probeCtx, "docker", "info").Run(); err != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return errors.New("this build requires a running Docker engine; start Docker Desktop or another Docker-compatible engine, then retry. If it is already running, check your Docker context and permissions with 'docker info'")
+	}
+	return nil
 }
 
 func FindDockerFile() (string, error) {
@@ -93,6 +105,10 @@ func IsLoggedIn(registryUrl string) bool {
 }
 
 func Build(dockerFilePathOrDir, name, tag string, verbose bool) (string, string, error) {
+	return BuildWithContext(context.Background(), dockerFilePathOrDir, name, tag, verbose)
+}
+
+func BuildWithContext(ctx context.Context, dockerFilePathOrDir, name, tag string, verbose bool) (string, string, error) {
 	var nameTag = name
 	if tag != "" {
 		nameTag = name + ":" + tag
@@ -112,7 +128,7 @@ func Build(dockerFilePathOrDir, name, tag string, verbose bool) (string, string,
 		args = []string{"build", "--platform", "linux/amd64", "-t", nameTag, dockerFilePathOrDir}
 	}
 
-	cmd := exec.Command("docker", args...)
+	cmd := exec.CommandContext(ctx, "docker", args...)
 
 	// Docker's build output is progress, not structured data. Sending it to
 	// stderr keeps our stdout clean for structured output modes (e.g.

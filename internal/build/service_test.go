@@ -5,10 +5,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/Hyphen/cli/internal/config"
+	"github.com/Hyphen/cli/pkg/cprint"
 	"github.com/Hyphen/cli/pkg/httputil"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -323,4 +328,33 @@ func TestCreateBuild(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestImageBuildsRequireRunningDocker(t *testing.T) {
+	for _, buildType := range []string{"docker", "static"} {
+		t.Run(buildType, func(t *testing.T) {
+			directory := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(directory, "docker"), []byte(`#!/bin/sh
+printf '%s\n' "$@" >> "$DOCKER_TEST_DIR/args"
+echo secret-sentinel >&2
+exit 1
+`), 0700))
+			t.Setenv("PATH", directory)
+			t.Setenv("DOCKER_TEST_DIR", directory)
+			service := &BuildService{}
+			var err error
+			if buildType == "static" {
+				_, err = service.uploadDigitalOceanSite(context.Background(), "", "", "", "", nil, uploadCapability{}, Options{})
+			} else {
+				cmd := &cobra.Command{}
+				cmd.SetContext(context.Background())
+				_, _, err = service.buildDocker(cmd, cprint.NewCPrinter(false), config.Config{}, Options{}, "")
+			}
+			require.ErrorContains(t, err, "this build requires a running Docker engine")
+			require.NotContains(t, err.Error(), "secret-sentinel")
+			args, readErr := os.ReadFile(filepath.Join(directory, "args"))
+			require.NoError(t, readErr)
+			require.Equal(t, "info\n", string(args))
+		})
+	}
 }

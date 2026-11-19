@@ -101,7 +101,8 @@ func (capability uploadCapability) validateR2(appID, appName, registryID string,
 		return nil, fmt.Errorf("invalid or expired Cloudflare revision upload")
 	}
 	prefix := "revisions/" + appName + "/revision_" + capability.Revision + "/"
-	if capability.URI != "r2://"+capability.BucketName+"/"+strings.TrimSuffix(prefix, "/") || capability.Manifest.Key != prefix+"manifest.json" || !validR2ObjectKey(capability.Manifest.Key) || len(capability.Manifest.Content) == 0 || len(capability.Manifest.Content) > 4*1024*1024 {
+	uri := "r2://" + capability.BucketName + "/" + strings.TrimSuffix(prefix, "/")
+	if capability.URI != uri || capability.Manifest.Key != prefix+"manifest.json" || !validR2ObjectKey(capability.Manifest.Key) || len(capability.Manifest.Content) == 0 || len(capability.Manifest.Content) > 4*1024*1024 {
 		return nil, fmt.Errorf("invalid R2 revision manifest")
 	}
 	var manifest struct {
@@ -167,7 +168,7 @@ func (bs *BuildService) uploadR2Site(ctx context.Context, orgID, appID, appName,
 		if _, err = next.validateR2(appID, appName, registryID, files); err != nil {
 			return err
 		}
-		if next.Endpoint != original.Endpoint || next.BucketName != original.BucketName || next.Revision != original.Revision || next.URI != original.URI || next.Manifest != original.Manifest {
+		if next.Provider != original.Provider || next.Endpoint != original.Endpoint || next.BucketName != original.BucketName || next.Revision != original.Revision || next.URI != original.URI || next.Manifest.Key != original.Manifest.Key || next.Manifest.Content != original.Manifest.Content {
 			return fmt.Errorf("renewed revision upload scope changed")
 		}
 		capability = next

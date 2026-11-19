@@ -92,6 +92,7 @@ func TestFindSiteRegistries(t *testing.T) {
 		ids              []string
 	}{
 		{"cloudflare", readyRegistry, "", []string{"conn_registry"}},
+		{"digitalOcean", strings.ReplaceAll(readyRegistry, "cloudflare", "digitalOcean"), "", []string{"conn_registry"}},
 		{"retired-provider", strings.ReplaceAll(readyRegistry, "cloudflare", "hyphenCloud"), "unsupported site registry provider", nil},
 		{"missing", "", "no ready", nil},
 		{"pending", strings.ReplaceAll(readyRegistry, `"Ready"`, `"Pending"`), "no ready", nil},
